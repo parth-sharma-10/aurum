@@ -129,7 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--weights", default=str(DEFAULT_WEIGHTS))
     ap.add_argument("--conf", type=float, default=0.35)
     ap.add_argument("--iou", type=float, default=0.5)
-    ap.add_argument("--imgsz", type=int, default=640)
+    ap.add_argument(
+        "--imgsz",
+        type=int,
+        default=None,
+        help="inference size; defaults to the size the checkpoint was trained at",
+    )
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument(

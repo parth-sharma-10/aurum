@@ -121,10 +121,19 @@ def main() -> int:
     else:
         ov = test["metrics_overall"]
         n_inst = sum(test["n_instances"].values())
+        measured_at = test.get("imgsz")
+        at = f" · measured at {measured_at} px" if measured_at else ""
         add(
             f"Model: `{test['weights']}` · {test['n_images']} unseen images · "
-            f"{n_inst:,} annotated instances.\n"
+            f"{n_inst:,} annotated instances{at}.\n"
         )
+        if measured_at:
+            add(
+                "Detection scores depend on inference resolution, so the size is "
+                "recorded with the result: evaluating this model at 640 px rather "
+                "than the 512 px it was trained at drops mAP@50 from 0.806 to "
+                "0.742. `ml.evaluate` reads the size from the checkpoint.\n"
+            )
         add("| Metric | Result |")
         add("|---|---:|")
         add(f"| mAP@50 | **{ov['mAP50']:.3f}** |")
