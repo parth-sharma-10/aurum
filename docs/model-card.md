@@ -54,7 +54,7 @@ Independently verified by `python -m ml.validate`:
 | Batch size | — |
 | Seed | — |
 | Device | — |
-| Epochs actually run | 11 |
+| Epochs actually run | 15 |
 
 Transfer learning only — nothing trained from scratch. Augmentation is horizontal flip, ±15° rotation and restrained HSV jitter. **No vertical flip**: an upside-down memory module is not a thing the bench will ever see, and colour is real class signal (green board, gold contacts).
 
