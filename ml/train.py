@@ -62,6 +62,20 @@ def main() -> int:
     for k, v in cfg.items():
         print(f"  {k:10s} {v}")
 
+    # A long run can die for reasons unrelated to the model — a machine sleeping,
+    # a full disk, a file briefly unavailable. Ultralytics checkpoints the
+    # optimizer state into last.pt every epoch, so the run can pick up where it
+    # stopped instead of discarding hours of work.
+    last = RUNS / cfg["name"] / "weights" / "last.pt"
+    resume = os.environ.get("AURUM_RESUME", "").lower() in ("1", "true", "yes")
+    if resume:
+        if not last.exists():
+            raise SystemExit(f"AURUM_RESUME set but no checkpoint at {last}")
+        print(f"  resuming from {last.relative_to(ROOT)}")
+        model = YOLO(str(last))
+        model.train(resume=True)
+        return _finalize(cfg)
+
     model = YOLO(cfg["model"])  # COCO-pretrained; transfer learning only
 
     model.train(
@@ -93,6 +107,15 @@ def main() -> int:
         close_mosaic=10,
     )
 
+    return _finalize(cfg)
+
+
+def _finalize(cfg: dict) -> int:
+    """Copy the chosen weights into models/ and write the version metadata.
+
+    Shared by a fresh run and a resumed one, so a resumed run produces the
+    same artifacts and the same metadata file as an uninterrupted one.
+    """
     run_dir = RUNS / cfg["name"]
     weights = run_dir / "weights"
     MODELS.mkdir(exist_ok=True)
