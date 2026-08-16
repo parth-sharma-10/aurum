@@ -32,6 +32,13 @@ ignore = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = [
+    # Our own deprecated API usage is a build failure, not a note. This is how
+    # FastAPI's removed on_event() handler was caught.
     "error::DeprecationWarning:app.*",
     "error::DeprecationWarning:ml.*",
+    # Third-party: Starlette's TestClient warns that it uses httpx rather than
+    # httpx2. Nothing in this project can act on it — the transport is chosen
+    # inside Starlette — and pinning httpx2 would be a test-only dependency
+    # change for no behavioural gain. Reviewed and suppressed deliberately.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:UserWarning",
 ]

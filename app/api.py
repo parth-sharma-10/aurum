@@ -14,7 +14,8 @@ from __future__ import annotations
 import io
 import json
 import sqlite3
-from contextlib import closing
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, closing
 from pathlib import Path
 
 import cv2
@@ -30,6 +31,14 @@ from app.weight import get_weight_source
 ROOT = Path(__file__).resolve().parent.parent
 DB = ROOT / "data" / "aurum_batches.db"
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Create the batch ledger before the first request is served."""
+    init_db()
+    yield
+
+
 app = FastAPI(
     title="Aurum Vision API",
     version="0.1",
@@ -37,6 +46,7 @@ app = FastAPI(
         "E-waste component identification. Returns component identities, counts "
         "and confidences. Does NOT measure precious-metal content."
     ),
+    lifespan=lifespan,
 )
 
 _detector: AurumDetector | None = None
@@ -71,13 +81,20 @@ def init_db() -> None:
         con.commit()
 
 
-@app.on_event("startup")
-def _startup() -> None:
-    init_db()
+def _rel(p: Path) -> str:
+    """Path for display. Weights may legitimately live outside the repo."""
+    return str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p)
 
 
 def _decode(data: bytes) -> np.ndarray:
-    img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    # cv2.imdecode on a zero-length buffer raises rather than returning None,
+    # which would surface as a 500 for what is really a bad request.
+    if not data:
+        raise HTTPException(400, "Empty upload: no image data received")
+    try:
+        img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    except cv2.error as exc:
+        raise HTTPException(400, f"Could not decode image: {exc}") from exc
     if img is None:
         raise HTTPException(400, "Could not decode image")
     return img
@@ -90,7 +107,7 @@ def health() -> dict:
         "status": "ok" if ok else "model_missing",
         "model_version": detector().model_version if ok else None,
         "classes": detector().classes if ok else [],
-        "weights": str(DEFAULT_WEIGHTS.relative_to(ROOT)),
+        "weights": _rel(DEFAULT_WEIGHTS),
     }
 
 
