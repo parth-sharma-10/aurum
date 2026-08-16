@@ -1,27 +1,29 @@
-# Aurum Vision — pinned to the versions actually used for the v0.1 training run.
+# Aurum Vision — runtime dependencies.
+# Pinned to the versions used for the v0.1 training run.
 # Python 3.12 (PyTorch has no stable wheels for 3.14 at time of writing).
+
+# --- model + inference -----------------------------------------------------
 ultralytics==8.4.120
 torch==2.13.0
-torchvision==0.28.0
+torchvision==0.28.0        # required by ultralytics; pinned for reproducibility
 opencv-python==5.0.0.93
 numpy==2.5.2
 pillow==12.3.0
 
-# Dataset ingest / normalization
-huggingface_hub==1.27.0
-datasets==5.0.1
+# --- dataset ingest / normalization ---------------------------------------
 pyyaml==6.0.3
-imagehash==4.3.2          # perceptual hashing for near-duplicate leakage checks
+imagehash==4.3.2           # perceptual hashing for near-duplicate leakage checks
 
-# Serving + dashboard backend
+# --- serving + dashboard backend ------------------------------------------
 fastapi==0.141.1
 uvicorn[standard]==0.52.3
-python-multipart==0.0.32
+python-multipart==0.0.32   # required by FastAPI to accept file uploads
 
-# Reporting / presentation assets
+# --- reporting / figures ---------------------------------------------------
 matplotlib==3.11.1
-seaborn==0.13.2
-pandas==3.0.5
 
-# Optional: only needed for `make data-roboflow` (requires ROBOFLOW_API_KEY)
-# roboflow==1.1.*
+# --- optional --------------------------------------------------------------
+# pyserial>=3.5            # only for a real HX711 load cell over serial.
+#                          # Without it the dashboard uses a clearly labelled
+#                          # SIMULATED sensor; app/weight.py raises a message
+#                          # telling you to install it if you ask for hx711.
