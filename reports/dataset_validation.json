@@ -1,0 +1,15 @@
+{
+  "images": {
+    "train": 4878,
+    "valid": 412,
+    "test": 206
+  },
+  "boxes": 7887,
+  "clusters": 2154,
+  "clusters_spanning_splits": 0,
+  "exact_duplicates_across_splits": 0,
+  "near_duplicates_train_to_heldout": 0,
+  "hamming_threshold": 5,
+  "failures": [],
+  "warnings": []
+}

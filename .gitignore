@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Raw and prepared datasets are reproducible from scripts/configs — not committed.
+data/raw/
+data/interim/
+data/aurum/
+
+# Training runs are large; curated outputs are copied into models/ and reports/.
+runs/
+*.pt
+!models/**/*.pt
+
+.DS_Store
+node_modules/
+dist/

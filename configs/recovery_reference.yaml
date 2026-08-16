@@ -1,0 +1,34 @@
+# Aurum Vision — reference recovery data
+#
+# ============================ NOT POPULATED ================================
+# This file is intentionally empty of figures and `enabled` is false.
+#
+# Aurum's position is that a recovery estimate comes from component counts
+# multiplied by *published reference yields*, not from the image. That only
+# holds if the yields are real and cited. No figures were invented to fill this
+# file, so the batch record reports `recovery_estimate.available = false` and
+# the dashboard shows "REFERENCE DATA NOT LOADED".
+#
+# To enable estimation, add an entry per Aurum class with a value, a unit and a
+# real citation (paper, standard, or assayer's published figure), then set
+# `enabled: true`. The pipeline validates that every detected class has an
+# entry before it will produce a number.
+#
+# Every consumer of this data must keep the ESTIMATE label attached. Aurum
+# Vision identifies components; it does not measure precious-metal content.
+# ===========================================================================
+
+enabled: false
+
+basis: >
+  Component counts from Aurum Vision multiplied by published per-component
+  recovery yields. Not a measurement of the batch's actual metal content.
+
+per_component: {}
+  # Example of the required shape — replace with cited values:
+  #
+  # RAM:
+  #   value: 0.0
+  #   unit: "g gold per module"
+  #   source: "<author, title, year, DOI/URL>"
+  #   notes: "<which module generation the figure applies to>"

@@ -1,0 +1,253 @@
+# Aurum Vision — canonical label normalization map (v0.1)
+#
+# Every source dataset uses its own vocabulary. This file is the single place
+# where a source label becomes an Aurum class. Nothing else in the pipeline is
+# allowed to invent a mapping.
+#
+# Matching is done on a normalized key: lowercased, punctuation and whitespace
+# collapsed to a single underscore. So "RAM stick", "ram_stick" and "Ram-Stick"
+# all match the alias `ram_stick`.
+#
+# Rules this file follows:
+#   1. A source label is merged into an Aurum class only if the physical object
+#      is the same kind of thing. Visual similarity alone is not enough.
+#   2. Anything not listed under `mappings` or `drop` is a hard error during
+#      preparation. Silent label loss is how datasets quietly become wrong.
+#   3. `drop` entries carry a reason. "We didn't need it" is a valid reason;
+#      "we didn't look at it" is not.
+
+version: "0.1"
+
+aurum_classes:
+  - PCB
+  - RAM
+  - CPU
+  - Connector
+
+# ---------------------------------------------------------------------------
+# Class definitions — what a human annotator should consider in-class.
+# These are written down so the model card and the training data agree.
+# ---------------------------------------------------------------------------
+definitions:
+  PCB: >
+    A whole printed circuit board as a single object: motherboards, graphics
+    cards, expansion cards, and bare/populated boards photographed as one item.
+    The box covers the board outline, not the components mounted on it.
+  RAM: >
+    A memory module as a whole object — DIMM, SO-DIMM, or server RDIMM. The
+    distinguishing feature is the long thin PCB with a gold edge connector and a
+    row of identical memory chips.
+  CPU: >
+    A packaged processor as a whole object — LGA, PGA, or BGA package, with or
+    without a heat spreader. Includes the pin/pad underside view.
+  Connector: >
+    A physical mating interface: headers, sockets, slots, ports, edge
+    connectors, and pin blocks. This is the class most associated with plated
+    gold contacts, which is why it is tracked separately from PCB.
+
+# ---------------------------------------------------------------------------
+# Source label -> Aurum class
+# ---------------------------------------------------------------------------
+mappings:
+  PCB:
+    - pcb
+    - pcbs
+    - printed_circuit_board
+    - printed_circuit_boards
+    - circuit_board
+    - circuitboard
+    - board
+    - mainboard
+    - motherboard
+    - mother_board
+    - daughter_board
+    # NOTE: `gpu` / `graphics_card` are deliberately NOT here. See `drop`.
+
+  RAM:
+    - ram
+    - rams
+    - ram_stick
+    - ram_module
+    - memory
+    - memory_module
+    - memory_stick
+    - dimm
+    - sodimm
+    - so_dimm
+    - ddr
+    - ddr2
+    - ddr3
+    - ddr4
+    - ddr5
+    - server_ram
+    - rdimm
+    - ram_stick
+
+  CPU:
+    - cpu
+    - cpus
+    - processor
+    - processors
+    - microprocessor
+    - micro_processor
+    - ceramic_cpu
+    - cpu_chip
+    - central_processing_unit
+
+  Connector:
+    - connector
+    - connectors
+    - gold_connector
+    - connector_pin
+    - connector_pins
+    - pins
+    - pin_header
+    - header
+    - socket
+    - slot
+    - port
+    - edge_connector
+    - jumper_connector
+    # Board-mounted sockets. A DIMM slot and a PCIe slot are mating interfaces
+    # with plated contacts — they are connectors by the definition above, and
+    # they are the only source of whole-object Connector boxes at the scale a
+    # webcam actually sees. Kept distinct from RAM/PCB: an empty DIMM slot and
+    # an inserted memory module are visually different objects.
+    - ram_slot
+    - gpu_slot
+    - pcie_slot
+    - dimm_slot
+    # A rear I/O panel is a bank of ports (USB, HDMI, Ethernet), i.e. a cluster
+    # of mating interfaces.
+    - rear_io
+
+# ---------------------------------------------------------------------------
+# Explicitly dropped source labels, with the reason. Reviewed, not ignored.
+# ---------------------------------------------------------------------------
+drop:
+  # --- Semantically wrong to merge into CPU ------------------------------
+  ic: >
+    An "IC" annotation covers every integrated circuit on a board — voltage
+    regulators, controllers, flash, glue logic. Folding these into CPU would
+    train the model to call any black rectangle a processor, and would make the
+    CPU count in a batch record meaningless. Dropped rather than merged.
+  integrated_circuit: same reason as `ic`.
+  chip: >
+    Ambiguous at the annotation level: used for ICs, memory chips and
+    transistors depending on the dataset. Not merged into CPU or RAM.
+  transistor: A discrete semiconductor, not a processor package.
+  mosfet: A discrete power transistor, not a processor package.
+
+  # --- Discrete passives: out of scope for v0.1 ---------------------------
+  resistor: Passive component, not in the v0.1 class set.
+  resestor: Misspelling of `resistor` present in one source dataset.
+  resistor_network: Passive component, not in the v0.1 class set.
+  resistor_jumper: Passive component, not in the v0.1 class set.
+  capacitor: Passive component, not in the v0.1 class set.
+  capacitor_jumper: Passive component, not in the v0.1 class set.
+  capacitor_network: Passive component, not in the v0.1 class set.
+  electrolytic_capacitor: Passive component, not in the v0.1 class set.
+  inductor: Passive component, not in the v0.1 class set.
+  ferrite_bead: Passive component, not in the v0.1 class set.
+  diode: Passive/discrete component, not in the v0.1 class set.
+  fuse: Discrete component, not in the v0.1 class set.
+  potentiometer: Discrete component, not in the v0.1 class set.
+  transformer: Discrete component, not in the v0.1 class set.
+  mov: Metal-oxide varistor; discrete component, not in the v0.1 class set.
+  clock: Crystal oscillator; discrete component, not in the v0.1 class set.
+  em: Ambiguous single-source label with no documented meaning.
+  rp: Ambiguous single-source label with no documented meaning.
+
+  # --- Board features that are not mating interfaces ----------------------
+  pads: >
+    Solder pads are a surface feature, not a mating connector. Merging them into
+    Connector would inflate Connector counts on every bare board.
+  test_point: A probe pad, not a mating connector.
+  jumper: A shorting link, not a mating interface.
+  button: A user control, not a mating interface.
+  switch: A user control, not a mating interface.
+  led: An indicator, not in the v0.1 class set.
+  buzzer: An output device, not in the v0.1 class set.
+  flex_cable: A cable, not a board-mounted connector.
+
+  # --- Whole assemblies that are NOT bare boards ---------------------------
+  gpu: >
+    In every source dataset used here a "gpu" is an assembled graphics card,
+    and the surface facing the camera is a plastic/metal cooler shroud with
+    fans — not an exposed circuit board. Merging it into PCB would train the
+    model that fan shrouds are circuit boards and would corrupt the PCB count
+    in a batch record. Dropped despite being the single largest available
+    label (~2,800 instances), because a big wrong class is worse than a small
+    right one.
+  graphics_card: same reason as `gpu`.
+  gpu_card: same reason as `gpu`.
+  expansion_card: >
+    Ambiguous between a bare add-in board and a shrouded card; not separable
+    from the annotations available.
+  psu: A power supply is a sealed metal enclosure, not a visible board.
+  cpu_cooler: A heatsink/fan assembly. Sits on the CPU but is not the CPU.
+  cooler: same reason as `cpu_cooler`.
+  heatsink: A thermal part, not in the v0.1 class set.
+  fan: A thermal part, not in the v0.1 class set.
+  cpu_fan: A thermal part, not in the v0.1 class set.
+  avr: Ambiguous single-source label (voltage regulator or microcontroller).
+
+  # --- Storage and drives: out of scope for v0.1 --------------------------
+  disk_drive: Storage device, not in the v0.1 class set.
+  optical_drive: Storage device, not in the v0.1 class set.
+  dvd: Storage device, not in the v0.1 class set.
+  hdd: Storage device, not in the v0.1 class set.
+  internal_hdd: Storage device, not in the v0.1 class set.
+  harddrive: Storage device, not in the v0.1 class set.
+  hard_disk_drive: Storage device, not in the v0.1 class set.
+  ssd: Storage device, not in the v0.1 class set.
+  storage: Storage device, not in the v0.1 class set.
+  thumbdrive: Storage device, not in the v0.1 class set.
+  usb_flash_drive: Storage device, not in the v0.1 class set.
+
+  # --- Chassis / enclosure parts -------------------------------------------
+  front_panel: >
+    A case face, not a mating interface. Unlike `rear_io` it is defined by the
+    chassis rather than by its connectors, so it is not merged into Connector.
+  panel: same reason as `front_panel`.
+  case_pc: Chassis, not in the v0.1 class set.
+  desktop_pc: Whole machine, not a component.
+  rear_panel: Chassis face; use `rear_io` where the annotation marks the ports.
+
+  # --- Non-PC domain labels from the RC/drone component dataset ------------
+  propeller: Not an electronic component in the v0.1 class set.
+  motor: Not in the v0.1 class set.
+  esc: Electronic speed controller; a shrouded module, not a bare board.
+  radio_controller: A handheld device, not a component.
+  receiver: A shrouded RC module, not a bare board.
+  video_transmitter: A shrouded RC module, not a bare board.
+  antenna: Not in the v0.1 class set.
+  camera: Not in the v0.1 class set.
+  cable: A cable is not a connector; the mating interface is the endpoint only.
+
+  # --- Whole devices (appliance-level e-waste labels) ----------------------
+  battery: >
+    Considered as a 5th Aurum class and rejected for v0.1: the available
+    `battery` annotations span 9V cells, coin cells, laptop packs and RC LiPo
+    packs, which are not one visual category. See DATA_SOURCES.md.
+  keyboard: Whole device, not a component.
+  mouse: Whole device, not a component.
+  computer_mouse: Whole device, not a component.
+  monitor: Whole device, not a component.
+  display: Whole device / board feature depending on dataset; ambiguous.
+  laptop: Whole device, not a component.
+  smartphone: Whole device, not a component.
+  smart_phone: Whole device, not a component.
+  mobile: Whole device, not a component.
+  printer: Whole device, not a component.
+  router: Whole device, not a component.
+  networkswitch: Whole device, not a component.
+  remote_control: Whole device, not a component.
+  headphones: Whole device, not a component.
+  speaker: Whole device, not a component.
+
+  # --- Non-classes ---------------------------------------------------------
+  unknown_unlabeled: Placeholder for unannotated regions in the source dataset.
+  circuit: >
+    Whole-scene wrapper box used by some Roboflow-100 datasets; duplicates the
+    image extent rather than marking an object.

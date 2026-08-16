@@ -1,0 +1,92 @@
+# Aurum Vision — source dataset registry (v0.1)
+#
+# Every dataset the prepared training set is built from. Image counts, class
+# counts and licenses in DATA_SOURCES.md are read from the Roboflow project
+# metadata API at ingest time, not typed by hand.
+#
+# `version` is pinned so a rebuild six months from now produces the same data.
+
+roboflow:
+  - key: pc_components_proelect
+    workspace: pro-elect-4-6fbgr
+    project: pc-components-mvkie
+    version: 2
+    note: >
+      Primary source of whole-object RAM modules and of the slot/port labels
+      that make Connector viable. Photos are of PC builds and disassembled
+      machines, which is the closest available match to a collection bench.
+
+  - key: pc_components_amin
+    workspace: amins-personal-workspace
+    project: pc-components-tuimj
+    version: 4
+    note: >
+      Best CPU-per-image density of the PC-domain sets (240 CPU instances in
+      435 images) and a strong motherboard count.
+
+  - key: computer_parts
+    workspace: computer-parts
+    project: computer-parts-zbh2e
+    version: 1
+    note: >
+      Largest source overall (4,015 images) and Public Domain. Supplies the
+      bulk of RAM and CPU instances. Studio-style product photography, so it
+      contributes clean examples but little clutter.
+
+  - key: pc_components_disassembly
+    workspace: disassembly
+    project: pc-components-2ugi7
+    version: 3
+    note: Small but genuinely different domain — teardown photos with clutter.
+
+  - key: pc_components_projeto
+    workspace: projeto-ia-plfah
+    project: pc-components-detection
+    version: 19
+    note: Adds motherboard and RAM instances from a third annotation team.
+
+  - key: rc_components
+    workspace: robot-pose-annotation
+    project: components-zx3kz
+    version: 2
+    note: >
+      Non-PC domain (RC/drone parts). Included only for `connector` and `PCB`:
+      without it, Connector would come from a single dataset and the model
+      would learn "connector = a slot on this one motherboard photo set".
+      Instance-segmentation project; exported as YOLO bounding boxes.
+
+# ---------------------------------------------------------------------------
+# Datasets that were found and deliberately NOT used. Recorded so the exclusion
+# is reviewable rather than invisible.
+# ---------------------------------------------------------------------------
+excluded:
+  - project: james-manalili/pc-components-tfwjg
+    reason: >
+      Exact duplicate of pro-elect-4-6fbgr/pc-components-mvkie — identical
+      image count (978), identical train/valid/test split sizes (782/98/98)
+      and identical per-class instance counts across all 12 classes. Including
+      both would put the same photographs in train and test.
+
+  - project: cas-pc-project/pc-parts-detection-yajmi
+    reason: >
+      Same 12-class vocabulary and near-proportional class counts (~42% of
+      mvkie across every class), consistent with being a re-upload of a subset
+      of the same source images. Excluded as a leakage risk.
+
+  - project: computer-vision-assembly-instructions/computer-hardware
+    reason: >
+      2,370 images with usable ram/cpu labels, but the project exposes no
+      generated versions via the API, so there is no reproducible export to
+      pin. Cannot be included without an unpinnable manual download.
+
+  - project: roboflow-100/printed-circuit-board
+    reason: >
+      Measured before exclusion: median annotation is 1.27% of the image side
+      (~8 px at 640), i.e. microscope/flatbed-scale SMD inspection. The
+      Connector boxes are real but at a scale a webcam at arm's length cannot
+      resolve, so training on them would not transfer to the demo. Also, its
+      class 0 `printed-circuit-board` has zero instances — a phantom class
+      from the Roboflow export, not a usable whole-board label.
+
+  - project: universe.roboflow.com/mylab/pcb-colab
+    reason: Same SMD inspection scale as roboflow-100/printed-circuit-board.

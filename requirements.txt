@@ -1,0 +1,27 @@
+# Aurum Vision — pinned to the versions actually used for the v0.1 training run.
+# Python 3.12 (PyTorch has no stable wheels for 3.14 at time of writing).
+ultralytics==8.4.120
+torch==2.13.0
+torchvision==0.28.0
+opencv-python==5.0.0.93
+numpy==2.5.2
+pillow==12.3.0
+
+# Dataset ingest / normalization
+huggingface_hub==1.27.0
+datasets==5.0.1
+pyyaml==6.0.3
+imagehash==4.3.2          # perceptual hashing for near-duplicate leakage checks
+
+# Serving + dashboard backend
+fastapi==0.141.1
+uvicorn[standard]==0.52.3
+python-multipart==0.0.32
+
+# Reporting / presentation assets
+matplotlib==3.11.1
+seaborn==0.13.2
+pandas==3.0.5
+
+# Optional: only needed for `make data-roboflow` (requires ROBOFLOW_API_KEY)
+# roboflow==1.1.*

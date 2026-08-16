@@ -1,0 +1,3518 @@
+[
+  {
+    "score": 3,
+    "covers": [
+      "CPU",
+      "PCB",
+      "RAM"
+    ],
+    "unmapped": [
+      "cpu_cooler",
+      "disk_drive",
+      "front_panel",
+      "gpu",
+      "gpu_slot",
+      "optical_drive",
+      "psu",
+      "ram_slot",
+      "rear_io"
+    ],
+    "name": "PC Components",
+    "url": "https://universe.roboflow.com/pro-elect-4-6fbgr/pc-components-mvkie",
+    "workspace": {
+      "name": "Pro Elect 4",
+      "url": "pro-elect-4-6fbgr"
+    },
+    "projectId": "wK09aQ5ZZe2sovWJuel2",
+    "type": "object-detection",
+    "annotation": "CPU",
+    "thumbnail": "https://source.roboflow.com/NRsgUvP3VPWm0YT3A3Kb6It8YLl1/8L2G0t4h7RfbBdJpoitD/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/NRsgUvP3VPWm0YT3A3Kb6It8YLl1/8L2G0t4h7RfbBdJpoitD/annotation-CPU.png",
+    "classes": [
+      "cpu",
+      "cpu_cooler",
+      "disk_drive",
+      "front_panel",
+      "gpu",
+      "gpu_slot",
+      "motherboard",
+      "optical_drive",
+      "psu",
+      "ram_slot",
+      "ram_stick",
+      "rear_io"
+    ],
+    "classCount": 12,
+    "images": 978,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov8",
+      "model:yolov8s",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 1,
+    "latestVersion": 2
+  },
+  {
+    "score": 3,
+    "covers": [
+      "CPU",
+      "PCB",
+      "RAM"
+    ],
+    "unmapped": [
+      "cpu_cooler",
+      "disk_drive",
+      "front_panel",
+      "gpu",
+      "gpu_slot",
+      "optical_drive",
+      "psu",
+      "ram_slot",
+      "rear_io"
+    ],
+    "name": "PC Components",
+    "url": "https://universe.roboflow.com/james-manalili/pc-components-tfwjg",
+    "workspace": {
+      "name": "James Manalili",
+      "url": "james-manalili"
+    },
+    "projectId": "Zc9JIIvCrT7p3U2uBDY7",
+    "type": "object-detection",
+    "annotation": "CPU-MotherBoard",
+    "thumbnail": "https://source.roboflow.com/axpsMe2XSONFZe9UuSSOAB5LtEo2/SKUxuq41kdKGOMjYxO6V/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/axpsMe2XSONFZe9UuSSOAB5LtEo2/SKUxuq41kdKGOMjYxO6V/annotation-CPU-MotherBoard.png",
+    "classes": [
+      "cpu",
+      "cpu_cooler",
+      "disk_drive",
+      "front_panel",
+      "gpu",
+      "gpu_slot",
+      "motherboard",
+      "optical_drive",
+      "psu",
+      "ram_slot",
+      "ram_stick",
+      "rear_io"
+    ],
+    "classCount": 12,
+    "images": 978,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov5"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 1,
+    "latestVersion": 2
+  },
+  {
+    "score": 3,
+    "covers": [
+      "CPU",
+      "PCB",
+      "RAM"
+    ],
+    "unmapped": [
+      "gpu"
+    ],
+    "name": "pc-components",
+    "url": "https://universe.roboflow.com/amins-personal-workspace/pc-components-tuimj",
+    "workspace": {
+      "name": "Amins Personal Workspace",
+      "url": "amins-personal-workspace"
+    },
+    "projectId": "lDmb9Lfh3tCPEPWpWk6N",
+    "type": "object-detection",
+    "annotation": "components",
+    "thumbnail": "https://source.roboflow.com/H9yrv5m31AbCMBQJ8BSLCikJe5k1/hkueYpvXg6w5uPj6xxdO/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/H9yrv5m31AbCMBQJ8BSLCikJe5k1/hkueYpvXg6w5uPj6xxdO/annotation-components.png",
+    "classes": [
+      "cpu",
+      "gpu",
+      "motherboard",
+      "ram"
+    ],
+    "classCount": 4,
+    "images": 435,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov11",
+      "model:yolov11n"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 2,
+    "latestVersion": 4
+  },
+  {
+    "score": 3,
+    "covers": [
+      "CPU",
+      "PCB",
+      "RAM"
+    ],
+    "unmapped": [
+      "cpu_cooler",
+      "disk_drive",
+      "front_panel",
+      "gpu",
+      "gpu_slot",
+      "optical_drive",
+      "psu",
+      "ram_slot",
+      "rear_io"
+    ],
+    "name": "PC Parts Detection",
+    "url": "https://universe.roboflow.com/cas-pc-project/pc-parts-detection-yajmi",
+    "workspace": {
+      "name": "CAS PC Project",
+      "url": "cas-pc-project"
+    },
+    "projectId": "UhwBSqrca5LywrgTByHk",
+    "type": "object-detection",
+    "annotation": "pc-parts",
+    "thumbnail": "https://source.roboflow.com/txhyCIxEa1oPqarW8mqe/gx5oi9YE2mA343j82Kjy/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/txhyCIxEa1oPqarW8mqe/gx5oi9YE2mA343j82Kjy/annotation-pc-parts.png",
+    "classes": [
+      "cpu",
+      "cpu_cooler",
+      "disk_drive",
+      "front_panel",
+      "gpu",
+      "gpu_slot",
+      "motherboard",
+      "optical_drive",
+      "psu",
+      "ram_slot",
+      "ram_stick",
+      "rear_io"
+    ],
+    "classCount": 12,
+    "images": 408,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 1,
+    "views": 98,
+    "downloads": 7,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 2,
+    "covers": [
+      "CPU",
+      "RAM"
+    ],
+    "unmapped": [
+      "GPU",
+      "HDD",
+      "SSD"
+    ],
+    "name": "Computer Parts",
+    "url": "https://universe.roboflow.com/computer-parts/computer-parts-zbh2e",
+    "workspace": {
+      "name": "Computer Parts",
+      "url": "computer-parts"
+    },
+    "projectId": "uaybQCMQ6pD5vgaWkpuN",
+    "type": "object-detection",
+    "annotation": "RAM-CPU-SSD-HDD-GPU",
+    "thumbnail": "https://source.roboflow.com/Bs8mOx7knLVwNUm69qB9IusMcBt1/01Sfxu8X5MYVokZcVqhL/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/Bs8mOx7knLVwNUm69qB9IusMcBt1/01Sfxu8X5MYVokZcVqhL/annotation-RAM-CPU-SSD-HDD-GPU.png",
+    "classes": [
+      "GPU",
+      "HDD",
+      "RAM",
+      "SSD",
+      "cpu",
+      "memory"
+    ],
+    "classCount": 6,
+    "images": 4015,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model"
+    ],
+    "license": "Public Domain",
+    "stars": 3,
+    "views": 712,
+    "downloads": 36,
+    "modelCount": 1,
+    "latestVersion": 1
+  },
+  {
+    "score": 2,
+    "covers": [
+      "CPU",
+      "RAM"
+    ],
+    "unmapped": [
+      "GPU",
+      "HDD",
+      "SSD"
+    ],
+    "name": "Computer Hardware",
+    "url": "https://universe.roboflow.com/computer-vision-assembly-instructions/computer-hardware",
+    "workspace": {
+      "name": "Computer Vision Assembly Instructions",
+      "url": "computer-vision-assembly-instructions"
+    },
+    "projectId": "6ckQ45CB1bj60WA61Fty",
+    "type": "object-detection",
+    "annotation": "computer-hardware",
+    "thumbnail": "https://source.roboflow.com/Hp0Obd1EVcCkY8EpKPDZ/609ZBLBHyimQR7w1K2SO/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/Hp0Obd1EVcCkY8EpKPDZ/609ZBLBHyimQR7w1K2SO/annotation-computer-hardware.png",
+    "classes": [
+      "GPU",
+      "HDD",
+      "SSD",
+      "cpu",
+      "ram"
+    ],
+    "classCount": 5,
+    "images": 2370,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 120,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": null
+  },
+  {
+    "score": 2,
+    "covers": [
+      "Connector",
+      "PCB"
+    ],
+    "unmapped": [
+      "battery",
+      "cable",
+      "camera",
+      "motor",
+      "antenna",
+      "esc",
+      "propeller",
+      "radio_controller",
+      "receiver",
+      "video_transmitter"
+    ],
+    "name": "Components",
+    "url": "https://universe.roboflow.com/robot-pose-annotation/components-zx3kz",
+    "workspace": {
+      "name": "Robot Pose Annotation",
+      "url": "robot-pose-annotation"
+    },
+    "projectId": "bbDz7lFxFHbQeJWewyV5",
+    "type": "instance-segmentation",
+    "annotation": "propeller",
+    "thumbnail": "https://source.roboflow.com/k6HmO7v11uOWYXb4k94TChxj5Vo1/kQ2XAxcsKSjukZub9R9F/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/k6HmO7v11uOWYXb4k94TChxj5Vo1/kQ2XAxcsKSjukZub9R9F/annotation-propeller.png",
+    "classes": [
+      "battery",
+      "cable",
+      "camera",
+      "motor",
+      "PCB",
+      "antenna",
+      "connector",
+      "esc",
+      "propeller",
+      "radio_controller",
+      "receiver",
+      "video_transmitter"
+    ],
+    "classCount": 12,
+    "images": 1347,
+    "description": null,
+    "tags": [
+      "instance-segmentation"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 2,
+    "covers": [
+      "PCB",
+      "RAM"
+    ],
+    "unmapped": [
+      "fan",
+      "keyboard",
+      "laptop",
+      "monitor",
+      "mouse",
+      "phone",
+      "printer",
+      "smartphone",
+      "speaker",
+      "AVR",
+      "Cpu Fan",
+      "DDR 5",
+      "DESKTOP PC",
+      "Desktop-PC",
+      "GPU",
+      "Hard Disk Drive",
+      "Headphones"
+    ],
+    "name": "Computer Hardware Components",
+    "url": "https://universe.roboflow.com/worstone/computer-hardware-components",
+    "workspace": {
+      "name": "WorstOne",
+      "url": "worstone"
+    },
+    "projectId": "gCgSf6AjZufawWcv07Hr",
+    "type": "object-detection",
+    "annotation": "objects",
+    "thumbnail": "https://source.roboflow.com/i5Z4Yz9AOUMtBqheDWVbcCfOUi63/elntMM4fAQSOzvHXvtLM/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/i5Z4Yz9AOUMtBqheDWVbcCfOUi63/elntMM4fAQSOzvHXvtLM/annotation-objects.png",
+    "classes": [
+      "fan",
+      "keyboard",
+      "laptop",
+      "monitor",
+      "mouse",
+      "phone",
+      "printer",
+      "smartphone",
+      "speaker",
+      "AVR",
+      "Cpu Fan",
+      "DDR 5",
+      "DDR3",
+      "DDR4",
+      "DESKTOP PC",
+      "Desktop-PC",
+      "Expansion Card",
+      "GPU",
+      "Hard Disk Drive",
+      "Headphones"
+    ],
+    "classCount": 68,
+    "images": 306,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 1,
+    "latestVersion": 6
+  },
+  {
+    "score": 2,
+    "covers": [
+      "CPU",
+      "RAM"
+    ],
+    "unmapped": [
+      "Cooler",
+      "DVD",
+      "Fan",
+      "GPU",
+      "PSU",
+      "Panel",
+      "Storage"
+    ],
+    "name": "PC Components",
+    "url": "https://universe.roboflow.com/disassembly/pc-components-2ugi7",
+    "workspace": {
+      "name": "Disassembly",
+      "url": "disassembly"
+    },
+    "projectId": "RQq9Ey7oEJd8rT97Nc77",
+    "type": "object-detection",
+    "annotation": "PC-components",
+    "thumbnail": "https://source.roboflow.com/2qmr5jj4q5a1zubrky9SoB46bbG2/eyFUU2KfwtCBqNoFDau8/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/2qmr5jj4q5a1zubrky9SoB46bbG2/eyFUU2KfwtCBqNoFDau8/annotation-PC-components.png",
+    "classes": [
+      "CPU",
+      "Cooler",
+      "DVD",
+      "Fan",
+      "GPU",
+      "PSU",
+      "Panel",
+      "RAM",
+      "Storage"
+    ],
+    "classCount": 9,
+    "images": 245,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 1,
+    "views": 158,
+    "downloads": 9,
+    "modelCount": 0,
+    "latestVersion": 3
+  },
+  {
+    "score": 2,
+    "covers": [
+      "PCB",
+      "RAM"
+    ],
+    "unmapped": [
+      "CPU Cooler",
+      "GPU"
+    ],
+    "name": "pc-components-detection",
+    "url": "https://universe.roboflow.com/projeto-ia-plfah/pc-components-detection",
+    "workspace": {
+      "name": "Projeto IA",
+      "url": "projeto-ia-plfah"
+    },
+    "projectId": "KAntUYXETa1NZKFBsaJ5",
+    "type": "object-detection",
+    "annotation": "objects",
+    "thumbnail": "https://source.roboflow.com/1cs656qQ47atb6UjazDJ7qYkuaF3/fQ8rH0LcQkpluSZ8lx8C/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/1cs656qQ47atb6UjazDJ7qYkuaF3/fQ8rH0LcQkpluSZ8lx8C/annotation-objects.png",
+    "classes": [
+      "CPU Cooler",
+      "GPU",
+      "Motherboard",
+      "RAM"
+    ],
+    "classCount": 4,
+    "images": 238,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:rfdetr",
+      "model:rfdetr-nano",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 13,
+    "latestVersion": 19
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "battery",
+      "fan",
+      "keyboard",
+      "laptop",
+      "microwave",
+      "mouse",
+      "printer",
+      "remote",
+      "smartphone",
+      "air-cond",
+      "audio-set",
+      "fridge",
+      "kettle",
+      "light-source",
+      "telephone",
+      "tv",
+      "usb",
+      "vape",
+      "washing-machine"
+    ],
+    "name": "capstone-kanon-2",
+    "url": "https://universe.roboflow.com/computer-vision-learning-touhj/capstone-kanon-2",
+    "workspace": {
+      "name": "Computer Vision Learning",
+      "url": "computer-vision-learning-touhj"
+    },
+    "projectId": "dZIKQc8BN9TdpMdPrO9q",
+    "type": "object-detection",
+    "annotation": "e-waste-xzBE",
+    "thumbnail": "https://source.roboflow.com/AgYIblP7hkbYpjL7rykGYhtTKk83/l5RGA58vOR0MtfRn7L8C/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/AgYIblP7hkbYpjL7rykGYhtTKk83/l5RGA58vOR0MtfRn7L8C/annotation-e-waste-xzBE.png",
+    "classes": [
+      "battery",
+      "fan",
+      "keyboard",
+      "laptop",
+      "microwave",
+      "mouse",
+      "printer",
+      "remote",
+      "smartphone",
+      "air-cond",
+      "audio-set",
+      "fridge",
+      "kettle",
+      "light-source",
+      "pcb",
+      "telephone",
+      "tv",
+      "usb",
+      "vape",
+      "washing-machine"
+    ],
+    "classCount": 20,
+    "images": 10000,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 3
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [
+      "monitor",
+      "avr"
+    ],
+    "name": "ThermoCam",
+    "url": "https://universe.roboflow.com/marygrace-landicho-e6och/thermocam",
+    "workspace": {
+      "name": "MaryGrace Landicho",
+      "url": "marygrace-landicho-e6och"
+    },
+    "projectId": "rRPeUbNctk54qi8Xj8ug",
+    "type": "object-detection",
+    "annotation": "pc-human-objects",
+    "thumbnail": "https://source.roboflow.com/Aiviy5QYYnXfwO62htfqIDsFJrF2/007g2Gy3I6iw5HmYZNeT/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/Aiviy5QYYnXfwO62htfqIDsFJrF2/007g2Gy3I6iw5HmYZNeT/annotation-pc-human-objects.png",
+    "classes": [
+      "monitor",
+      "avr",
+      "cpu"
+    ],
+    "classCount": 3,
+    "images": 9810,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap",
+      "model:yolov5"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 204,
+    "downloads": 20,
+    "modelCount": 5,
+    "latestVersion": 11
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "battery",
+      "keyboard",
+      "laptop",
+      "mobile phone",
+      "monitor",
+      "mouse",
+      "printer",
+      "electronic-waste"
+    ],
+    "name": "e-waste",
+    "url": "https://universe.roboflow.com/mehmet-wswds/e-waste-qmxtt",
+    "workspace": {
+      "name": "mehmet",
+      "url": "mehmet-wswds"
+    },
+    "projectId": "nWyIBL0KIAJHxbjF8qUZ",
+    "type": "object-detection",
+    "annotation": "electronic-waste",
+    "thumbnail": "https://source.roboflow.com/iAyqxi9KDHWJtqJnlyqwLBtPYJs2/1rxfpb9HirT1n6wLa2ac/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/iAyqxi9KDHWJtqJnlyqwLBtPYJs2/1rxfpb9HirT1n6wLa2ac/annotation-electronic-waste.png",
+    "classes": [
+      "battery",
+      "keyboard",
+      "laptop",
+      "mobile phone",
+      "monitor",
+      "mouse",
+      "printer",
+      "electronic-waste",
+      "pcb"
+    ],
+    "classCount": 9,
+    "images": 9433,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 151,
+    "downloads": 5,
+    "modelCount": 1,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "arrow",
+      "arrowhead",
+      "data",
+      "decision",
+      "process",
+      "terminator"
+    ],
+    "name": "flowchart detectioo",
+    "url": "https://universe.roboflow.com/pd-dxzvp/flowchart-detectioo",
+    "workspace": {
+      "name": "pd",
+      "url": "pd-dxzvp"
+    },
+    "projectId": "hf7jMF9lWusZywVj9xQj",
+    "type": "object-detection",
+    "annotation": "symbols",
+    "thumbnail": "https://source.roboflow.com/C4cIR0jsNWXoAzjRK9G5/xotFIDOeQzbflGMDACbc/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/C4cIR0jsNWXoAzjRK9G5/xotFIDOeQzbflGMDACbc/annotation-symbols.png",
+    "classes": [
+      "arrow",
+      "arrowhead",
+      "connector",
+      "data",
+      "decision",
+      "process",
+      "terminator"
+    ],
+    "classCount": 7,
+    "images": 4469,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov5",
+      "model:yolov11",
+      "model:yolov11n"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 3,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 1,
+    "latestVersion": 20
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "computer",
+      "monitor",
+      "mouse",
+      "phone",
+      "plastic",
+      "remote",
+      "speaker",
+      "television",
+      "toaster",
+      "Air Conditioner",
+      "Air Conditioner vhf radio",
+      "Air Pump",
+      "Amplifier",
+      "Android Car Radio",
+      "Antenae",
+      "Appliances",
+      "Bags",
+      "Battery Charger"
+    ],
+    "name": "e-waste management 2",
+    "url": "https://universe.roboflow.com/ewaste-management-zjiiq/e-waste-management-2",
+    "workspace": {
+      "name": "ewaste management",
+      "url": "ewaste-management-zjiiq"
+    },
+    "projectId": "iNJkPLEil6BS6zU3rswB",
+    "type": "classification",
+    "annotation": "product",
+    "thumbnail": "https://source.roboflow.com/iTsFDe82MoUgAoHoC4jJ6jqPOJg2/6V3y1KCuCRMMgnnDmsvA/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/iTsFDe82MoUgAoHoC4jJ6jqPOJg2/6V3y1KCuCRMMgnnDmsvA/annotation-product.png",
+    "classes": [
+      "computer",
+      "monitor",
+      "mouse",
+      "phone",
+      "plastic",
+      "remote",
+      "socket",
+      "speaker",
+      "switch",
+      "television",
+      "toaster",
+      "Air Conditioner",
+      "Air Conditioner vhf radio",
+      "Air Pump",
+      "Amplifier",
+      "Android Car Radio",
+      "Antenae",
+      "Appliances",
+      "Bags",
+      "Battery Charger"
+    ],
+    "classCount": 179,
+    "images": 3064,
+    "description": null,
+    "tags": [
+      "classification"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 3,
+    "views": 315,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": null
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "apple",
+      "background",
+      "bag",
+      "banana",
+      "basket",
+      "bear",
+      "bed",
+      "beef",
+      "bench",
+      "bike",
+      "bird",
+      "boat",
+      "book",
+      "bottle",
+      "box",
+      "bread",
+      "building",
+      "bus",
+      "cake"
+    ],
+    "name": "Object detection ",
+    "url": "https://universe.roboflow.com/projdit/object-detection-3ldu9",
+    "workspace": {
+      "name": "ProjDIT",
+      "url": "projdit"
+    },
+    "projectId": "XYCpS9P6q1ZvgSxZfSnI",
+    "type": "object-detection",
+    "annotation": "person",
+    "thumbnail": "https://source.roboflow.com/L2woPFTMFegYbjqNAVzwxJd49e53/Fi6imL34pLBDzu3NMEf4/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/L2woPFTMFegYbjqNAVzwxJd49e53/Fi6imL34pLBDzu3NMEf4/annotation-person.png",
+    "classes": [
+      "apple",
+      "background",
+      "bag",
+      "banana",
+      "basket",
+      "bear",
+      "bed",
+      "beef",
+      "bench",
+      "bike",
+      "bird",
+      "board",
+      "boat",
+      "book",
+      "bottle",
+      "box",
+      "bread",
+      "building",
+      "bus",
+      "cake"
+    ],
+    "classCount": 204,
+    "images": 2860,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 1,
+    "views": 853,
+    "downloads": 36,
+    "modelCount": 1,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "airplane",
+      "apple",
+      "backpack",
+      "bag",
+      "ball",
+      "balloon",
+      "banana",
+      "baseball",
+      "basket",
+      "bear",
+      "bed",
+      "belt",
+      "bench",
+      "bicycle",
+      "block",
+      "boar",
+      "boat",
+      "body",
+      "boiler"
+    ],
+    "name": "MIT Indoor Semantic Segmentation",
+    "url": "https://universe.roboflow.com/test-3vtzt/mit-indoor-semantic-segmentation",
+    "workspace": {
+      "name": "Test",
+      "url": "test-3vtzt"
+    },
+    "projectId": "26uIVoedFT0KRYmBlBxp",
+    "type": "semantic-segmentation",
+    "annotation": "indoor-objects",
+    "thumbnail": "https://source.roboflow.com/IICSdVhKcuXGtpnUQiTEpb8jR4D2/uKbmExaLgtlR3zLqWpMc/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/IICSdVhKcuXGtpnUQiTEpb8jR4D2/uKbmExaLgtlR3zLqWpMc/annotation-indoor-objects.png",
+    "classes": [
+      "airplane",
+      "apple",
+      "backpack",
+      "bag",
+      "ball",
+      "balloon",
+      "banana",
+      "baseball",
+      "basket",
+      "bear",
+      "bed",
+      "belt",
+      "bench",
+      "bicycle",
+      "block",
+      "boar",
+      "board",
+      "boat",
+      "body",
+      "boiler"
+    ],
+    "classCount": 2944,
+    "images": 2582,
+    "description": null,
+    "tags": [
+      "semantic-segmentation"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 1051,
+    "downloads": 34,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "Battery",
+      "Camera",
+      "LCD"
+    ],
+    "name": "E-waste detection",
+    "url": "https://universe.roboflow.com/jensen/e-waste-detection-g7vf3",
+    "workspace": {
+      "name": "Jensen",
+      "url": "jensen"
+    },
+    "projectId": "ywfq2xp9doiOm9WhS2KL",
+    "type": "object-detection",
+    "annotation": "PCB-LCD-Battery",
+    "thumbnail": "https://source.roboflow.com/TFwNFJKj2VezpRRJPDN5oq9MZsp1/02QqYuo5FSWMPCNwahYi/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/TFwNFJKj2VezpRRJPDN5oq9MZsp1/02QqYuo5FSWMPCNwahYi/annotation-PCB-LCD-Battery.png",
+    "classes": [
+      "Battery",
+      "Camera",
+      "LCD",
+      "PCB"
+    ],
+    "classCount": 4,
+    "images": 2512,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap",
+      "model:yolov8",
+      "model:yolov8s"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 273,
+    "downloads": 20,
+    "modelCount": 2,
+    "latestVersion": 7
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "Battery",
+      "Keyboard",
+      "Microwave",
+      "Mobile",
+      "Mouse",
+      "Player",
+      "Printer",
+      "Television",
+      "Washing Machine"
+    ],
+    "name": "E-waste",
+    "url": "https://universe.roboflow.com/ewaste-k1a9x/e-waste-tdvbp",
+    "workspace": {
+      "name": "Ewaste",
+      "url": "ewaste-k1a9x"
+    },
+    "projectId": "mC8j0eWgGohMG9gD2H1e",
+    "type": "object-detection",
+    "annotation": "e-waste",
+    "thumbnail": "https://source.roboflow.com/eOtniI9biNXMPrM25UkIrHX4O602/qoW6iDkcNluVbUDxLQBP/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/eOtniI9biNXMPrM25UkIrHX4O602/qoW6iDkcNluVbUDxLQBP/annotation-e-waste.png",
+    "classes": [
+      "Battery",
+      "Keyboard",
+      "Microwave",
+      "Mobile",
+      "Mouse",
+      "PCB",
+      "Player",
+      "Printer",
+      "Television",
+      "Washing Machine"
+    ],
+    "classCount": 10,
+    "images": 2371,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 5
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "arrow",
+      "circle",
+      "document",
+      "head",
+      "square",
+      "text",
+      "triangle",
+      "class attributes",
+      "class name",
+      "database",
+      "link",
+      "oval",
+      "parallelogram",
+      "process",
+      "rectangle",
+      "rhombus"
+    ],
+    "name": " HandwrittenV2",
+    "url": "https://universe.roboflow.com/psd-gtq91/handwrittenv2",
+    "workspace": {
+      "name": "PSD",
+      "url": "psd-gtq91"
+    },
+    "projectId": "zDaGA5LxPHmYy6Otla0K",
+    "type": "object-detection",
+    "annotation": "shapes",
+    "thumbnail": "https://source.roboflow.com/LXsUqqR9XINq34q04Nmw82MLVWD3/v6xlTauZ4BZD4WWi4T3L/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/LXsUqqR9XINq34q04Nmw82MLVWD3/v6xlTauZ4BZD4WWi4T3L/annotation-shapes.png",
+    "classes": [
+      "arrow",
+      "circle",
+      "document",
+      "head",
+      "square",
+      "text",
+      "triangle",
+      "class attributes",
+      "class name",
+      "connector",
+      "database",
+      "link",
+      "oval",
+      "parallelogram",
+      "process",
+      "rectangle",
+      "rhombus"
+    ],
+    "classCount": 17,
+    "images": 2289,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov8",
+      "model:yolov8s",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 3,
+    "views": 411,
+    "downloads": 14,
+    "modelCount": 2,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "fuse-cutout",
+      "horizontal-insulator",
+      "overhead-switch",
+      "vertical-insulator"
+    ],
+    "name": "robocelesc",
+    "url": "https://universe.roboflow.com/testerobocelesc/robocelesc-zrn9m",
+    "workspace": {
+      "name": "testerobocelesc",
+      "url": "testerobocelesc"
+    },
+    "projectId": "4IRTzoKqpSpnDF19N94l",
+    "type": "object-detection",
+    "annotation": "componentes",
+    "thumbnail": "https://source.roboflow.com/lfoemouH7BfQ20xsrtlOyKT2ANP2/Dq5L8lfHzgcdA0t8SZeS/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/lfoemouH7BfQ20xsrtlOyKT2ANP2/Dq5L8lfHzgcdA0t8SZeS/annotation-componentes.png",
+    "classes": [
+      "transformer",
+      "connector",
+      "fuse-cutout",
+      "horizontal-insulator",
+      "overhead-switch",
+      "vertical-insulator"
+    ],
+    "classCount": 6,
+    "images": 2284,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov9"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 5,
+    "views": 108,
+    "downloads": 9,
+    "modelCount": 1,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "computer",
+      "monitor",
+      "mouse",
+      "phone",
+      "plastic",
+      "remote",
+      "speaker",
+      "television",
+      "toaster",
+      "Air Conditioner",
+      "Android Car Radio",
+      "Antenae",
+      "Appliances",
+      "Bags",
+      "Battery Charger",
+      "Blender",
+      "Bulb",
+      "Cable Charger"
+    ],
+    "name": "Tetrapak",
+    "url": "https://universe.roboflow.com/circularity-7fb36/tetrapak-quant",
+    "workspace": {
+      "name": "circularity",
+      "url": "circularity-7fb36"
+    },
+    "projectId": "p3F6pa62lgcjFgsCjoMj",
+    "type": "object-detection",
+    "annotation": "Tetrapak",
+    "thumbnail": "https://source.roboflow.com/P1aGnN4sttM5SkA7ReoV80Q7Cr73/gEGxwjqrIeDZo7E1RMFR/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/P1aGnN4sttM5SkA7ReoV80Q7Cr73/gEGxwjqrIeDZo7E1RMFR/annotation-Tetrapak.png",
+    "classes": [
+      "computer",
+      "monitor",
+      "mouse",
+      "phone",
+      "plastic",
+      "remote",
+      "socket",
+      "speaker",
+      "switch",
+      "television",
+      "toaster",
+      "Air Conditioner",
+      "Android Car Radio",
+      "Antenae",
+      "Appliances",
+      "Bags",
+      "Battery Charger",
+      "Blender",
+      "Bulb",
+      "Cable Charger"
+    ],
+    "classCount": 115,
+    "images": 2248,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "MIT",
+    "stars": 1,
+    "views": 119,
+    "downloads": 4,
+    "modelCount": 2,
+    "latestVersion": 5
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [
+      "monitor",
+      "case_pc",
+      "cd_room",
+      "hdd",
+      "heatsink",
+      "monitor 1",
+      "monitor 12",
+      "monitor 14",
+      "monitor 15",
+      "monitor 16",
+      "monitor 17",
+      "monitor 18",
+      "monitor 19",
+      "monitor 2",
+      "monitor 20",
+      "monitor 21",
+      "monitor 22",
+      "monitor 23",
+      "monitor 24"
+    ],
+    "name": "Hardware Detection",
+    "url": "https://universe.roboflow.com/yalonp/hardware-detection-zumd5",
+    "workspace": {
+      "name": "Yalonp",
+      "url": "yalonp"
+    },
+    "projectId": "0cUfxqWHNbYlzOH8U5sJ",
+    "type": "object-detection",
+    "annotation": "Hardware",
+    "thumbnail": "https://source.roboflow.com/k7FyQf39xSXwbiOTtMkhh5I0hkA2/5Z1HfZZvb3UDFaz1NLl4/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/k7FyQf39xSXwbiOTtMkhh5I0hkA2/5Z1HfZZvb3UDFaz1NLl4/annotation-Hardware.png",
+    "classes": [
+      "monitor",
+      "case_pc",
+      "cd_room",
+      "cpu",
+      "hdd",
+      "heatsink",
+      "monitor 1",
+      "monitor 12",
+      "monitor 14",
+      "monitor 15",
+      "monitor 16",
+      "monitor 17",
+      "monitor 18",
+      "monitor 19",
+      "monitor 2",
+      "monitor 20",
+      "monitor 21",
+      "monitor 22",
+      "monitor 23",
+      "monitor 24"
+    ],
+    "classCount": 91,
+    "images": 1866,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 1,
+    "views": 34,
+    "downloads": 2,
+    "modelCount": 0,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "-",
+      "Battery",
+      "Conductor",
+      "Display",
+      "Fiducial",
+      "Filter"
+    ],
+    "name": "PCB- Colab",
+    "url": "https://universe.roboflow.com/mylab/pcb-colab",
+    "workspace": {
+      "name": "Mylab",
+      "url": "mylab"
+    },
+    "projectId": "hFryAYE8p7GxaUUx5wPc",
+    "type": "object-detection",
+    "annotation": "PCB",
+    "thumbnail": "https://source.roboflow.com/Gi6QVUSVi5eYXNFR6VSqfdDuo5H3/009ahmwP55jASFBxywMH/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/Gi6QVUSVi5eYXNFR6VSqfdDuo5H3/009ahmwP55jASFBxywMH/annotation-PCB.png",
+    "classes": [
+      "capacitor",
+      "-",
+      "Battery",
+      "Button",
+      "Buzzer",
+      "Capacitor",
+      "Capacitor Jumper",
+      "Capacitor Network",
+      "Clock",
+      "Conductor",
+      "Connector",
+      "Diode",
+      "Display",
+      "EM",
+      "Electrolytic Capacitor",
+      "Electrolytic capacitor",
+      "Ferrite Bead",
+      "Fiducial",
+      "Filter",
+      "Flex Cable"
+    ],
+    "classCount": 50,
+    "images": 1755,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 427,
+    "downloads": 2,
+    "modelCount": 0,
+    "latestVersion": null
+  },
+  {
+    "score": 1,
+    "covers": [
+      "RAM"
+    ],
+    "unmapped": [
+      "cable",
+      "9V Battery",
+      "Battery",
+      "HDD",
+      "Keyboard",
+      "NetworkSwitch",
+      "Printed Circuit Board PCB",
+      "Remote control",
+      "Router",
+      "Smart Phone",
+      "USB Flash Drive",
+      "computer mouse",
+      "internal HDD"
+    ],
+    "name": "E-waste detection model ",
+    "url": "https://universe.roboflow.com/trcproject/e-waste-detection-model",
+    "workspace": {
+      "name": "TRCProject",
+      "url": "trcproject"
+    },
+    "projectId": "RJaAbaqyqxrnwjw2SNFa",
+    "type": "object-detection",
+    "annotation": "E-waste",
+    "thumbnail": "https://source.roboflow.com/MtNQlltlTBXXTK76OdeCxYAlPLy2/00juRu1UeX55f13NemKx/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/MtNQlltlTBXXTK76OdeCxYAlPLy2/00juRu1UeX55f13NemKx/annotation-E-waste.png",
+    "classes": [
+      "cable",
+      "9V Battery",
+      "Battery",
+      "HDD",
+      "Keyboard",
+      "NetworkSwitch",
+      "Printed Circuit Board PCB",
+      "RAM",
+      "Remote control",
+      "Router",
+      "Smart Phone",
+      "USB Flash Drive",
+      "computer mouse",
+      "internal HDD"
+    ],
+    "classCount": 14,
+    "images": 1690,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap",
+      "model:yolov8",
+      "model:yolov8s"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 3,
+    "views": 1750,
+    "downloads": 75,
+    "modelCount": 3,
+    "latestVersion": 5
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [
+      "battery",
+      "cable",
+      "phone",
+      "remote",
+      "10k_ohm_resistor",
+      "1k_ohm_resistor",
+      "220_ohm_resistor",
+      "2k_ohm_resistor",
+      "330_ohm_resistor",
+      "AC-to-DC-power-adapter",
+      "Apple computer motherboard",
+      "Arduino microcontroller",
+      "Blow dry machine",
+      "CPU-Shredding and Seperation",
+      "Camera-WEEE Recycling",
+      "Card",
+      "Cellphone"
+    ],
+    "name": "PCB-collect",
+    "url": "https://universe.roboflow.com/learningcomputervision/pcb-collect",
+    "workspace": {
+      "name": "Learningcomputervision",
+      "url": "learningcomputervision"
+    },
+    "projectId": "hvI25pXinMNXCPF60U4p",
+    "type": "object-detection",
+    "annotation": "PCB-components",
+    "thumbnail": "https://source.roboflow.com/QAUEYIkv7AQF31qaEA08oCmeZeI2/MdIYDLWsxpjnMeaF16HG/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/QAUEYIkv7AQF31qaEA08oCmeZeI2/MdIYDLWsxpjnMeaF16HG/annotation-PCB-components.png",
+    "classes": [
+      "battery",
+      "cable",
+      "phone",
+      "remote",
+      "transistor",
+      "10k_ohm_resistor",
+      "1k_ohm_resistor",
+      "220_ohm_resistor",
+      "2k_ohm_resistor",
+      "330_ohm_resistor",
+      "AC-to-DC-power-adapter",
+      "Apple computer motherboard",
+      "Arduino microcontroller",
+      "Blow dry machine",
+      "CPU",
+      "CPU-Shredding and Seperation",
+      "Camera-WEEE Recycling",
+      "Capacitor",
+      "Card",
+      "Cellphone"
+    ],
+    "classCount": 74,
+    "images": 1367,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 5,
+    "views": 1036,
+    "downloads": 21,
+    "modelCount": 1,
+    "latestVersion": 5
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "cctv-camerarotation",
+      "devices",
+      "ethernet-switchrotation",
+      "routerrotation"
+    ],
+    "name": "Yolov8",
+    "url": "https://universe.roboflow.com/uz/yolov8-7imic",
+    "workspace": {
+      "name": "Uz",
+      "url": "uz"
+    },
+    "projectId": "pTOi5WbfSXwbH2F5v01F",
+    "type": "object-detection",
+    "annotation": "devices",
+    "thumbnail": "https://source.roboflow.com/0VwjaKUG8pOguXuFjAORTp5GpgW2/t0KkkMSnygLlvUyH6Vaa/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/0VwjaKUG8pOguXuFjAORTp5GpgW2/t0KkkMSnygLlvUyH6Vaa/annotation-devices.png",
+    "classes": [
+      "Motherboard",
+      "cctv-camerarotation",
+      "devices",
+      "ethernet-switchrotation",
+      "routerrotation"
+    ],
+    "classCount": 5,
+    "images": 1248,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov8s",
+      "model:yolov8",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 1,
+    "views": 257,
+    "downloads": 11,
+    "modelCount": 1,
+    "latestVersion": 6
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "Battery-1.5V",
+      "Battery-9V",
+      "Harddrive",
+      "Keyboard",
+      "Networkswitch",
+      "Remote",
+      "Thumbdrive"
+    ],
+    "name": "Electronic waste",
+    "url": "https://universe.roboflow.com/maxs-workspace-y04dh/electronic-waste-ukqgc",
+    "workspace": {
+      "name": "Maxs Workspace",
+      "url": "maxs-workspace-y04dh"
+    },
+    "projectId": "ZyuCaukH2eChoweYmKh0",
+    "type": "object-detection",
+    "annotation": "test-sttv",
+    "thumbnail": null,
+    "annotationThumbnail": null,
+    "classes": [
+      "Battery-1.5V",
+      "Battery-9V",
+      "Harddrive",
+      "Keyboard",
+      "Networkswitch",
+      "PCB",
+      "Remote",
+      "Thumbdrive"
+    ],
+    "classCount": 8,
+    "images": 932,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "battery",
+      "component text",
+      "display",
+      "emi filter"
+    ],
+    "name": "Internship 2",
+    "url": "https://universe.roboflow.com/pcb-component-detection/internship-2-jsdza",
+    "workspace": {
+      "name": "PCB Component Detection",
+      "url": "pcb-component-detection"
+    },
+    "projectId": "Nr5qA8JaxP7EPH29pKVH",
+    "type": "object-detection",
+    "annotation": "Electronic-Components-oMiJ",
+    "thumbnail": "https://source.roboflow.com/4LWi4ZTTiadGsP7qR3GWUOaxFro2/fyn96jw5UuJg8bpIU84Y/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/4LWi4ZTTiadGsP7qR3GWUOaxFro2/fyn96jw5UuJg8bpIU84Y/annotation-Electronic-Components-oMiJ.png",
+    "classes": [
+      "battery",
+      "button",
+      "capacitor",
+      "clock",
+      "diode",
+      "inductor",
+      "resistor",
+      "switch",
+      "transformer",
+      "transistor",
+      "EM",
+      "IC",
+      "LED",
+      "buzzer",
+      "component text",
+      "connector",
+      "display",
+      "electrolytic capacitor",
+      "emi filter",
+      "ferrite bead"
+    ],
+    "classCount": 30,
+    "images": 835,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 10,
+    "views": 671,
+    "downloads": 36,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "Battery",
+      "Conductor",
+      "Display",
+      "Filter",
+      "Heatsink"
+    ],
+    "name": "circuit elements",
+    "url": "https://universe.roboflow.com/roboflow-100/circuit-elements",
+    "workspace": {
+      "name": "Roboflow 100",
+      "url": "roboflow-100"
+    },
+    "projectId": "krN8UQ1jmcApeLDi5qsz",
+    "type": "object-detection",
+    "annotation": "circuit",
+    "thumbnail": "https://source.roboflow.com/pwYAXv9BTpqLyFfgQoPZ/UlPBMehY47Q1SS2JXKj9/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/pwYAXv9BTpqLyFfgQoPZ/UlPBMehY47Q1SS2JXKj9/annotation-circuit.png",
+    "classes": [
+      "Battery",
+      "Button",
+      "Buzzer",
+      "Capacitor",
+      "Capacitor Jumper",
+      "Capacitor Network",
+      "Clock",
+      "Conductor",
+      "Connector",
+      "Diode",
+      "Display",
+      "EM",
+      "Electrolytic Capacitor",
+      "Electrolytic capacitor",
+      "Ferrite Bead",
+      "Filter",
+      "Flex Cable",
+      "Fuse",
+      "Heatsink",
+      "IC"
+    ],
+    "classCount": 46,
+    "images": 772,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov5"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 4,
+    "views": 8799,
+    "downloads": 319,
+    "modelCount": 1,
+    "latestVersion": 4
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [],
+    "name": " printed circuit board",
+    "url": "https://universe.roboflow.com/luizf/printed-circuit-board-lafr6",
+    "workspace": {
+      "name": "LuizF",
+      "url": "luizf"
+    },
+    "projectId": "8n0V8RULzGqMzk4aL3Kt",
+    "type": "instance-segmentation",
+    "annotation": "objects",
+    "thumbnail": "https://source.roboflow.com/EP5KNsdeobbzWHALZdftmCRw3vJ2/sB8Q5mZ5ptMVxYzllNyB/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/EP5KNsdeobbzWHALZdftmCRw3vJ2/sB8Q5mZ5ptMVxYzllNyB/annotation-objects.png",
+    "classes": [
+      "Button",
+      "Capacitor",
+      "Capacitor Jumper",
+      "Clock",
+      "Connector",
+      "Diode",
+      "EM",
+      "Electrolytic Capacitor",
+      "Ferrite Bead",
+      "IC",
+      "Inductor",
+      "Jumper",
+      "Led",
+      "Pads",
+      "Pins",
+      "Resistor",
+      "Resistor Jumper",
+      "Resistor Network",
+      "Switch",
+      "Test Point"
+    ],
+    "classCount": 23,
+    "images": 672,
+    "description": null,
+    "tags": [
+      "instance-segmentation",
+      "model",
+      "model:roboflow-3-n-seg"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 1,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "-",
+      "Battery",
+      "Display",
+      "Heatsink",
+      "PS"
+    ],
+    "name": "printed circuit board",
+    "url": "https://universe.roboflow.com/roboflow-100/printed-circuit-board",
+    "workspace": {
+      "name": "Roboflow 100",
+      "url": "roboflow-100"
+    },
+    "projectId": "zprEoPMmurADI8w8juP1",
+    "type": "object-detection",
+    "annotation": "printed-circuit-board",
+    "thumbnail": "https://source.roboflow.com/pwYAXv9BTpqLyFfgQoPZ/g0JWzfdLUIDU0hEO1VJG/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/pwYAXv9BTpqLyFfgQoPZ/g0JWzfdLUIDU0hEO1VJG/annotation-printed-circuit-board.png",
+    "classes": [
+      "-",
+      "Battery",
+      "Button",
+      "Buzzer",
+      "Capacitor",
+      "Capacitor Jumper",
+      "Clock",
+      "Connector",
+      "Diode",
+      "Display",
+      "EM",
+      "Electrolytic Capacitor",
+      "Ferrite Bead",
+      "Fuse",
+      "Heatsink",
+      "IC",
+      "Inductor",
+      "Jumper",
+      "Led",
+      "PS"
+    ],
+    "classCount": 34,
+    "images": 672,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov5"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 12,
+    "views": 25515,
+    "downloads": 1092,
+    "modelCount": 1,
+    "latestVersion": 4
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [],
+    "name": "Classification",
+    "url": "https://universe.roboflow.com/classification-yvmiu/classification-kkzuz",
+    "workspace": {
+      "name": "classification",
+      "url": "classification-yvmiu"
+    },
+    "projectId": "d9Hjj2gmlSc6YXVuMJkQ",
+    "type": "object-detection",
+    "annotation": "Shapes",
+    "thumbnail": "https://source.roboflow.com/lCoatUUqcSOmaz7MAnJjsTTb6Ws2/mM4VrZb4fWvF7ZmIoeaG/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/lCoatUUqcSOmaz7MAnJjsTTb6Ws2/mM4VrZb4fWvF7ZmIoeaG/annotation-Shapes.png",
+    "classes": [
+      "Button",
+      "Capacitor",
+      "Capacitor Jumper",
+      "Clock",
+      "Connector",
+      "Diode",
+      "EM",
+      "Electrolytic Capacitor",
+      "Ferrite Bead",
+      "IC",
+      "Inductor",
+      "Jumper",
+      "Led",
+      "Pads",
+      "Pins",
+      "Resistor",
+      "Resistor Jumper",
+      "Resistor Network",
+      "Switch",
+      "Test Point"
+    ],
+    "classCount": 23,
+    "images": 672,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 3,
+    "views": 317,
+    "downloads": 13,
+    "modelCount": 1,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [],
+    "name": "PCB_NCKH",
+    "url": "https://universe.roboflow.com/tra-7uhgd/pcb_nckh-opehh",
+    "workspace": {
+      "name": "Tra",
+      "url": "tra-7uhgd"
+    },
+    "projectId": "zgzE58zB5EAbvx2LQAQw",
+    "type": "object-detection",
+    "annotation": "polyp-pXqi",
+    "thumbnail": "https://source.roboflow.com/fMPP3K9JgYdlh2dNT1vjkwc3KA22/riuKyPPauKcloZP7QbN9/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/fMPP3K9JgYdlh2dNT1vjkwc3KA22/riuKyPPauKcloZP7QbN9/annotation-polyp-pXqi.png",
+    "classes": [
+      "Button",
+      "Capacitor",
+      "Capacitor Jumper",
+      "Clock",
+      "Connector",
+      "Diode",
+      "EM",
+      "Electrolytic Capacitor",
+      "Ferrite Bead",
+      "IC",
+      "Inductor",
+      "Jumper",
+      "Led",
+      "Pads",
+      "Pins",
+      "Resistor",
+      "Resistor Jumper",
+      "Resistor Network",
+      "Switch",
+      "Test Point"
+    ],
+    "classCount": 23,
+    "images": 672,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov8",
+      "model:yolov8s",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 650,
+    "downloads": 13,
+    "modelCount": 1,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "Battery",
+      "Keyboard",
+      "Microwave",
+      "Mobile",
+      "Mouse",
+      "Player",
+      "Printer",
+      "Television",
+      "Washing Machine"
+    ],
+    "name": "e-waste",
+    "url": "https://universe.roboflow.com/yolotrial-czyrz/e-waste-njtdp",
+    "workspace": {
+      "name": "YOLOtrial",
+      "url": "yolotrial-czyrz"
+    },
+    "projectId": "SD6Jtv9tGb1gKTdk1gf7",
+    "type": "object-detection",
+    "annotation": "battery",
+    "thumbnail": "https://source.roboflow.com/cUe83cTMwvRfxmVVbsPge8xmzeU2/XUyFs5lLHilppPuitcgM/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/cUe83cTMwvRfxmVVbsPge8xmzeU2/XUyFs5lLHilppPuitcgM/annotation-battery.png",
+    "classes": [
+      "Battery",
+      "Keyboard",
+      "Microwave",
+      "Mobile",
+      "Mouse",
+      "PCB",
+      "Player",
+      "Printer",
+      "Television",
+      "Washing Machine"
+    ],
+    "classCount": 10,
+    "images": 656,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:yolov11",
+      "model:yolov11n"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 1,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "cable",
+      "speaker",
+      "ac",
+      "audio_gear",
+      "computing",
+      "cooking_appliances",
+      "digital_camera",
+      "display",
+      "grooming_tool",
+      "ironbox",
+      "large_appliance",
+      "media_player",
+      "mobile_device",
+      "networking",
+      "office_equipment",
+      "pc_accessory",
+      "power_supply",
+      "solar_panel",
+      "wearable"
+    ],
+    "name": "ewaste",
+    "url": "https://universe.roboflow.com/jeevirobo-o1q85/ewaste-jdevj",
+    "workspace": {
+      "name": "Jeevirobo",
+      "url": "jeevirobo-o1q85"
+    },
+    "projectId": "32S9XwiQnmNPmCcM5qRn",
+    "type": "object-detection",
+    "annotation": "digital_camera",
+    "thumbnail": "https://source.roboflow.com/Q2gUnS2GzsZQSUjlzuQftKJ0Y493/CxAlvim9sr5iqGwTD087/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/Q2gUnS2GzsZQSUjlzuQftKJ0Y493/CxAlvim9sr5iqGwTD087/annotation-digital_camera.png",
+    "classes": [
+      "cable",
+      "speaker",
+      "ac",
+      "audio_gear",
+      "computing",
+      "cooking_appliances",
+      "digital_camera",
+      "display",
+      "grooming_tool",
+      "ironbox",
+      "large_appliance",
+      "media_player",
+      "mobile_device",
+      "networking",
+      "office_equipment",
+      "pc_accessory",
+      "pcb",
+      "power_supply",
+      "solar_panel",
+      "wearable"
+    ],
+    "classCount": 20,
+    "images": 648,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [
+      "bicycle",
+      "bottle",
+      "car",
+      "chair",
+      "fan",
+      "helmet",
+      "keyboard",
+      "laptop",
+      "mobile",
+      "monitor",
+      "mouse",
+      "pen",
+      "person",
+      "speaker",
+      "table",
+      "books",
+      "monitor-mouse-keyboard-cpu-chair",
+      "shoes",
+      "tubelight"
+    ],
+    "name": "Computer components",
+    "url": "https://universe.roboflow.com/obj-mwipi/computer-components",
+    "workspace": {
+      "name": "OBJ",
+      "url": "obj-mwipi"
+    },
+    "projectId": "nGo2KxOElg7mSqidYZMR",
+    "type": "object-detection",
+    "annotation": "monitor-mouse-keyboard-cpu-chair",
+    "thumbnail": "https://source.roboflow.com/M4eyQgNgkOeH5JPCBf5P5oAJKw73/OLHyAX4jwMUVtbKGMbjo/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/M4eyQgNgkOeH5JPCBf5P5oAJKw73/OLHyAX4jwMUVtbKGMbjo/annotation-monitor-mouse-keyboard-cpu-chair.png",
+    "classes": [
+      "bicycle",
+      "bottle",
+      "car",
+      "chair",
+      "fan",
+      "helmet",
+      "keyboard",
+      "laptop",
+      "mobile",
+      "monitor",
+      "mouse",
+      "pen",
+      "person",
+      "speaker",
+      "table",
+      "books",
+      "cpu",
+      "monitor-mouse-keyboard-cpu-chair",
+      "shoes",
+      "tubelight"
+    ],
+    "classCount": 20,
+    "images": 637,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 80,
+    "downloads": 5,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "Battery",
+      "Keyboard",
+      "Microwave",
+      "Mobile",
+      "Mouse",
+      "Player",
+      "Printer",
+      "Television",
+      "Washing Machine"
+    ],
+    "name": "Ewaste",
+    "url": "https://universe.roboflow.com/assignment-v2gus/ewaste-hdwiy",
+    "workspace": {
+      "name": "Assignment",
+      "url": "assignment-v2gus"
+    },
+    "projectId": "AWwRWrT28HmEkH9GiMnK",
+    "type": "object-detection",
+    "annotation": "Battery",
+    "thumbnail": "https://source.roboflow.com/5IdbLU76tYNF91XWx8LABxOQ6ko1/bP3sd6oFbCZl3776YVrH/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/5IdbLU76tYNF91XWx8LABxOQ6ko1/bP3sd6oFbCZl3776YVrH/annotation-Battery.png",
+    "classes": [
+      "Battery",
+      "Keyboard",
+      "Microwave",
+      "Mobile",
+      "Mouse",
+      "PCB",
+      "Player",
+      "Printer",
+      "Television",
+      "Washing Machine"
+    ],
+    "classCount": 10,
+    "images": 630,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [
+      "battery",
+      "cable",
+      "phone",
+      "remote",
+      "Apple computer motherboard",
+      "Blow dry machine",
+      "CPU-Shredding and Seperation",
+      "Camera-WEEE Recycling",
+      "Card",
+      "Cellphone",
+      "Charger",
+      "Charger-WEEE Recycling",
+      "D-Link Router",
+      "DVD/TV Remote",
+      "Desktop Keyboard",
+      "Desktop Monitor",
+      "Desktop-Donation and Refurbishment",
+      "Electronic",
+      "Feature phone"
+    ],
+    "name": "Ecolect",
+    "url": "https://universe.roboflow.com/learningcomputervision/ecolect",
+    "workspace": {
+      "name": "Learningcomputervision",
+      "url": "learningcomputervision"
+    },
+    "projectId": "yUrAq74PgNreU2ECQFjj",
+    "type": "object-detection",
+    "annotation": "Smartphones-laptops-keyboards",
+    "thumbnail": "https://source.roboflow.com/QAUEYIkv7AQF31qaEA08oCmeZeI2/003WBFQuZc9NQZa0M1GH/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/QAUEYIkv7AQF31qaEA08oCmeZeI2/003WBFQuZc9NQZa0M1GH/annotation-Smartphones-laptops-keyboards.png",
+    "classes": [
+      "battery",
+      "cable",
+      "phone",
+      "remote",
+      "Apple computer motherboard",
+      "Blow dry machine",
+      "CPU",
+      "CPU-Shredding and Seperation",
+      "Camera-WEEE Recycling",
+      "Card",
+      "Cellphone",
+      "Charger",
+      "Charger-WEEE Recycling",
+      "D-Link Router",
+      "DVD/TV Remote",
+      "Desktop Keyboard",
+      "Desktop Monitor",
+      "Desktop-Donation and Refurbishment",
+      "Electronic",
+      "Feature phone"
+    ],
+    "classCount": 53,
+    "images": 603,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 452,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": null
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "battery",
+      "display",
+      "relay"
+    ],
+    "name": "CompDetect",
+    "url": "https://universe.roboflow.com/dataset-lmrsw/compdetect",
+    "workspace": {
+      "name": "Dataset",
+      "url": "dataset-lmrsw"
+    },
+    "projectId": "02v8Iili8zB9Pcei1szq",
+    "type": "object-detection",
+    "annotation": "Components",
+    "thumbnail": "https://source.roboflow.com/c0sZLaBydqY5TGaMMgTNsXgcWb13/8CsX9yTA8TVCLWm6pjfG/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/c0sZLaBydqY5TGaMMgTNsXgcWb13/8CsX9yTA8TVCLWm6pjfG/annotation-Components.png",
+    "classes": [
+      "battery",
+      "capacitor",
+      "clock",
+      "diode",
+      "inductor",
+      "resistor",
+      "switch",
+      "transistor",
+      "IC",
+      "LED",
+      "buzzer",
+      "connector",
+      "display",
+      "fuse",
+      "potentiometer",
+      "relay"
+    ],
+    "classCount": 16,
+    "images": 583,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 7,
+    "views": 4788,
+    "downloads": 303,
+    "modelCount": 2,
+    "latestVersion": 23
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "battery",
+      "cable",
+      "mobile",
+      "remote",
+      "sdcard"
+    ],
+    "name": "ewaste",
+    "url": "https://universe.roboflow.com/work-9dvgk/ewaste-efxwy",
+    "workspace": {
+      "name": "work",
+      "url": "work-9dvgk"
+    },
+    "projectId": "d70MJpOmLsHcCyH38SEp",
+    "type": "object-detection",
+    "annotation": "battery-pcb-cable-remote-sdcard",
+    "thumbnail": "https://source.roboflow.com/JR24p0v0aiOhJVvo96twRzOL4SH3/tdP7Fwc2U0fgUwZ1eRdL/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/JR24p0v0aiOhJVvo96twRzOL4SH3/tdP7Fwc2U0fgUwZ1eRdL/annotation-battery-pcb-cable-remote-sdcard.png",
+    "classes": [
+      "battery",
+      "cable",
+      "mobile",
+      "remote",
+      "pcb",
+      "sdcard"
+    ],
+    "classCount": 6,
+    "images": 422,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 5,
+    "downloads": 1,
+    "modelCount": 0,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [
+      "vga"
+    ],
+    "name": "Hardware",
+    "url": "https://universe.roboflow.com/aok-project/hardware-mrwsb",
+    "workspace": {
+      "name": "AOK Project",
+      "url": "aok-project"
+    },
+    "projectId": "OkttuTtSIavJZDOQUIRa",
+    "type": "object-detection",
+    "annotation": "Hardware",
+    "thumbnail": "https://source.roboflow.com/o1AZc7JYLJPflLG0OAVJOpoPB772/49S5IHuQcylShWOZwx0U/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/o1AZc7JYLJPflLG0OAVJOpoPB772/49S5IHuQcylShWOZwx0U/annotation-Hardware.png",
+    "classes": [
+      "processor",
+      "vga"
+    ],
+    "classCount": 2,
+    "images": 367,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 5,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": null
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [],
+    "name": "PCB_detection",
+    "url": "https://universe.roboflow.com/jeppeao/pcb_detection-cbtbb",
+    "workspace": {
+      "name": "JeppeAO",
+      "url": "jeppeao"
+    },
+    "projectId": "QPLnrnuQeYB9XIsfsdTy",
+    "type": "object-detection",
+    "annotation": "pcb",
+    "thumbnail": "https://source.roboflow.com/rILnQ7OY8CMceorXj1nDWjdzPSg1/hk0ylF91AjqYr7HnCHo2/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/rILnQ7OY8CMceorXj1nDWjdzPSg1/hk0ylF91AjqYr7HnCHo2/annotation-pcb.png",
+    "classes": [
+      "Capacitor",
+      "IC",
+      "PCB",
+      "Resistor"
+    ],
+    "classCount": 4,
+    "images": 327,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 66,
+    "downloads": 3,
+    "modelCount": 2,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [
+      "battery",
+      "cable",
+      "phone",
+      "remote",
+      "AC-to-DC-power-adapter",
+      "Apple computer motherboard",
+      "Arduino microcontroller",
+      "Blow dry machine",
+      "CPU-Shredding and Seperation",
+      "Camera-WEEE Recycling",
+      "Cellphone",
+      "Charger",
+      "Charger-WEEE Recycling",
+      "Computer power supply unit",
+      "D-Link Router",
+      "DVD/TV Remote",
+      "Desktop Keyboard",
+      "Desktop Monitor",
+      "Desktop-Donation and Refurbishment"
+    ],
+    "name": "E-collect",
+    "url": "https://universe.roboflow.com/learningcomputervision/e-collect",
+    "workspace": {
+      "name": "Learningcomputervision",
+      "url": "learningcomputervision"
+    },
+    "projectId": "Wbq8SGgQjmR01CFhs4rP",
+    "type": "object-detection",
+    "annotation": "Laptops-mobilephones-accessories",
+    "thumbnail": "https://source.roboflow.com/QAUEYIkv7AQF31qaEA08oCmeZeI2/ICsNa5bryFQZ3WUUp7ip/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/QAUEYIkv7AQF31qaEA08oCmeZeI2/ICsNa5bryFQZ3WUUp7ip/annotation-Laptops-mobilephones-accessories.png",
+    "classes": [
+      "battery",
+      "cable",
+      "phone",
+      "remote",
+      "AC-to-DC-power-adapter",
+      "Apple computer motherboard",
+      "Arduino microcontroller",
+      "Blow dry machine",
+      "CPU",
+      "CPU-Shredding and Seperation",
+      "Camera-WEEE Recycling",
+      "Cellphone",
+      "Charger",
+      "Charger-WEEE Recycling",
+      "Computer power supply unit",
+      "D-Link Router",
+      "DVD/TV Remote",
+      "Desktop Keyboard",
+      "Desktop Monitor",
+      "Desktop-Donation and Refurbishment"
+    ],
+    "classCount": 60,
+    "images": 266,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 397,
+    "downloads": 26,
+    "modelCount": 0,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "Battery"
+    ],
+    "name": "Electronic Waste Detection",
+    "url": "https://universe.roboflow.com/voltawastes-workspace/electronic-waste-detection-b0gco",
+    "workspace": {
+      "name": "Voltawastes Workspace",
+      "url": "voltawastes-workspace"
+    },
+    "projectId": "esZAeFlttGgkxrPRJ19Q",
+    "type": "object-detection",
+    "annotation": "Electronic-Waste-Detection",
+    "thumbnail": "https://source.roboflow.com/fiTWRGWuInQJ1diDLuNjx3zyrSi1/ippXvMW6tnBJwjbN7DRt/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/fiTWRGWuInQJ1diDLuNjx3zyrSi1/ippXvMW6tnBJwjbN7DRt/annotation-Electronic-Waste-Detection.png",
+    "classes": [
+      "Battery",
+      "PCB"
+    ],
+    "classCount": 2,
+    "images": 245,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 10
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "Metallized_Polycarbonate_Capacitor",
+      "carbon_film_resistor",
+      "ceramic_capacitor",
+      "crystal_oscillator",
+      "film_capacitor",
+      "optocoupler",
+      "relay",
+      "resistor_array",
+      "smd_capacitor",
+      "smd_resistor",
+      "tantalum_capacitor",
+      "voltage_regulator"
+    ],
+    "name": "PCB",
+    "url": "https://universe.roboflow.com/project1-s9kw6/pcb-g4jrl",
+    "workspace": {
+      "name": "Project1",
+      "url": "project1-s9kw6"
+    },
+    "projectId": "G9heuLgMyCPpNlMytGYv",
+    "type": "object-detection",
+    "annotation": "components",
+    "thumbnail": "https://source.roboflow.com/EELpWwZWJZOBxnC8Orsc5WMUhFj2/2qS2tTiC977X2jPrLEjp/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/EELpWwZWJZOBxnC8Orsc5WMUhFj2/2qS2tTiC977X2jPrLEjp/annotation-components.png",
+    "classes": [
+      "diode",
+      "inductor",
+      "transformer",
+      "transistor",
+      "Connectors",
+      "IC",
+      "LED",
+      "Metallized_Polycarbonate_Capacitor",
+      "carbon_film_resistor",
+      "ceramic_capacitor",
+      "crystal_oscillator",
+      "electrolytic_capacitor",
+      "film_capacitor",
+      "optocoupler",
+      "relay",
+      "resistor_array",
+      "smd_capacitor",
+      "smd_resistor",
+      "tantalum_capacitor",
+      "voltage_regulator"
+    ],
+    "classCount": 21,
+    "images": 232,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "Capacitor_SMD",
+      "Capacitor_THT_C",
+      "Capacitor_THT_E",
+      "Electronic-components",
+      "IntCircuit",
+      "Resistor_SMD",
+      "Resistor_THT"
+    ],
+    "name": "Electronic components detection",
+    "url": "https://universe.roboflow.com/wee-xrtt6/electronic-components-detection-ovqm9",
+    "workspace": {
+      "name": "WEE",
+      "url": "wee-xrtt6"
+    },
+    "projectId": "6tm5rWzNgj9nIa6CPxfy",
+    "type": "object-detection",
+    "annotation": "Electronic-components",
+    "thumbnail": "https://source.roboflow.com/hrEqYkMnjUYsNj8Ey1sMHINFB332/bdmkg6TckjJxoaI4PEt8/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/hrEqYkMnjUYsNj8Ey1sMHINFB332/bdmkg6TckjJxoaI4PEt8/annotation-Electronic-components.png",
+    "classes": [
+      "Capacitor_SMD",
+      "Capacitor_THT_C",
+      "Capacitor_THT_E",
+      "Connector",
+      "Diode",
+      "Electronic-components",
+      "IntCircuit",
+      "Resistor_SMD",
+      "Resistor_THT"
+    ],
+    "classCount": 9,
+    "images": 183,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "BY-NC-SA 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 5
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "defect",
+      "Display"
+    ],
+    "name": "Board circuit",
+    "url": "https://universe.roboflow.com/alanbsantos-bgehh/board-circuit",
+    "workspace": {
+      "name": "alanbsantos",
+      "url": "alanbsantos-bgehh"
+    },
+    "projectId": "tepq0u0ODe0JPDn0ZxMb",
+    "type": "object-detection",
+    "annotation": "Circuito",
+    "thumbnail": "https://source.roboflow.com/UITbiFaaZ7UkkvTHalte6N1pmiJ3/06InCkLGpNDMkPbe5XFX/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/UITbiFaaZ7UkkvTHalte6N1pmiJ3/06InCkLGpNDMkPbe5XFX/annotation-Circuito.png",
+    "classes": [
+      "defect",
+      "Button",
+      "Capacitor",
+      "Capacitor Jumper",
+      "Clock",
+      "Connector",
+      "Diode",
+      "Display",
+      "EM",
+      "Electrolytic Capacitor",
+      "Ferrite Bead",
+      "Fuse",
+      "IC",
+      "Inductor",
+      "Jumper",
+      "Led",
+      "Pads",
+      "Pins",
+      "Resistor",
+      "Resistor Jumper"
+    ],
+    "classCount": 27,
+    "images": 150,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "Public Domain",
+    "stars": 0,
+    "views": 17,
+    "downloads": 3,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "RAM"
+    ],
+    "unmapped": [
+      "hdd",
+      "ssd"
+    ],
+    "name": "Pengenalan-3-storage-komputer",
+    "url": "https://universe.roboflow.com/unaki/pengenalan-3-storage-komputer",
+    "workspace": {
+      "name": "unaki",
+      "url": "unaki"
+    },
+    "projectId": "vuN4g83eifj3Vi71GDis",
+    "type": "object-detection",
+    "annotation": "sparepart-komputer",
+    "thumbnail": "https://source.roboflow.com/CHgh23kmvQP9hY8nrYXi1ZjCqWU2/57q6GJxh0dyeOlQ6IpNQ/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/CHgh23kmvQP9hY8nrYXi1ZjCqWU2/57q6GJxh0dyeOlQ6IpNQ/annotation-sparepart-komputer.png",
+    "classes": [
+      "hdd",
+      "ram",
+      "ssd"
+    ],
+    "classCount": 3,
+    "images": 102,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 146,
+    "downloads": 12,
+    "modelCount": 3,
+    "latestVersion": 33
+  },
+  {
+    "score": 1,
+    "covers": [
+      "RAM"
+    ],
+    "unmapped": [],
+    "name": "Ram",
+    "url": "https://universe.roboflow.com/saida-ljvql/ram-epwwy",
+    "workspace": {
+      "name": "Saida",
+      "url": "saida-ljvql"
+    },
+    "projectId": "d60MGP2YBOY61yWTAKUV",
+    "type": "object-detection",
+    "annotation": "Ram",
+    "thumbnail": "https://source.roboflow.com/YsANl7gjqkdQur5UhWMI6xmC6512/sPF7fUOWevbe3qtHjVQn/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/YsANl7gjqkdQur5UhWMI6xmC6512/sPF7fUOWevbe3qtHjVQn/annotation-Ram.png",
+    "classes": [
+      "Ram"
+    ],
+    "classCount": 1,
+    "images": 100,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 51,
+    "downloads": 4,
+    "modelCount": 1,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "RAM"
+    ],
+    "unmapped": [],
+    "name": "RAM",
+    "url": "https://universe.roboflow.com/laura/ram-w9jwn",
+    "workspace": {
+      "name": "Laura",
+      "url": "laura"
+    },
+    "projectId": "PEcV2vSvXuVdVpdW48NC",
+    "type": "object-detection",
+    "annotation": "RAM",
+    "thumbnail": "https://source.roboflow.com/QNA4VHE9uBOHXKDvpaTyKGq9mFt1/MIea5VPwZpJzoPOioBoT/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/QNA4VHE9uBOHXKDvpaTyKGq9mFt1/MIea5VPwZpJzoPOioBoT/annotation-RAM.png",
+    "classes": [
+      "RAM"
+    ],
+    "classCount": 1,
+    "images": 100,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 59,
+    "downloads": 2,
+    "modelCount": 0,
+    "latestVersion": 3
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [],
+    "name": "Motherboard",
+    "url": "https://universe.roboflow.com/michael-chan/motherboard-uz8pl",
+    "workspace": {
+      "name": "Michael Chan",
+      "url": "michael-chan"
+    },
+    "projectId": "5FomaHjboesL7WJNPSbe",
+    "type": "object-detection",
+    "annotation": "Motherboard",
+    "thumbnail": "https://source.roboflow.com/gnuplP5ohceNEDip92rszIZUt6v1/7u4IIFAm0dRwh1LHDsXl/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/gnuplP5ohceNEDip92rszIZUt6v1/7u4IIFAm0dRwh1LHDsXl/annotation-Motherboard.png",
+    "classes": [
+      "Motherboard"
+    ],
+    "classCount": 1,
+    "images": 100,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 1,
+    "views": 1116,
+    "downloads": 41,
+    "modelCount": 0,
+    "latestVersion": 3
+  },
+  {
+    "score": 1,
+    "covers": [
+      "RAM"
+    ],
+    "unmapped": [],
+    "name": "RAM",
+    "url": "https://universe.roboflow.com/mfgvisionai/ram-rknr1",
+    "workspace": {
+      "name": "MfgVisionAI",
+      "url": "mfgvisionai"
+    },
+    "projectId": "AAaGVKK4NT43IrthcQda",
+    "type": "object-detection",
+    "annotation": "RAM",
+    "thumbnail": "https://source.roboflow.com/89vKrDYCd5UCgBjXDPDhnhMm3Wx2/Mfskqe6ukwkYr5o7Zxab/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/89vKrDYCd5UCgBjXDPDhnhMm3Wx2/Mfskqe6ukwkYr5o7Zxab/annotation-RAM.png",
+    "classes": [
+      "RAM"
+    ],
+    "classCount": 1,
+    "images": 99,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": null
+  },
+  {
+    "score": 1,
+    "covers": [
+      "RAM"
+    ],
+    "unmapped": [],
+    "name": "RAM",
+    "url": "https://universe.roboflow.com/dhruv-6gdfe/ram-zqth0",
+    "workspace": {
+      "name": "Dhruv",
+      "url": "dhruv-6gdfe"
+    },
+    "projectId": "GrktdCqU8cNWdm9Eok43",
+    "type": "object-detection",
+    "annotation": "RAM",
+    "thumbnail": "https://source.roboflow.com/BQEDop3tC7eWAx31LxKkKDNjfWN2/jJEkcgfoBQeOnmaSWR1H/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/BQEDop3tC7eWAx31LxKkKDNjfWN2/jJEkcgfoBQeOnmaSWR1H/annotation-RAM.png",
+    "classes": [
+      "RAM"
+    ],
+    "classCount": 1,
+    "images": 99,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [],
+    "name": "Motherboard",
+    "url": "https://universe.roboflow.com/mfgvisionai/motherboard-mzzbe",
+    "workspace": {
+      "name": "MfgVisionAI",
+      "url": "mfgvisionai"
+    },
+    "projectId": "pM9ajFRJFb6KV3kdmUtr",
+    "type": "object-detection",
+    "annotation": "Motherboard",
+    "thumbnail": "https://source.roboflow.com/89vKrDYCd5UCgBjXDPDhnhMm3Wx2/hvPG6rCpoLGMLVNdwijg/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/89vKrDYCd5UCgBjXDPDhnhMm3Wx2/hvPG6rCpoLGMLVNdwijg/annotation-Motherboard.png",
+    "classes": [
+      "Motherboard"
+    ],
+    "classCount": 1,
+    "images": 99,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": null
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [],
+    "name": "CPU",
+    "url": "https://universe.roboflow.com/laura/cpu",
+    "workspace": {
+      "name": "Laura",
+      "url": "laura"
+    },
+    "projectId": "ha8ir1Iufkr4x1vIuR6w",
+    "type": "object-detection",
+    "annotation": "CPU",
+    "thumbnail": "https://source.roboflow.com/QNA4VHE9uBOHXKDvpaTyKGq9mFt1/SS1mO9Qt5qq1nWeNnWgN/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/QNA4VHE9uBOHXKDvpaTyKGq9mFt1/SS1mO9Qt5qq1nWeNnWgN/annotation-CPU.png",
+    "classes": [
+      "CPU"
+    ],
+    "classCount": 1,
+    "images": 98,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 50,
+    "downloads": 4,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "Black_Connector",
+      "Green_Connector",
+      "Red_Connector",
+      "SBlack_Connector"
+    ],
+    "name": "Connector",
+    "url": "https://universe.roboflow.com/123-debyl/connector-4aygh",
+    "workspace": {
+      "name": "123",
+      "url": "123-debyl"
+    },
+    "projectId": "zTH1qqsQoDXQAQcy9wsE",
+    "type": "instance-segmentation",
+    "annotation": "Connector",
+    "thumbnail": "https://source.roboflow.com/XEQjQ4mF0cdaNW5qjikHVBKcqEY2/J1zcWutBp37bb3r0IKTO/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/XEQjQ4mF0cdaNW5qjikHVBKcqEY2/J1zcWutBp37bb3r0IKTO/annotation-Connector.png",
+    "classes": [
+      "Black_Connector",
+      "Connector",
+      "Green_Connector",
+      "Red_Connector",
+      "SBlack_Connector"
+    ],
+    "classCount": 5,
+    "images": 93,
+    "description": null,
+    "tags": [
+      "instance-segmentation",
+      "model",
+      "model:roboflow-3-n-seg"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 1,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "keyboard",
+      "laptop",
+      "phone",
+      "* Auto-orientation of pixel data (with EXIF-orientation stripping)",
+      "* Resize to 640x640 (Stretch)",
+      "* annotate, and create datasets",
+      "* collaborate with your team on computer vision projects",
+      "* collect & organize images",
+      "* export, train, and deploy computer vision models",
+      "* understand and search unstructured image data",
+      "* use active learning to improve your dataset over time",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "==============================",
+      "E-waste are annotated in YOLOv8 format.",
+      "For state of the art Computer Vision training notebooks you can use with this dataset,"
+    ],
+    "name": "e-waste",
+    "url": "https://universe.roboflow.com/project-ajgd8/e-waste-bn21a",
+    "workspace": {
+      "name": "project",
+      "url": "project-ajgd8"
+    },
+    "projectId": "rI6FtspJ5bNcHJKJ02MD",
+    "type": "object-detection",
+    "annotation": "all-electrical-products",
+    "thumbnail": "https://source.roboflow.com/IzosCh9aGpbVw2Tbzpv7Y4kfDgy2/243AytrSe3RJMceB4Uvc/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/IzosCh9aGpbVw2Tbzpv7Y4kfDgy2/243AytrSe3RJMceB4Uvc/annotation-all-electrical-products.png",
+    "classes": [
+      "keyboard",
+      "laptop",
+      "phone",
+      "* Auto-orientation of pixel data (with EXIF-orientation stripping)",
+      "* Resize to 640x640 (Stretch)",
+      "* annotate, and create datasets",
+      "* collaborate with your team on computer vision projects",
+      "* collect & organize images",
+      "* export, train, and deploy computer vision models",
+      "* understand and search unstructured image data",
+      "* use active learning to improve your dataset over time",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "==============================",
+      "E-waste are annotated in YOLOv8 format.",
+      "For state of the art Computer Vision training notebooks you can use with this dataset,",
+      "Motherboard"
+    ],
+    "classCount": 34,
+    "images": 86,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 1,
+    "views": 197,
+    "downloads": 9,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [],
+    "name": "Motherboard",
+    "url": "https://universe.roboflow.com/masters-5bgc5/motherboard-l07y7",
+    "workspace": {
+      "name": "Masters",
+      "url": "masters-5bgc5"
+    },
+    "projectId": "OEm8u0u4lJJl4RiOjsPA",
+    "type": "classification",
+    "annotation": "Motherboard",
+    "thumbnail": "https://source.roboflow.com/Umua126c9wW0Xoh9M1mS1LJZd9e2/gQDrJRH0YHLycSbbd4GY/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/Umua126c9wW0Xoh9M1mS1LJZd9e2/gQDrJRH0YHLycSbbd4GY/annotation-Motherboard.png",
+    "classes": [
+      "motherboard"
+    ],
+    "classCount": 1,
+    "images": 75,
+    "description": null,
+    "tags": [
+      "classification"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 153,
+    "downloads": 7,
+    "modelCount": 0,
+    "latestVersion": 1
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [],
+    "name": "Xeon CPU",
+    "url": "https://universe.roboflow.com/aitesting/xeon-cpu",
+    "workspace": {
+      "name": "AITesting",
+      "url": "aitesting"
+    },
+    "projectId": "uGQbOHtdsKxSaK6Y8d3T",
+    "type": "object-detection",
+    "annotation": "rust-qDt2",
+    "thumbnail": "https://source.roboflow.com/uA5NY0Y3CUN0L0qElh79ttF2R8l2/KC441CkkhT165a2NQlK9/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/uA5NY0Y3CUN0L0qElh79ttF2R8l2/KC441CkkhT165a2NQlK9/annotation-rust-qDt2.png",
+    "classes": [
+      "cpu"
+    ],
+    "classCount": 1,
+    "images": 66,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model",
+      "model:snap"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 17,
+    "downloads": 2,
+    "modelCount": 1,
+    "latestVersion": 7
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "0",
+      "Connector_10PIN",
+      "Connector_6PIN"
+    ],
+    "name": "Connector",
+    "url": "https://universe.roboflow.com/yolo-training-lltzx/connector-d5l5e",
+    "workspace": {
+      "name": "YOLO Training",
+      "url": "yolo-training-lltzx"
+    },
+    "projectId": "jsHhyLHEi4reNdNpL7Zd",
+    "type": "object-detection",
+    "annotation": "Connector",
+    "thumbnail": null,
+    "annotationThumbnail": null,
+    "classes": [
+      "0",
+      "Connector",
+      "Connector_10PIN",
+      "Connector_6PIN"
+    ],
+    "classCount": 4,
+    "images": 60,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 9
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "battery",
+      "test",
+      "text",
+      "component",
+      "display",
+      "electrolytic",
+      "emi",
+      "ferrite"
+    ],
+    "name": "GNN_YOLO",
+    "url": "https://universe.roboflow.com/erlmvp-eqss9/gnn_yolo",
+    "workspace": {
+      "name": "ERLMVP",
+      "url": "erlmvp-eqss9"
+    },
+    "projectId": "vykcSioyg7dlWAgGFVsj",
+    "type": "object-detection",
+    "annotation": "components",
+    "thumbnail": "https://source.roboflow.com/ekPbLaltmKb4hphCMT8sLcdqZas1/2zwN7VOK23xdFdPD5fAA/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/ekPbLaltmKb4hphCMT8sLcdqZas1/2zwN7VOK23xdFdPD5fAA/annotation-components.png",
+    "classes": [
+      "battery",
+      "button",
+      "capacitor",
+      "clock",
+      "diode",
+      "inductor",
+      "resistor",
+      "switch",
+      "test",
+      "text",
+      "transformer",
+      "transistor",
+      "Port",
+      "buzzer",
+      "component",
+      "connector",
+      "display",
+      "electrolytic",
+      "emi",
+      "ferrite"
+    ],
+    "classCount": 30,
+    "images": 47,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 107,
+    "downloads": 4,
+    "modelCount": 1,
+    "latestVersion": 4
+  },
+  {
+    "score": 1,
+    "covers": [
+      "Connector"
+    ],
+    "unmapped": [
+      "battery",
+      "text",
+      "display",
+      "emi filter",
+      "heatsink"
+    ],
+    "name": "WACV Dataset ",
+    "url": "https://universe.roboflow.com/new-workspace-qklmv/wacv-dataset",
+    "workspace": {
+      "name": "New Workspace",
+      "url": "new-workspace-qklmv"
+    },
+    "projectId": "ri2scVAk4iseXA2wnUSr",
+    "type": "object-detection",
+    "annotation": "PCB-COMPONENTS",
+    "thumbnail": "https://source.roboflow.com/xm5c9Ys6OXN0PAuYUfSB/6LZTym0FSFfgiYLMCt9l/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/xm5c9Ys6OXN0PAuYUfSB/6LZTym0FSFfgiYLMCt9l/annotation-PCB-COMPONENTS.png",
+    "classes": [
+      "battery",
+      "button",
+      "capacitor",
+      "clock",
+      "diode",
+      "inductor",
+      "resistor",
+      "switch",
+      "text",
+      "transformer",
+      "transistor",
+      "buzzer",
+      "connector",
+      "display",
+      "emi filter",
+      "ferrite bead",
+      "fuse",
+      "heatsink",
+      "ic",
+      "jumper"
+    ],
+    "classCount": 26,
+    "images": 45,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 2,
+    "views": 351,
+    "downloads": 20,
+    "modelCount": 0,
+    "latestVersion": 3
+  },
+  {
+    "score": 1,
+    "covers": [
+      "CPU"
+    ],
+    "unmapped": [],
+    "name": "CPU",
+    "url": "https://universe.roboflow.com/ruoying/cpu-h6mf9",
+    "workspace": {
+      "name": "RUOYING",
+      "url": "ruoying"
+    },
+    "projectId": "j35zD0xUqFoD32iV2iWm",
+    "type": "object-detection",
+    "annotation": "CPU",
+    "thumbnail": "https://source.roboflow.com/ohq2UfRjCQefNanGXfkE5FLLfDS2/J4nt5XgeWi6OBKbQFJuI/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/ohq2UfRjCQefNanGXfkE5FLLfDS2/J4nt5XgeWi6OBKbQFJuI/annotation-CPU.png",
+    "classes": [
+      "CPU"
+    ],
+    "classCount": 1,
+    "images": 43,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 4
+  },
+  {
+    "score": 1,
+    "covers": [
+      "RAM"
+    ],
+    "unmapped": [
+      "nomemory"
+    ],
+    "name": "memory",
+    "url": "https://universe.roboflow.com/imagedetection-mqvnz/memory-lp4zv",
+    "workspace": {
+      "name": "imagedetection",
+      "url": "imagedetection-mqvnz"
+    },
+    "projectId": "e4LeGKsMhjYCQm2crRfu",
+    "type": "object-detection",
+    "annotation": "memory",
+    "thumbnail": "https://source.roboflow.com/Z0JzDWVQo1V5gtvMcH0EGtBLick1/S0OxKpnSvB974jQkGYIs/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/Z0JzDWVQo1V5gtvMcH0EGtBLick1/S0OxKpnSvB974jQkGYIs/annotation-memory.png",
+    "classes": [
+      "memory",
+      "nomemory"
+    ],
+    "classCount": 2,
+    "images": 40,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 23,
+    "downloads": 1,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "RAM"
+    ],
+    "unmapped": [
+      "no_memory"
+    ],
+    "name": "Memory Detection",
+    "url": "https://universe.roboflow.com/kowshik-deb-nath-f5zuk/memory-detection",
+    "workspace": {
+      "name": "Kowshik Deb Nath",
+      "url": "kowshik-deb-nath-f5zuk"
+    },
+    "projectId": "9l9r1pk9ZP8b5fpBOAO7",
+    "type": "object-detection",
+    "annotation": "Memory-in-Motherboard",
+    "thumbnail": "https://source.roboflow.com/KohFl7TfhsfL4CwqbTQcII2SGXi1/xX8Id32qkvcWVjKuagNz/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/KohFl7TfhsfL4CwqbTQcII2SGXi1/xX8Id32qkvcWVjKuagNz/annotation-Memory-in-Motherboard.png",
+    "classes": [
+      "memory",
+      "no_memory"
+    ],
+    "classCount": 2,
+    "images": 40,
+    "description": null,
+    "tags": [
+      "object-detection",
+      "model"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 30,
+    "downloads": 6,
+    "modelCount": 1,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "RAM"
+    ],
+    "unmapped": [
+      "R-DIMM",
+      "SSD"
+    ],
+    "name": "Memory Classification ",
+    "url": "https://universe.roboflow.com/romanb123/memory-classification-si3ln",
+    "workspace": {
+      "name": "RomanB123",
+      "url": "romanb123"
+    },
+    "projectId": "MSosVEtXhAonJwO7esfT",
+    "type": "object-detection",
+    "annotation": "Memory",
+    "thumbnail": "https://source.roboflow.com/IJYRx7BIV6fmJ9GnmYCMKzW3grS2/6jt0RsozE7Xr6HhDURej/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/IJYRx7BIV6fmJ9GnmYCMKzW3grS2/6jt0RsozE7Xr6HhDURej/annotation-Memory.png",
+    "classes": [
+      "Memory",
+      "R-DIMM",
+      "SO-DIMM",
+      "SSD"
+    ],
+    "classCount": 4,
+    "images": 32,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 0,
+    "views": 0,
+    "downloads": 0,
+    "modelCount": 0,
+    "latestVersion": 2
+  },
+  {
+    "score": 1,
+    "covers": [
+      "PCB"
+    ],
+    "unmapped": [
+      "harddrive",
+      "systemunit"
+    ],
+    "name": "Boggle Cubes",
+    "url": "https://universe.roboflow.com/clinton-anani/boggle-cubes-ospry",
+    "workspace": {
+      "name": "Clinton Anani",
+      "url": "clinton-anani"
+    },
+    "projectId": "EsXu4vgBJXLS6QKlBrN0",
+    "type": "object-detection",
+    "annotation": "items",
+    "thumbnail": "https://source.roboflow.com/RTomnH3YgqeAuo7dPY6Jpg5TzUm1/5xSdEVjXGZOHDO3aZ6N3/thumb.jpg",
+    "annotationThumbnail": "https://source.roboflow.com/RTomnH3YgqeAuo7dPY6Jpg5TzUm1/5xSdEVjXGZOHDO3aZ6N3/annotation-items.png",
+    "classes": [
+      "harddrive",
+      "motherboard",
+      "systemunit"
+    ],
+    "classCount": 3,
+    "images": 31,
+    "description": null,
+    "tags": [
+      "object-detection"
+    ],
+    "license": "CC BY 4.0",
+    "stars": 1,
+    "views": 17,
+    "downloads": 2,
+    "modelCount": 0,
+    "latestVersion": 1
+  }
+]
