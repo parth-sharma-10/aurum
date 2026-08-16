@@ -7,7 +7,7 @@ invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-<!--RESULTS_BADGE-->
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-92%20passing-brightgreen) ![python](https://img.shields.io/badge/python-3.12-blue)
 
 ---
 
@@ -44,7 +44,25 @@ Keys: `B` new batch · `S` save batch · `SPACE` pause · `Q` quit
 
 ## Results
 
-<!--RESULTS_TABLE-->
+> **Held-out test metrics are not published yet.** The v0.1 training run was
+> still in progress when this repository was first pushed. Nothing is quoted as
+> a result until `python -m ml.evaluate` has run on the held-out split — see
+> [docs/evaluation.md](docs/evaluation.md), which is generated from the
+> pipeline's own output and currently says the same thing.
+
+What *has* been measured:
+
+| | |
+|---|---:|
+| Live inference | **34.3 FPS** (1280×720 capture, 512 px inference, Apple M4) |
+| Classes | 4 — PCB, RAM, CPU, Connector |
+| Source images | 17,193 across 6 public datasets |
+| Held-out test set | 206 images, 340 instances, unique scenes |
+| Clusters spanning splits | **0** |
+| Exact duplicates across splits | **0** |
+| Near-duplicates train↔held-out | **0** |
+| Tests | 92 passing |
+
 
 Measured on a held-out test split that shares **no duplicate cluster** with
 training data. Full methodology, per-class figures and the external
