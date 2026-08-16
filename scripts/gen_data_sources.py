@@ -56,8 +56,7 @@ def main() -> int:
     dropped = sum(v for v in stats["dropped_source_labels"].values())
     add(f"- **{len(metas)} source datasets**, all from Roboflow Universe")
     add(f"- **{tot_img:,} images** downloaded (includes Roboflow's augmented copies)")
-    add(f"- **{kept:,} annotations** mapped into Aurum classes; "
-        f"**{dropped:,}** explicitly dropped")
+    add(f"- **{kept:,} annotations** mapped into Aurum classes; **{dropped:,}** explicitly dropped")
     add(f"- Final classes: **{', '.join(lm.classes)}**")
     lic = sorted({m["license"] for m in metas})
     add(f"- Licenses present: **{', '.join(lic)}**\n")
@@ -65,8 +64,8 @@ def main() -> int:
     add("## Datasets used\n")
     for m in metas:
         add(f"### {m['name']} (`{m['key']}`)\n")
-        add(f"| field | value |")
-        add(f"|---|---|")
+        add("| field | value |")
+        add("|---|---|")
         add(f"| Source URL | {m['url']} |")
         add(f"| Version pinned | v{m['version']} |")
         add(f"| License | **{m['license']}** |")
@@ -103,9 +102,11 @@ def main() -> int:
     add("")
 
     add("## Label normalization\n")
-    add(f"The full map lives in `configs/aurum_labels.yaml` (version "
+    add(
+        f"The full map lives in `configs/aurum_labels.yaml` (version "
         f"{lm.version}). Matching is on a normalized key, so `RAM stick`, "
-        f"`ram_stick` and `Ram-Stick` all resolve to the same alias.\n")
+        f"`ram_stick` and `Ram-Stick` all resolve to the same alias.\n"
+    )
     add("A source label must be either mapped or explicitly dropped with a")
     add("reason; an unreviewed label raises an error during preparation rather")
     add("than being silently discarded.\n")
@@ -128,49 +129,72 @@ def main() -> int:
     add("")
 
     add("## Notable class decisions\n")
-    add("- **`gpu` was dropped despite being the largest available label "
+    add(
+        "- **`gpu` was dropped despite being the largest available label "
         "(~2,800 instances).** In every source dataset a `gpu` is an assembled "
         "graphics card whose camera-facing surface is a cooler shroud, not an "
         "exposed board. Merging it into PCB would train the model that plastic "
-        "shrouds are circuit boards and would corrupt PCB counts in batch records.")
-    add("- **`ic` was not merged into CPU.** An `IC` annotation covers every "
+        "shrouds are circuit boards and would corrupt PCB counts in batch records."
+    )
+    add(
+        "- **`ic` was not merged into CPU.** An `IC` annotation covers every "
         "integrated circuit on a board — regulators, controllers, flash. Folding "
-        "these into CPU would make the CPU count in a batch record meaningless.")
-    add("- **`ram_slot`, `gpu_slot` and `rear_io` were merged into Connector.** "
+        "these into CPU would make the CPU count in a batch record meaningless."
+    )
+    add(
+        "- **`ram_slot`, `gpu_slot` and `rear_io` were merged into Connector.** "
         "A DIMM socket, a PCIe socket and a rear port bank are all mating "
         "interfaces with plated contacts, and they are the only source of "
-        "whole-object Connector boxes at a scale a webcam resolves.")
-    add("- **`battery` was considered as a fifth class and rejected.** The "
+        "whole-object Connector boxes at a scale a webcam resolves."
+    )
+    add(
+        "- **`battery` was considered as a fifth class and rejected.** The "
         "available annotations span 9V cells, coin cells, laptop packs and RC "
-        "LiPo packs, which are not one visual category.\n")
+        "LiPo packs, which are not one visual category.\n"
+    )
 
     add("## Splits and leakage control\n")
     g = stats["grouping"]
-    add(f"- {g['images_hashed']:,} images hashed; {g['stem_groups']:,} source-stem "
+    add(
+        f"- {g['images_hashed']:,} images hashed; {g['stem_groups']:,} source-stem "
         f"groups merged into **{g['clusters']:,} duplicate clusters** "
-        f"({g['merges']} near-duplicate merges at Hamming ≤ {stats['hamming']}).")
-    add("- Splits are assigned over **clusters, never images**, so augmented "
-        "copies and re-uploads of one photograph cannot straddle train and test.")
-    add(f"- {stats['augmented_copies_dropped_from_heldout']:,} augmented copies "
-        f"were removed from valid/test so held-out counts reflect unique scenes.")
-    add(f"- {stats['background_images_dropped']:,} background-only images dropped "
-        f"(capped so they cannot drown the labelled objects).\n")
+        f"({g['merges']} near-duplicate merges at Hamming ≤ {stats['hamming']})."
+    )
+    add(
+        "- Splits are assigned over **clusters, never images**, so augmented "
+        "copies and re-uploads of one photograph cannot straddle train and test."
+    )
+    add(
+        f"- {stats['augmented_copies_dropped_from_heldout']:,} augmented copies "
+        f"were removed from valid/test so held-out counts reflect unique scenes."
+    )
+    add(
+        f"- {stats['background_images_dropped']:,} background-only images dropped "
+        f"(capped so they cannot drown the labelled objects).\n"
+    )
     add("| split | images | " + " | ".join(lm.classes) + " |")
     add("|---|---|" + "---|" * len(lm.classes))
     for s in ("train", "valid", "test"):
         d = stats["splits"][s]
-        add(f"| {s} | {d['images']:,} | " +
-            " | ".join(f"{d['boxes'].get(c,0):,}" for c in lm.classes) + " |")
+        add(
+            f"| {s} | {d['images']:,} | "
+            + " | ".join(f"{d['boxes'].get(c, 0):,}" for c in lm.classes)
+            + " |"
+        )
     add("")
-    add("Verified by `python -m ml.validate`, which independently re-checks for "
+    add(
+        "Verified by `python -m ml.validate`, which independently re-checks for "
         "cluster containment, exact duplicates and perceptual near-duplicates "
-        "across splits. See `reports/dataset_validation.json`.\n")
+        "across splits. See `reports/dataset_validation.json`.\n"
+    )
 
     add("## Attribution\n")
-    add("All datasets are used under their stated licenses. CC BY 4.0 sources "
+    add(
+        "All datasets are used under their stated licenses. CC BY 4.0 sources "
         "require attribution; the table above records each project URL for that "
         "purpose. Aurum Vision redistributes no source imagery — "
-        "`data/` is gitignored and rebuilt with `python -m ml.ingest`.\n")
+        "`data/` is gitignored and rebuilt with `python -m ml.ingest`.\n"
+    )
 
     out = ROOT / "DATA_SOURCES.md"
     out.write_text("\n".join(L))

@@ -45,67 +45,88 @@ def main() -> int:
     add("| | |")
     add("|---|---|")
     add(f"| Version | **{meta.get('model_version', 'v0.1')}** |")
-    add(f"| Task | Object detection (bounding boxes) |")
-    add(f"| Architecture | {meta.get('architecture', 'yolo11n.pt')} "
-        f"(COCO-pretrained, fine-tuned) |")
-    add(f"| Framework | {meta.get('framework', 'ultralytics')} / "
-        f"torch {meta.get('torch', '—')} |")
+    add("| Task | Object detection (bounding boxes) |")
+    add(
+        f"| Architecture | {meta.get('architecture', 'yolo11n.pt')} (COCO-pretrained, fine-tuned) |"
+    )
+    add(f"| Framework | {meta.get('framework', 'ultralytics')} / torch {meta.get('torch', '—')} |")
     add(f"| Classes | {', '.join(classes)} |")
     add(f"| Input size | {meta.get('image_size', '—')} px |")
     add(f"| Trained | {meta.get('trained_at', '—')} |")
     add(f"| Weights | `{meta.get('weights', 'models/aurum_vision_v0_1_best.pt')}` |")
     add("")
 
-    add("**What it does.** Identifies and counts four visible e-waste component "
-        "categories in RGB imagery at webcam speed.\n")
-    add("**What it does not do.** It does not measure precious-metal content, "
+    add(
+        "**What it does.** Identifies and counts four visible e-waste component "
+        "categories in RGB imagery at webcam speed.\n"
+    )
+    add(
+        "**What it does not do.** It does not measure precious-metal content, "
         "purity or mass. RGB imagery cannot determine composition. Recovery "
         "figures anywhere downstream are estimates built from component counts "
-        "and published reference yields, and are labelled as estimates.\n")
+        "and published reference yields, and are labelled as estimates.\n"
+    )
 
     # ------------------------------------------------------------- intended use
     add("## Intended use\n")
-    add("- **In scope:** identifying which component categories are present at a "
+    add(
+        "- **In scope:** identifying which component categories are present at a "
         "point-of-collection bench, counting them, and producing a batch record "
-        "for the Aurum valuation/ledger workflow.")
-    add("- **Out of scope:** assaying metal content; safety-critical sorting; "
+        "for the Aurum valuation/ledger workflow."
+    )
+    add(
+        "- **Out of scope:** assaying metal content; safety-critical sorting; "
         "any decision where a missed or hallucinated component causes harm; "
-        "automated pricing without human review.")
-    add("- **Users:** the Aurum prototype bench and its operators. Not a "
-        "deployed product.\n")
+        "automated pricing without human review."
+    )
+    add("- **Users:** the Aurum prototype bench and its operators. Not a deployed product.\n")
 
     # ------------------------------------------------------------ training data
     add("## Training data\n")
-    add(f"Six public Roboflow Universe datasets normalized into {len(classes)} "
+    add(
+        f"Six public Roboflow Universe datasets normalized into {len(classes)} "
         f"Aurum classes. Full provenance, licenses and per-dataset counts are in "
-        f"[`DATA_SOURCES.md`](DATA_SOURCES.md).\n")
+        f"[`DATA_SOURCES.md`](DATA_SOURCES.md).\n"
+    )
     add("| split | images | " + " | ".join(classes) + " |")
     add("|---|---|" + "---|" * len(classes))
     for s in ("train", "valid", "test"):
         d = stats["splits"][s]
-        add(f"| {s} | {d['images']:,} | " +
-            " | ".join(f"{d['boxes'].get(c, 0):,}" for c in classes) + " |")
+        add(
+            f"| {s} | {d['images']:,} | "
+            + " | ".join(f"{d['boxes'].get(c, 0):,}" for c in classes)
+            + " |"
+        )
     add("")
     g = stats["grouping"]
-    add(f"Splits are assigned over **{g['clusters']:,} duplicate clusters**, not "
+    add(
+        f"Splits are assigned over **{g['clusters']:,} duplicate clusters**, not "
         f"individual images: {g['images_hashed']:,} images were grouped by source "
         f"stem and merged across datasets by SHA-256 and perceptual hash "
         f"({g['merges']} near-duplicate merges). Held-out splits keep one image "
-        f"per cluster.\n")
+        f"per cluster.\n"
+    )
     if val:
         add("Independently verified by `python -m ml.validate`:\n")
         add(f"- clusters spanning splits: **{val.get('clusters_spanning_splits')}**")
         add(f"- exact duplicates across splits: **{val.get('exact_duplicates_across_splits')}**")
-        add(f"- near-duplicates train↔held-out (Hamming ≤ "
-            f"{val.get('hamming_threshold')}): **{val.get('near_duplicates_train_to_heldout')}**\n")
+        add(
+            f"- near-duplicates train↔held-out (Hamming ≤ "
+            f"{val.get('hamming_threshold')}): **{val.get('near_duplicates_train_to_heldout')}**\n"
+        )
 
     # -------------------------------------------------------------- training cfg
     add("## Training configuration\n")
     add("| setting | value |")
     add("|---|---|")
-    for k, label in (("architecture", "Base weights"), ("image_size", "Image size"),
-                     ("epochs_requested", "Epochs (max)"), ("batch", "Batch size"),
-                     ("seed", "Seed"), ("device", "Device")):
+    for k, label in (
+        ("architecture", "Base weights"),
+        ("image_size", "Image size"),
+        ("epochs_requested", "Epochs (max)"),
+        ("batch", "Batch size"),
+        ("seed", "Seed"),
+        ("device", "Device"),
+    ):
         add(f"| {label} | {meta.get(k, '—')} |")
     results = ROOT / "runs" / "aurum_vision_v0_1" / "results.csv"
     if results.exists():
@@ -113,21 +134,27 @@ def main() -> int:
         if rows:
             add(f"| Epochs actually run | {len(rows)} |")
     add("")
-    add("Transfer learning only — nothing trained from scratch. Augmentation is "
+    add(
+        "Transfer learning only — nothing trained from scratch. Augmentation is "
         "horizontal flip, ±15° rotation and restrained HSV jitter. **No vertical "
         "flip**: an upside-down memory module is not a thing the bench will ever "
-        "see, and colour is real class signal (green board, gold contacts).\n")
+        "see, and colour is real class signal (green board, gold contacts).\n"
+    )
 
     # ------------------------------------------------------------------ metrics
     add("## Evaluation — held-out test split\n")
     if not test:
-        add("> **Not yet evaluated.** Run `python -m ml.evaluate` to populate "
-            "this section. No figures are stated until it has.\n")
+        add(
+            "> **Not yet evaluated.** Run `python -m ml.evaluate` to populate "
+            "this section. No figures are stated until it has.\n"
+        )
     else:
         ov = test["metrics_overall"]
-        add(f"Measured on **{test['n_images']} unseen images** "
+        add(
+            f"Measured on **{test['n_images']} unseen images** "
             f"({sum(test['n_instances'].values()):,} instances) that share no "
-            f"duplicate cluster with training data.\n")
+            f"duplicate cluster with training data.\n"
+        )
         add("| metric | value |")
         add("|---|---|")
         add(f"| Precision | **{ov['precision']:.3f}** |")
@@ -142,65 +169,94 @@ def main() -> int:
             m = test["metrics_per_class"].get(c)
             n = test["n_instances"].get(c, 0)
             if m:
-                add(f"| {c} | {n} | {m['precision']:.3f} | {m['recall']:.3f} | "
-                    f"{m['mAP50']:.3f} | {m['mAP50_95']:.3f} |")
+                add(
+                    f"| {c} | {n} | {m['precision']:.3f} | {m['recall']:.3f} | "
+                    f"{m['mAP50']:.3f} | {m['mAP50_95']:.3f} |"
+                )
             else:
                 add(f"| {c} | {n} | — | — | — | — |")
         add("")
-        add("Artifacts in `reports/`: `confusion_matrix.png`, "
+        add(
+            "Artifacts in `reports/`: `confusion_matrix.png`, "
             "`BoxPR_curve.png`, `BoxF1_curve.png`, and example predictions "
             "under `reports/test_predictions/{correct,failures}/` with ground "
-            "truth in white and predictions in gold.\n")
+            "truth in white and predictions in gold.\n"
+        )
 
-        worst = min((c for c in classes if test["metrics_per_class"].get(c)),
-                    key=lambda c: test["metrics_per_class"][c]["mAP50"], default=None)
+        worst = min(
+            (c for c in classes if test["metrics_per_class"].get(c)),
+            key=lambda c: test["metrics_per_class"][c]["mAP50"],
+            default=None,
+        )
         if worst:
-            add(f"The weakest class is **{worst}** "
+            add(
+                f"The weakest class is **{worst}** "
                 f"(mAP@50 {test['metrics_per_class'][worst]['mAP50']:.3f}). "
                 f"It has the fewest training instances and the widest visual "
-                f"range in the source data.\n")
+                f"range in the source data.\n"
+            )
 
     # --------------------------------------------------------------- limitations
     add("## Limitations and failure modes\n")
-    add("- **No composition sensing.** The model sees surfaces. It cannot tell a "
-        "gold-plated connector from a tin-plated one of the same shape.")
-    add("- **Domain gap.** Training images are internet photography of PC "
+    add(
+        "- **No composition sensing.** The model sees surfaces. It cannot tell a "
+        "gold-plated connector from a tin-plated one of the same shape."
+    )
+    add(
+        "- **Domain gap.** Training images are internet photography of PC "
         "hardware — product shots, build photos, teardowns. A scrap bench has "
         "different lighting, clutter and camera angles. Use "
         "`python -m ml.realworld` to measure this on your own photographs "
-        "before relying on the model in the field.")
-    add("- **Connector is broad.** It spans DIMM sockets, PCIe slots, rear port "
+        "before relying on the model in the field."
+    )
+    add(
+        "- **Connector is broad.** It spans DIMM sockets, PCIe slots, rear port "
         "banks and RC plugs. Breadth was accepted to get whole-object connector "
-        "coverage at all; it costs precision.")
-    add("- **`gpu` is not a class.** Graphics cards are deliberately not mapped "
+        "coverage at all; it costs precision."
+    )
+    add(
+        "- **`gpu` is not a class.** Graphics cards are deliberately not mapped "
         "to PCB, because their camera-facing surface is a cooler shroud. A "
-        "shrouded card in frame may go undetected — that is intended.")
-    add("- **Counting is per-frame detection, not tracking.** Stacked or "
+        "shrouded card in frame may go undetected — that is intended."
+    )
+    add(
+        "- **Counting is per-frame detection, not tracking.** Stacked or "
         "occluding boards can undercount. The batch record uses a median over a "
-        "frame window to suppress flicker, not to resolve occlusion.")
-    add("- **Small test set.** Per-class figures rest on tens of instances, so "
-        "treat differences of a few points as noise.\n")
+        "frame window to suppress flicker, not to resolve occlusion."
+    )
+    add(
+        "- **Small test set.** Per-class figures rest on tens of instances, so "
+        "treat differences of a few points as noise.\n"
+    )
 
     # ------------------------------------------------------------------ ethics
     add("## Claims discipline\n")
     add("The following must **not** be claimed on the basis of this model:\n")
-    add("- that it detects, measures or predicts gold, silver, copper, palladium "
-        "or any other metal content")
+    add(
+        "- that it detects, measures or predicts gold, silver, copper, palladium "
+        "or any other metal content"
+    )
     add("- that it is production-ready or industrial-grade")
     add("- any accuracy figure not present in the table above")
     add("- that simulated load-cell readings are measurements\n")
-    add("What can be said: *Aurum Vision identifies and counts visible e-waste "
+    add(
+        "What can be said: *Aurum Vision identifies and counts visible e-waste "
         "component categories in real time, establishing a machine-readable "
-        "record of what physically entered the workflow.*\n")
+        "record of what physically entered the workflow.*\n"
+    )
 
     add("## Reproduction\n")
-    add("See [`TRAINING.md`](TRAINING.md). The full chain is `ml.ingest` → "
-        "`ml.prepare` → `ml.validate` → `ml.train` → `ml.evaluate`.\n")
+    add(
+        "See [`TRAINING.md`](TRAINING.md). The full chain is `ml.ingest` → "
+        "`ml.prepare` → `ml.validate` → `ml.train` → `ml.evaluate`.\n"
+    )
 
     out = ROOT / "MODEL_CARD.md"
     out.write_text("\n".join(L))
-    print(f"wrote {out.relative_to(ROOT)} ({len(L)} lines)"
-          + ("" if test else "  [evaluation pending]"))
+    print(
+        f"wrote {out.relative_to(ROOT)} ({len(L)} lines)"
+        + ("" if test else "  [evaluation pending]")
+    )
     return 0
 
 

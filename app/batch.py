@@ -19,7 +19,7 @@ import statistics
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,7 +31,7 @@ REFERENCE = ROOT / "configs" / "recovery_reference.yaml"
 class BatchSession:
     """Accumulates frames for one batch."""
 
-    window: int = 45                      # ~1.5 s at 30 fps
+    window: int = 45  # ~1.5 s at 30 fps
     classes: list[str] = field(default_factory=list)
     batch_id: str = ""
     started_at: str = ""
@@ -50,7 +50,7 @@ class BatchSession:
         self._confs.clear()
         self._frames_seen = 0
         self.batch_id = f"AUR-{uuid.uuid4().hex[:8].upper()}"
-        self.started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        self.started_at = datetime.now(UTC).isoformat(timespec="seconds")
 
     def new_scene(self) -> None:
         """Drop the count window without ending the batch.
@@ -79,7 +79,7 @@ class BatchSession:
 
     def stable_counts(self) -> dict[str, int]:
         if not self._counts:
-            return {c: 0 for c in self.classes}
+            return dict.fromkeys(self.classes, 0)
         out = {}
         for c in self.classes:
             series = [f.get(c, 0) for f in self._counts]
@@ -89,8 +89,9 @@ class BatchSession:
     def average_confidence(self) -> float:
         return round(statistics.fmean(self._confs), 4) if self._confs else 0.0
 
-    def record(self, model_version: str, weight: dict | None = None,
-               source: str = "webcam") -> dict:
+    def record(
+        self, model_version: str, weight: dict | None = None, source: str = "webcam"
+    ) -> dict:
         counts = self.stable_counts()
         rec = {
             "batch_id": self.batch_id,
@@ -102,7 +103,7 @@ class BatchSession:
                 f"median per-class count over a trailing {self.window}-frame window"
             ),
             "started_at": self.started_at,
-            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
             "model_version": model_version,
             "source": source,
         }
@@ -144,6 +145,7 @@ def recovery_estimate(counts: dict[str, int]) -> dict:
         return unavailable
 
     import yaml
+
     ref = yaml.safe_load(REFERENCE.read_text()) or {}
     if not ref.get("enabled"):
         return unavailable
@@ -151,20 +153,23 @@ def recovery_estimate(counts: dict[str, int]) -> dict:
     yields = ref.get("per_component") or {}
     missing = [c for c, n in counts.items() if n and c not in yields]
     if missing:
-        return {**unavailable,
-                "reason": f"No cited reference yield for: {sorted(missing)}"}
+        return {**unavailable, "reason": f"No cited reference yield for: {sorted(missing)}"}
 
     lines = []
     for c, n in sorted(counts.items()):
         if not n:
             continue
         y = yields[c]
-        lines.append({
-            "component": c, "count": n,
-            "per_unit": y.get("value"), "unit": y.get("unit"),
-            "total": round(n * float(y.get("value", 0)), 6),
-            "source": y.get("source"),
-        })
+        lines.append(
+            {
+                "component": c,
+                "count": n,
+                "per_unit": y.get("value"),
+                "unit": y.get("unit"),
+                "total": round(n * float(y.get("value", 0)), 6),
+                "source": y.get("source"),
+            }
+        )
     return {
         "available": True,
         "basis": ref.get("basis", "published reference yields"),

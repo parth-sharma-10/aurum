@@ -33,8 +33,9 @@ IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic"}
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--path", required=True, help="folder of unseen photographs")
     ap.add_argument("--weights", default=str(DEFAULT_WEIGHTS))
     ap.add_argument("--conf", type=float, default=0.35)
@@ -42,8 +43,9 @@ def main() -> int:
     args = ap.parse_args()
 
     src = Path(args.path).expanduser()
-    images = sorted(p for p in ([src] if src.is_file() else src.rglob("*"))
-                    if p.suffix.lower() in IMG_EXT)
+    images = sorted(
+        p for p in ([src] if src.is_file() else src.rglob("*")) if p.suffix.lower() in IMG_EXT
+    )
     if not images:
         raise SystemExit(f"No images found under {src}")
 
@@ -74,10 +76,15 @@ def main() -> int:
         if not res.detections:
             n_empty += 1
 
-        rows.append({"image": p.name, "counts": counts,
-                     "n_objects": len(res.detections),
-                     "mean_confidence": round(res.mean_confidence, 4),
-                     "inference_ms": round(res.inference_ms, 1)})
+        rows.append(
+            {
+                "image": p.name,
+                "counts": counts,
+                "n_objects": len(res.detections),
+                "mean_confidence": round(res.mean_confidence, 4),
+                "inference_ms": round(res.inference_ms, 1),
+            }
+        )
         desc = ", ".join(f"{k}×{v}" for k, v in sorted(counts.items())) or "nothing detected"
         print(f"  {p.name:45.45s} {desc}")
 
@@ -85,8 +92,11 @@ def main() -> int:
     for c in det.classes:
         cs = confs[c]
         mean = sum(cs) / len(cs) if cs else 0.0
-        print(f"{c:12s} {totals.get(c,0):11d} {mean:11.3f}" if cs
-              else f"{c:12s} {totals.get(c,0):11d} {'--':>11s}")
+        print(
+            f"{c:12s} {totals.get(c, 0):11d} {mean:11.3f}"
+            if cs
+            else f"{c:12s} {totals.get(c, 0):11d} {'--':>11s}"
+        )
     print(f"\nImages with no detection: {n_empty}/{len(rows)}")
 
     summary = {
@@ -100,8 +110,7 @@ def main() -> int:
         "mean_confidence_per_class": {
             c: (round(sum(v) / len(v), 4) if v else None) for c, v in confs.items()
         },
-        "mean_inference_ms": round(
-            sum(r["inference_ms"] for r in rows) / max(1, len(rows)), 1),
+        "mean_inference_ms": round(sum(r["inference_ms"] for r in rows) / max(1, len(rows)), 1),
         "per_image": rows,
         "caveat": (
             "Detections only. These images have no ground-truth annotations, so "

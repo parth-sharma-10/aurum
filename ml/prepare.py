@@ -98,8 +98,10 @@ def load_records(lm) -> tuple[list[dict], dict]:
     for ds_dir in sorted(p for p in RAW.iterdir() if p.is_dir()):
         meta_path = ds_dir / "_aurum_meta.json"
         if not meta_path.exists():
-            print(f"  ! {ds_dir.name}: no _aurum_meta.json, skipping "
-                  f"(not produced by ml.ingest)", file=sys.stderr)
+            print(
+                f"  ! {ds_dir.name}: no _aurum_meta.json, skipping (not produced by ml.ingest)",
+                file=sys.stderr,
+            )
             continue
         meta = json.loads(meta_path.read_text())
         names = yaml.safe_load((ds_dir / "data.yaml").read_text())["names"]
@@ -114,7 +116,7 @@ def load_records(lm) -> tuple[list[dict], dict]:
                 idx_to_aurum[i] = lm.resolve(raw_name)
             except UnknownLabelError as exc:
                 audit["unknown_labels"][f"{ds_dir.name}:{raw_name}"] += 1
-                raise SystemExit(f"\n{exc}\n  (dataset: {ds_dir.name})")
+                raise SystemExit(f"\n{exc}\n  (dataset: {ds_dir.name})") from exc
 
         n_img = n_box = 0
         for split in ("train", "valid", "test"):
@@ -151,18 +153,22 @@ def load_records(lm) -> tuple[list[dict], dict]:
                             continue
                         boxes.append((aurum, cx, cy, w, h))
                         n_box += 1
-                records.append({
-                    "path": img,
-                    "dataset": ds_dir.name,
-                    "orig_split": split,
-                    "group": f"{ds_dir.name}::{source_stem(img)}",
-                    "boxes": boxes,
-                })
+                records.append(
+                    {
+                        "path": img,
+                        "dataset": ds_dir.name,
+                        "orig_split": split,
+                        "group": f"{ds_dir.name}::{source_stem(img)}",
+                        "boxes": boxes,
+                    }
+                )
                 n_img += 1
 
         audit["datasets"][ds_dir.name] = {
-            "images": n_img, "boxes_kept": n_box,
-            "license": meta.get("license"), "url": meta.get("url"),
+            "images": n_img,
+            "boxes_kept": n_box,
+            "license": meta.get("license"),
+            "url": meta.get("url"),
         }
         print(f"  {ds_dir.name:28s} {n_img:6d} images, {n_box:6d} Aurum boxes")
 
@@ -229,12 +235,12 @@ def merge_groups_by_similarity(records: list[dict], max_hamming: int) -> dict:
     n_merged = 0
     chunk = 256
     for start in range(0, len(uniq), chunk):
-        block = uniq[start:start + chunk]
+        block = uniq[start : start + chunk]
         xor = block[:, None] ^ uniq[None, :]
         dist = popcnt[xor.view(np.uint8).reshape(xor.shape + (8,))].sum(axis=-1)
         # Only look forward to avoid doing every pair twice.
-        rows, cols = np.nonzero((dist <= max_hamming))
-        for r, c in zip(rows, cols):
+        rows, cols = np.nonzero(dist <= max_hamming)
+        for r, c in zip(rows, cols, strict=True):
             gi_all, gj_all = by_hash[int(block[r])], by_hash[int(uniq[c])]
             if start + r >= c:
                 continue
@@ -248,10 +254,16 @@ def merge_groups_by_similarity(records: list[dict], max_hamming: int) -> dict:
 
     n_groups = len({r["group"] for r in records})
     n_clusters = len({r["cluster"] for r in records})
-    print(f"  {n_groups} stem-groups -> {n_clusters} clusters "
-          f"({n_merged} near-duplicate merges at Hamming<={max_hamming})")
-    return {"images_hashed": n_img, "stem_groups": n_groups,
-            "clusters": n_clusters, "merges": n_merged}
+    print(
+        f"  {n_groups} stem-groups -> {n_clusters} clusters "
+        f"({n_merged} near-duplicate merges at Hamming<={max_hamming})"
+    )
+    return {
+        "images_hashed": n_img,
+        "stem_groups": n_groups,
+        "clusters": n_clusters,
+        "merges": n_merged,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -299,13 +311,11 @@ def split_clusters(records: list[dict], classes: list[str], seed: int) -> dict[s
             target = min(present, key=lambda c: rarity[c])
             deficits = {
                 s: SPLITS[s] * (sum(have[x][target] for x in SPLITS) + counts[target])
-                   - have[s][target]
+                - have[s][target]
                 for s in SPLITS
             }
         else:  # background-only cluster: balance on raw image count
-            deficits = {
-                s: SPLITS[s] * (sum(n_have.values()) + 1) - n_have[s] for s in SPLITS
-            }
+            deficits = {s: SPLITS[s] * (sum(n_have.values()) + 1) - n_have[s] for s in SPLITS}
         best = max(deficits, key=lambda s: (deficits[s], SPLITS[s]))
         assigned[cid] = best
         have[best].update(counts)
@@ -319,10 +329,15 @@ def split_clusters(records: list[dict], classes: list[str], seed: int) -> dict[s
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--seed", type=int, default=1337)
-    ap.add_argument("--hamming", type=int, default=5,
-                    help="perceptual-hash distance treated as the same photo")
-    ap.add_argument("--max-background-frac", type=float, default=0.10,
-                    help="cap on images with no Aurum object, per split")
+    ap.add_argument(
+        "--hamming", type=int, default=5, help="perceptual-hash distance treated as the same photo"
+    )
+    ap.add_argument(
+        "--max-background-frac",
+        type=float,
+        default=0.10,
+        help="cap on images with no Aurum object, per split",
+    )
     args = ap.parse_args()
 
     lm = load_label_map()
@@ -383,36 +398,53 @@ def main() -> int:
         for r in rs:
             name = f"{r['dataset']}__{r['path'].name}"
             shutil.copy2(r["path"], OUT / split / "images" / name)
-            lines = [f"{idx[c]} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
-                     for c, cx, cy, w, h in r["boxes"]]
+            lines = [
+                f"{idx[c]} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}" for c, cx, cy, w, h in r["boxes"]
+            ]
             (OUT / split / "labels" / f"{Path(name).stem}.txt").write_text(
-                "\n".join(lines) + ("\n" if lines else ""))
-            manifest.append({"split": split, "file": name, "dataset": r["dataset"],
-                             "cluster": r["cluster"], "n_boxes": len(r["boxes"])})
+                "\n".join(lines) + ("\n" if lines else "")
+            )
+            manifest.append(
+                {
+                    "split": split,
+                    "file": name,
+                    "dataset": r["dataset"],
+                    "cluster": r["cluster"],
+                    "n_boxes": len(r["boxes"]),
+                }
+            )
 
-    (OUT / "data.yaml").write_text(yaml.safe_dump({
-        "path": str(OUT.resolve()),
-        "train": "train/images",
-        "val": "valid/images",
-        "test": "test/images",
-        "nc": len(lm.classes),
-        "names": lm.classes,
-    }, sort_keys=False))
+    (OUT / "data.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "path": str(OUT.resolve()),
+                "train": "train/images",
+                "val": "valid/images",
+                "test": "test/images",
+                "nc": len(lm.classes),
+                "names": lm.classes,
+            },
+            sort_keys=False,
+        )
+    )
 
     # --- report -----------------------------------------------------------
     REPORTS.mkdir(exist_ok=True)
-    stats = {"seed": args.seed, "hamming": args.hamming,
-             "label_map_version": lm.version, "classes": lm.classes,
-             "grouping": group_stats,
-             "background_images_dropped": n_bg_dropped,
-             "augmented_copies_dropped_from_heldout": n_aug_dropped,
-             "per_dataset": audit["datasets"],
-             "kept_source_labels": dict(audit["kept_labels"].most_common()),
-             "dropped_source_labels": dict(audit["dropped_labels"].most_common()),
-             "splits": {}}
+    stats = {
+        "seed": args.seed,
+        "hamming": args.hamming,
+        "label_map_version": lm.version,
+        "classes": lm.classes,
+        "grouping": group_stats,
+        "background_images_dropped": n_bg_dropped,
+        "augmented_copies_dropped_from_heldout": n_aug_dropped,
+        "per_dataset": audit["datasets"],
+        "kept_source_labels": dict(audit["kept_labels"].most_common()),
+        "dropped_source_labels": dict(audit["dropped_labels"].most_common()),
+        "splits": {},
+    }
 
-    print(f"\n{'split':8s} {'images':>7s} {'bg':>5s} " +
-          " ".join(f"{c:>10s}" for c in lm.classes))
+    print(f"\n{'split':8s} {'images':>7s} {'bg':>5s} " + " ".join(f"{c:>10s}" for c in lm.classes))
     for split in ("train", "valid", "test"):
         rs = kept.get(split, [])
         cc = Counter()
@@ -420,17 +452,21 @@ def main() -> int:
             for c, *_ in r["boxes"]:
                 cc[c] += 1
         bg = sum(1 for r in rs if not r["boxes"])
-        stats["splits"][split] = {"images": len(rs), "background": bg,
-                                  "boxes": dict(cc),
-                                  "datasets": dict(Counter(r["dataset"] for r in rs))}
-        print(f"{split:8s} {len(rs):7d} {bg:5d} " +
-              " ".join(f"{cc.get(c,0):10d}" for c in lm.classes))
+        stats["splits"][split] = {
+            "images": len(rs),
+            "background": bg,
+            "boxes": dict(cc),
+            "datasets": dict(Counter(r["dataset"] for r in rs)),
+        }
+        print(
+            f"{split:8s} {len(rs):7d} {bg:5d} "
+            + " ".join(f"{cc.get(c, 0):10d}" for c in lm.classes)
+        )
 
     (REPORTS / "dataset_stats.json").write_text(json.dumps(stats, indent=2))
     (REPORTS / "dataset_manifest.json").write_text(json.dumps(manifest, indent=2))
 
-    print(f"\nDropped source labels (top 10): "
-          f"{audit['dropped_labels'].most_common(10)}")
+    print(f"\nDropped source labels (top 10): {audit['dropped_labels'].most_common(10)}")
     print(f"Background-only images dropped: {n_bg_dropped}")
     print(f"Augmented copies dropped from valid/test: {n_aug_dropped}")
     print(f"\nWrote {OUT}/data.yaml and reports/dataset_stats.json")

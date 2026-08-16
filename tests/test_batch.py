@@ -22,7 +22,7 @@ def session():
 
 class TestStableCounting:
     def test_empty_session_reports_zeros_not_missing_keys(self, session):
-        assert session.stable_counts() == {c: 0 for c in CLASSES}
+        assert session.stable_counts() == dict.fromkeys(CLASSES, 0)
 
     def test_steady_scene_reports_that_scene(self, session):
         for _ in range(9):
@@ -36,7 +36,7 @@ class TestStableCounting:
         """A hand crossing the bench for one frame must not alter the record."""
         for _ in range(8):
             session.add_frame({"RAM": 2}, 0.9)
-        session.add_frame({}, 0.0)          # the dropout
+        session.add_frame({}, 0.0)  # the dropout
         assert session.stable_counts()["RAM"] == 2
 
     def test_single_frame_spurious_double_does_not_change_the_count(self, session):
@@ -108,8 +108,9 @@ class TestRecord:
 
     def test_simulated_weight_is_flagged_in_the_record(self, session):
         session.add_frame({"RAM": 1}, 0.9)
-        rec = session.record("v", weight={"kg": 1.84, "simulated": True,
-                                          "warning": "SIMULATED SENSOR"})
+        rec = session.record(
+            "v", weight={"kg": 1.84, "simulated": True, "warning": "SIMULATED SENSOR"}
+        )
         assert rec["weight"]["simulated"] is True
 
 

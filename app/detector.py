@@ -6,6 +6,7 @@ the HTTP service report the same numbers from the same code path.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from collections import deque
@@ -47,14 +48,18 @@ class FrameResult:
 
 
 class AurumDetector:
-    def __init__(self, weights: Path | str = DEFAULT_WEIGHTS,
-                 conf: float = 0.35, iou: float = 0.5, imgsz: int = 640,
-                 device: str | None = None) -> None:
+    def __init__(
+        self,
+        weights: Path | str = DEFAULT_WEIGHTS,
+        conf: float = 0.35,
+        iou: float = 0.5,
+        imgsz: int = 640,
+        device: str | None = None,
+    ) -> None:
         weights = Path(weights)
         if not weights.exists():
             raise FileNotFoundError(
-                f"No weights at {weights}. Train first (`python -m ml.train`) or "
-                f"pass --weights."
+                f"No weights at {weights}. Train first (`python -m ml.train`) or pass --weights."
             )
         self.weights = weights
         self.conf, self.iou, self.imgsz, self.device = conf, iou, imgsz, device
@@ -63,10 +68,10 @@ class AurumDetector:
 
         self.meta: dict = {}
         if DEFAULT_META.exists():
-            try:
+            # A malformed metadata file must not stop inference; the model
+            # still works, it just reports itself as unversioned.
+            with contextlib.suppress(json.JSONDecodeError):
                 self.meta = json.loads(DEFAULT_META.read_text())
-            except json.JSONDecodeError:
-                pass
         self.model_version = self.meta.get("model_version", "Aurum Vision (unversioned)")
 
         self._frame_times: deque[float] = deque(maxlen=30)
@@ -95,12 +100,14 @@ class AurumDetector:
             xyxy = res.boxes.xyxy.cpu().numpy()
             confs = res.boxes.conf.cpu().numpy()
             clss = res.boxes.cls.cpu().numpy().astype(int)
-            for (x1, y1, x2, y2), c, k in zip(xyxy, confs, clss):
-                dets.append(Detection(
-                    cls=self.model.names[int(k)],
-                    conf=float(c),
-                    xyxy=(int(x1), int(y1), int(x2), int(y2)),
-                ))
+            for (x1, y1, x2, y2), c, k in zip(xyxy, confs, clss, strict=True):
+                dets.append(
+                    Detection(
+                        cls=self.model.names[int(k)],
+                        conf=float(c),
+                        xyxy=(int(x1), int(y1), int(x2), int(y2)),
+                    )
+                )
         return FrameResult(detections=dets, inference_ms=dt * 1000.0)
 
     @property

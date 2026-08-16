@@ -28,7 +28,7 @@ def _fallback_argv(argv: list[str], path: Path) -> list[str]:
     """Rewrite the command line for image mode, keeping the user's other flags."""
     out: list[str] = []
     skip = False
-    for i, tok in enumerate(argv):
+    for tok in argv:
         if skip:
             skip = False
             continue
@@ -51,9 +51,12 @@ def run() -> int:
             raise
         print(f"\n{exc}\n", file=sys.stderr)
         if not FALLBACK_IMAGES.is_dir():
-            print("No fallback images available at "
-                  f"{FALLBACK_IMAGES}. Run `python -m ml.prepare`, or pass "
-                  "--mode images --path <folder>.", file=sys.stderr)
+            print(
+                "No fallback images available at "
+                f"{FALLBACK_IMAGES}. Run `python -m ml.prepare`, or pass "
+                "--mode images --path <folder>.",
+                file=sys.stderr,
+            )
             return 1
         print(f"Falling back to IMAGE DEMO MODE using {FALLBACK_IMAGES}\n")
         return main(_fallback_argv(argv, FALLBACK_IMAGES))

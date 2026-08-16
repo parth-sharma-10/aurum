@@ -35,8 +35,15 @@ WINDOW = "Aurum Vision"
 class FrameSource:
     """Uniform iterator over webcam / video / image-folder."""
 
-    def __init__(self, mode: str, path: str | None, camera: int, width: int,
-                 height: int, image_seconds: float) -> None:
+    def __init__(
+        self,
+        mode: str,
+        path: str | None,
+        camera: int,
+        width: int,
+        height: int,
+        image_seconds: float,
+    ) -> None:
         self.mode = mode
         self.image_seconds = image_seconds
         self._cap = None
@@ -65,8 +72,7 @@ class FrameSource:
                 raise RuntimeError("--mode images requires --path")
             p = Path(path)
             self._images = sorted(
-                q for q in ([p] if p.is_file() else p.rglob("*"))
-                if q.suffix.lower() in IMG_EXT
+                q for q in ([p] if p.is_file() else p.rglob("*")) if q.suffix.lower() in IMG_EXT
             )
             if not self._images:
                 raise RuntimeError(f"No images found under {path}")
@@ -77,7 +83,7 @@ class FrameSource:
     @property
     def label(self) -> str:
         if self.mode == "images":
-            return f"images {self._idx+1}/{len(self._images)}"
+            return f"images {self._idx + 1}/{len(self._images)}"
         return self.mode
 
     @property
@@ -99,8 +105,7 @@ class FrameSource:
 
     def read(self):
         if self.mode == "images":
-            if self.image_seconds > 0 and \
-                    time.time() - self._last_advance > self.image_seconds:
+            if self.image_seconds > 0 and time.time() - self._last_advance > self.image_seconds:
                 self.advance(1)
             return True, cv2.imread(str(self._images[self._idx]))
         ok, frame = self._cap.read()
@@ -115,8 +120,9 @@ class FrameSource:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--mode", default="webcam", choices=["webcam", "video", "images"])
     ap.add_argument("--path", help="video file or image folder")
     ap.add_argument("--camera", type=int, default=0)
@@ -126,17 +132,21 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--imgsz", type=int, default=640)
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
-    ap.add_argument("--window", type=int, default=45,
-                    help="frames in the batch-count median window")
-    ap.add_argument("--image-seconds", type=float, default=3.0,
-                    help="auto-advance interval in images mode (0 = manual)")
-    ap.add_argument("--weight-mode", default="auto",
-                    choices=["auto", "hx711", "simulated", "off"])
+    ap.add_argument(
+        "--window", type=int, default=45, help="frames in the batch-count median window"
+    )
+    ap.add_argument(
+        "--image-seconds",
+        type=float,
+        default=3.0,
+        help="auto-advance interval in images mode (0 = manual)",
+    )
+    ap.add_argument("--weight-mode", default="auto", choices=["auto", "hx711", "simulated", "off"])
     ap.add_argument("--hx711-port", default=None)
-    ap.add_argument("--no-window", action="store_true",
-                    help="headless: run N frames and print the batch record")
-    ap.add_argument("--frames", type=int, default=60,
-                    help="frames to process in --no-window mode")
+    ap.add_argument(
+        "--no-window", action="store_true", help="headless: run N frames and print the batch record"
+    )
+    ap.add_argument("--frames", type=int, default=60, help="frames to process in --no-window mode")
     return ap
 
 
@@ -148,8 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     det.warmup()
     print(f"  {det.model_version} — classes {det.classes}")
 
-    src = FrameSource(args.mode, args.path, args.camera, args.width,
-                      args.height, args.image_seconds)
+    src = FrameSource(
+        args.mode, args.path, args.camera, args.width, args.height, args.image_seconds
+    )
     wsrc = get_weight_source(args.weight_mode, args.hx711_port)
     session = BatchSession(window=args.window, classes=det.classes)
 
@@ -185,12 +196,19 @@ def main(argv: list[str] | None = None) -> int:
                 status = "LIVE"
 
             canvas = compose(
-                frame=frame, detections=result.detections, counts=counts,
-                classes=det.classes, avg_conf=session.average_confidence(),
-                fps=det.fps, model_version=det.model_version,
-                batch_id=session.batch_id, frames=session.frames_seen,
-                mode=src.label, status="PAUSED" if paused else status,
-                weight=weight, recovery=record_preview,
+                frame=frame,
+                detections=result.detections,
+                counts=counts,
+                classes=det.classes,
+                avg_conf=session.average_confidence(),
+                fps=det.fps,
+                model_version=det.model_version,
+                batch_id=session.batch_id,
+                frames=session.frames_seen,
+                mode=src.label,
+                status="PAUSED" if paused else status,
+                weight=weight,
+                recovery=record_preview,
             )
 
             if args.no_window:
@@ -223,8 +241,9 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_window:
             cv2.destroyAllWindows()
 
-    rec = session.record(det.model_version,
-                         wsrc.read().as_dict() if wsrc else None, source=src.label)
+    rec = session.record(
+        det.model_version, wsrc.read().as_dict() if wsrc else None, source=src.label
+    )
     print("\n=== BATCH COMPOSITION ===")
     print(json.dumps(rec, indent=2))
     if args.no_window:

@@ -1,0 +1,37 @@
+[project]
+name = "aurum-vision"
+version = "0.1.0"
+description = "Real-time e-waste component identification for Project Aurum"
+requires-python = ">=3.12,<3.14"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "data", "runs", "models", "reports"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # import sorting
+    "B",    # bugbear
+    "UP",   # pyupgrade
+    "C4",   # comprehensions
+    "SIM",  # simplify
+]
+ignore = [
+    "E501",  # line length is enforced by the formatter, not the linter
+    "B008",  # FastAPI's Depends()/File() defaults are the documented idiom
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests intentionally assert on expressions rather than binding them.
+"tests/*" = ["B011"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "error::DeprecationWarning:app.*",
+    "error::DeprecationWarning:ml.*",
+]

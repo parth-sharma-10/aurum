@@ -42,8 +42,9 @@ def hamming(a: int, b: int) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--hamming", type=int, default=5,
-                    help="cross-split perceptual distance treated as a leak")
+    ap.add_argument(
+        "--hamming", type=int, default=5, help="cross-split perceptual distance treated as a leak"
+    )
     args = ap.parse_args()
 
     if not (OUT / "data.yaml").exists():
@@ -84,11 +85,13 @@ def main() -> int:
                 ci = int(parts[0])
                 cx, cy, w, h = (float(v) for v in parts[1:])
                 if not 0 <= ci < nc:
-                    failures.append(f"{split}/{lbl.name}:{ln} class index {ci} outside 0..{nc-1}")
+                    failures.append(f"{split}/{lbl.name}:{ln} class index {ci} outside 0..{nc - 1}")
                 if not (0 < w <= 1.0001 and 0 < h <= 1.0001):
                     failures.append(f"{split}/{lbl.name}:{ln} box w/h {w:.3f}x{h:.3f} out of range")
                 if not (-0.001 <= cx <= 1.001 and -0.001 <= cy <= 1.001):
-                    failures.append(f"{split}/{lbl.name}:{ln} centre {cx:.3f},{cy:.3f} out of range")
+                    failures.append(
+                        f"{split}/{lbl.name}:{ln} centre {cx:.3f},{cy:.3f} out of range"
+                    )
                 box_stats[(split, classes[ci] if 0 <= ci < nc else ci)] += 1
                 n_boxes += 1
 
@@ -105,10 +108,10 @@ def main() -> int:
             split_of_cluster[c] = split
     multi = {c: s for c, s in spanning.items() if len(s) > 1}
     if multi:
-        failures.append(f"{len(multi)} cluster(s) span multiple splits, e.g. "
-                        f"{list(multi.items())[:3]}")
-    print(f"\ncluster containment : {len(spanning)} clusters, "
-          f"{len(multi)} spanning splits")
+        failures.append(
+            f"{len(multi)} cluster(s) span multiple splits, e.g. {list(multi.items())[:3]}"
+        )
+    print(f"\ncluster containment : {len(spanning)} clusters, {len(multi)} spanning splits")
 
     # --- leakage check 2: exact duplicates across splits --------------------
     sha_index: dict[str, tuple[str, str]] = {}
@@ -122,8 +125,9 @@ def main() -> int:
             else:
                 sha_index[sha] = (split, p.name)
     if exact_leaks:
-        failures.append(f"{len(exact_leaks)} exact duplicate image(s) across splits, "
-                        f"e.g. {exact_leaks[:2]}")
+        failures.append(
+            f"{len(exact_leaks)} exact duplicate image(s) across splits, e.g. {exact_leaks[:2]}"
+        )
     print(f"exact duplicates    : {len(exact_leaks)} across splits")
 
     # --- leakage check 3: perceptual near-duplicates across splits ----------
@@ -151,10 +155,11 @@ def main() -> int:
                     near_leaks.append((split, name, tn, hamming(h, th)))
                     break
     if near_leaks:
-        failures.append(f"{len(near_leaks)} near-duplicate(s) between train and "
-                        f"held-out at Hamming<={args.hamming}, e.g. {near_leaks[:3]}")
-    print(f"near-duplicates     : {len(near_leaks)} train<->heldout "
-          f"at Hamming<={args.hamming}")
+        failures.append(
+            f"{len(near_leaks)} near-duplicate(s) between train and "
+            f"held-out at Hamming<={args.hamming}, e.g. {near_leaks[:3]}"
+        )
+    print(f"near-duplicates     : {len(near_leaks)} train<->heldout at Hamming<={args.hamming}")
 
     # --- class presence -----------------------------------------------------
     print(f"\n{'class':12s} {'train':>8s} {'valid':>8s} {'test':>8s}")
@@ -164,21 +169,27 @@ def main() -> int:
         if row[2] == 0:
             failures.append(f"class {c} has no instances in the test set")
         elif row[2] < 30:
-            warnings.append(f"class {c} has only {row[2]} test instances; "
-                            f"its per-class metrics will be noisy")
-    print(f"{'TOTAL':12s} {sum(box_stats.get(('train',c),0) for c in classes):8d} "
-          f"{sum(box_stats.get(('valid',c),0) for c in classes):8d} "
-          f"{sum(box_stats.get(('test',c),0) for c in classes):8d}")
+            warnings.append(
+                f"class {c} has only {row[2]} test instances; its per-class metrics will be noisy"
+            )
+    print(
+        f"{'TOTAL':12s} {sum(box_stats.get(('train', c), 0) for c in classes):8d} "
+        f"{sum(box_stats.get(('valid', c), 0) for c in classes):8d} "
+        f"{sum(box_stats.get(('test', c), 0) for c in classes):8d}"
+    )
 
     # --- verdict ------------------------------------------------------------
-    report = {"images": {s: len(v) for s, v in images.items()},
-              "boxes": n_boxes,
-              "clusters": len(spanning),
-              "clusters_spanning_splits": len(multi),
-              "exact_duplicates_across_splits": len(exact_leaks),
-              "near_duplicates_train_to_heldout": len(near_leaks),
-              "hamming_threshold": args.hamming,
-              "failures": failures, "warnings": warnings}
+    report = {
+        "images": {s: len(v) for s, v in images.items()},
+        "boxes": n_boxes,
+        "clusters": len(spanning),
+        "clusters_spanning_splits": len(multi),
+        "exact_duplicates_across_splits": len(exact_leaks),
+        "near_duplicates_train_to_heldout": len(near_leaks),
+        "hamming_threshold": args.hamming,
+        "failures": failures,
+        "warnings": warnings,
+    }
     REPORTS.mkdir(exist_ok=True)
     (REPORTS / "dataset_validation.json").write_text(json.dumps(report, indent=2))
 

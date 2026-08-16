@@ -20,20 +20,39 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from ml.labels import load_label_map, normalize_key  # noqa: E402
+from ml.labels import load_label_map  # noqa: E402
 
 API = "https://api.roboflow.com/universe/search"
 
 QUERIES = [
-    "ewaste", "e-waste", "e waste components", "ewaste detection",
-    "electronic waste", "electronic components detection",
-    "computer components", "pc components", "hardware components",
-    "ram detection", "ram module", "memory module", "ddr ram",
-    "cpu detection", "processor detection", "cpu ram",
-    "motherboard components", "pcb detection", "circuit board detection",
-    "connector detection", "recycling electronics", "scrap electronics",
-    "class:ram", "class:cpu", "class:pcb", "class:connector",
-    "class:motherboard", "class:processor",
+    "ewaste",
+    "e-waste",
+    "e waste components",
+    "ewaste detection",
+    "electronic waste",
+    "electronic components detection",
+    "computer components",
+    "pc components",
+    "hardware components",
+    "ram detection",
+    "ram module",
+    "memory module",
+    "ddr ram",
+    "cpu detection",
+    "processor detection",
+    "cpu ram",
+    "motherboard components",
+    "pcb detection",
+    "circuit board detection",
+    "connector detection",
+    "recycling electronics",
+    "scrap electronics",
+    "class:ram",
+    "class:cpu",
+    "class:pcb",
+    "class:connector",
+    "class:motherboard",
+    "class:processor",
 ]
 
 
@@ -98,9 +117,12 @@ def main() -> int:
 
     out = Path("reports/universe_search.json")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(
-        [{"score": n, "covers": cov, "unmapped": un, **r}
-         for n, _, _, r, cov, un in scored], indent=2))
+    out.write_text(
+        json.dumps(
+            [{"score": n, "covers": cov, "unmapped": un, **r} for n, _, _, r, cov, un in scored],
+            indent=2,
+        )
+    )
     print(f"\nwrote {out}")
     return 0
 

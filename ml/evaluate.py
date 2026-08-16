@@ -19,7 +19,6 @@ import shutil
 from pathlib import Path
 
 import cv2
-import numpy as np
 import yaml
 from ultralytics import YOLO
 
@@ -34,7 +33,7 @@ def iou(a, b) -> float:
     ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
     iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
     inter = iw * ih
-    ua = (a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - inter
+    ua = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
     return inter / ua if ua > 0 else 0.0
 
 
@@ -48,12 +47,15 @@ def load_gt(label_path: Path, w: int, h: int) -> list[tuple[int, list[float]]]:
             continue
         c = int(p[0])
         cx, cy, bw, bh = (float(v) for v in p[1:])
-        out.append((c, [(cx - bw/2)*w, (cy - bh/2)*h, (cx + bw/2)*w, (cy + bh/2)*h]))
+        out.append(
+            (c, [(cx - bw / 2) * w, (cy - bh / 2) * h, (cx + bw / 2) * w, (cy + bh / 2) * h])
+        )
     return out
 
 
-def qualitative(model: YOLO, split_dir: Path, names: list[str], conf: float,
-                out_dir: Path, n_each: int = 12) -> dict:
+def qualitative(
+    model: YOLO, split_dir: Path, names: list[str], conf: float, out_dir: Path, n_each: int = 12
+) -> dict:
     """Split test images into clean successes and instructive failures."""
     img_dir, lbl_dir = split_dir / "images", split_dir / "labels"
     good_dir, bad_dir = out_dir / "correct", out_dir / "failures"
@@ -76,15 +78,18 @@ def qualitative(model: YOLO, split_dir: Path, names: list[str], conf: float,
         res = model.predict(img, conf=conf, verbose=False)[0]
         preds = []
         if res.boxes is not None and len(res.boxes):
-            for bb, cc, kk in zip(res.boxes.xyxy.cpu().numpy(),
-                                  res.boxes.conf.cpu().numpy(),
-                                  res.boxes.cls.cpu().numpy().astype(int)):
+            for bb, cc, kk in zip(
+                res.boxes.xyxy.cpu().numpy(),
+                res.boxes.conf.cpu().numpy(),
+                res.boxes.cls.cpu().numpy().astype(int),
+                strict=True,
+            ):
                 preds.append((int(kk), float(cc), bb.tolist()))
 
         matched_gt, matched_pred = set(), set()
         for gi, (gc, gb) in enumerate(gt):
             best, bj = 0.0, None
-            for pj, (pc, pconf, pb) in enumerate(preds):
+            for pj, (pc, _pconf, pb) in enumerate(preds):
                 if pj in matched_pred or pc != gc:
                     continue
                 v = iou(gb, pb)
@@ -107,19 +112,41 @@ def qualitative(model: YOLO, split_dir: Path, names: list[str], conf: float,
         _, fp, fn, img_path, gt, preds = item
         img = cv2.imread(str(img_path))
         for gc, gb in gt:  # ground truth: thin white
-            cv2.rectangle(img, (int(gb[0]), int(gb[1])), (int(gb[2]), int(gb[3])),
-                          (230, 230, 230), 1)
-            cv2.putText(img, f"GT:{names[gc]}", (int(gb[0]), int(gb[1]) - 4),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (230, 230, 230), 1, cv2.LINE_AA)
+            cv2.rectangle(
+                img, (int(gb[0]), int(gb[1])), (int(gb[2]), int(gb[3])), (230, 230, 230), 1
+            )
+            cv2.putText(
+                img,
+                f"GT:{names[gc]}",
+                (int(gb[0]), int(gb[1]) - 4),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (230, 230, 230),
+                1,
+                cv2.LINE_AA,
+            )
         for pc, pconf, pb in preds:  # prediction: gold
-            cv2.rectangle(img, (int(pb[0]), int(pb[1])), (int(pb[2]), int(pb[3])),
-                          (60, 175, 214), 2)
-            cv2.putText(img, f"{names[pc]} {pconf:.2f}",
-                        (int(pb[0]), int(pb[3]) + 16),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (60, 175, 214), 2, cv2.LINE_AA)
+            cv2.rectangle(
+                img, (int(pb[0]), int(pb[1])), (int(pb[2]), int(pb[3])), (60, 175, 214), 2
+            )
+            cv2.putText(
+                img,
+                f"{names[pc]} {pconf:.2f}",
+                (int(pb[0]), int(pb[3]) + 16),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (60, 175, 214),
+                2,
+                cv2.LINE_AA,
+            )
         cv2.imwrite(str(dest / img_path.name), img)
-        return {"image": img_path.name, "false_positives": fp,
-                "false_negatives": fn, "n_gt": len(gt), "n_pred": len(preds)}
+        return {
+            "image": img_path.name,
+            "false_positives": fp,
+            "false_negatives": fn,
+            "n_gt": len(gt),
+            "n_pred": len(preds),
+        }
 
     for item in scored[:n_each]:
         summary["correct"].append(render(item, good_dir))
@@ -148,43 +175,71 @@ def main() -> int:
     # the canonical train/val/test keys, so the validation split must be asked
     # for as "val" even though its directory is data/aurum/valid.
     ul_split = "val" if args.split == "valid" else args.split
-    m = model.val(data=str(DATA), split=ul_split, imgsz=args.imgsz,
-                  conf=0.001, iou=0.6, plots=True, verbose=True,
-                  project=str(ROOT / "runs"), name=f"eval_{args.split}",
-                  exist_ok=True)
+    m = model.val(
+        data=str(DATA),
+        split=ul_split,
+        imgsz=args.imgsz,
+        conf=0.001,
+        iou=0.6,
+        plots=True,
+        verbose=True,
+        project=str(ROOT / "runs"),
+        name=f"eval_{args.split}",
+        exist_ok=True,
+    )
 
     box = m.box
     overall = {
-        "precision": float(box.mp), "recall": float(box.mr),
-        "mAP50": float(box.map50), "mAP50_95": float(box.map),
+        "precision": float(box.mp),
+        "recall": float(box.mr),
+        "mAP50": float(box.map50),
+        "mAP50_95": float(box.map),
     }
     per_class = {}
     for i, c in enumerate(names):
         try:
             p, r, ap50, ap = box.class_result(i)
-            per_class[c] = {"precision": float(p), "recall": float(r),
-                            "mAP50": float(ap50), "mAP50_95": float(ap)}
+            per_class[c] = {
+                "precision": float(p),
+                "recall": float(r),
+                "mAP50": float(ap50),
+                "mAP50_95": float(ap),
+            }
         except Exception:
             per_class[c] = None
 
     print(f"\n{'class':12s} {'P':>8s} {'R':>8s} {'mAP50':>8s} {'mAP50-95':>9s}")
-    print(f"{'ALL':12s} {overall['precision']:8.3f} {overall['recall']:8.3f} "
-          f"{overall['mAP50']:8.3f} {overall['mAP50_95']:9.3f}")
+    print(
+        f"{'ALL':12s} {overall['precision']:8.3f} {overall['recall']:8.3f} "
+        f"{overall['mAP50']:8.3f} {overall['mAP50_95']:9.3f}"
+    )
     for c, v in per_class.items():
         if v:
-            print(f"{c:12s} {v['precision']:8.3f} {v['recall']:8.3f} "
-                  f"{v['mAP50']:8.3f} {v['mAP50_95']:9.3f}")
+            print(
+                f"{c:12s} {v['precision']:8.3f} {v['recall']:8.3f} "
+                f"{v['mAP50']:8.3f} {v['mAP50_95']:9.3f}"
+            )
 
     print("\nRendering qualitative examples…")
-    qual = qualitative(model, ROOT / "data" / "aurum" / args.split, names,
-                       args.conf, REPORTS / f"{args.split}_predictions")
+    qual = qualitative(
+        model,
+        ROOT / "data" / "aurum" / args.split,
+        names,
+        args.conf,
+        REPORTS / f"{args.split}_predictions",
+    )
 
     eval_dir = ROOT / "runs" / f"eval_{args.split}"
     REPORTS.mkdir(exist_ok=True)
     copied = []
-    for art in ("confusion_matrix.png", "confusion_matrix_normalized.png",
-                "BoxPR_curve.png", "BoxF1_curve.png", "BoxP_curve.png",
-                "BoxR_curve.png"):
+    for art in (
+        "confusion_matrix.png",
+        "confusion_matrix_normalized.png",
+        "BoxPR_curve.png",
+        "BoxF1_curve.png",
+        "BoxP_curve.png",
+        "BoxR_curve.png",
+    ):
         src = eval_dir / art
         if src.exists():
             shutil.copy2(src, REPORTS / art)
@@ -192,8 +247,7 @@ def main() -> int:
 
     stats = json.loads((REPORTS / "dataset_stats.json").read_text())
     out = {
-        "weights": str(weights.relative_to(ROOT)) if weights.is_relative_to(ROOT)
-                   else str(weights),
+        "weights": str(weights.relative_to(ROOT)) if weights.is_relative_to(ROOT) else str(weights),
         "split": args.split,
         "n_images": stats["splits"][args.split]["images"],
         "n_instances": stats["splits"][args.split]["boxes"],

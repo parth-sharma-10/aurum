@@ -1,8 +1,18 @@
+# Environments
 .venv/
+env/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
 
-# Raw and prepared datasets are reproducible from scripts/configs — not committed.
+# Secrets — never commit. See .env.example for the required variables.
+.env
+.env.*
+!.env.example
+
+# Datasets are rebuilt from configs/datasets.yaml via `python -m ml.ingest`.
+# They are large and carry third-party licenses; not redistributed here.
 data/raw/
 data/interim/
 data/aurum/
@@ -10,13 +20,17 @@ data/realworld/
 data/batches/
 data/*.db
 
-# Training runs are large; curated outputs are copied into models/ and reports/.
+# Training runs. Curated outputs are copied into models/ and reports/.
 runs/
 
-# Model weights are build artifacts, not source. Rebuild via TRAINING.md.
-models/*.pt
+# Model weights are build artifacts. See docs/model-card.md for how to obtain
+# or rebuild them; yolo11n.pt is auto-downloaded by Ultralytics on first train.
+*.pt
+
+# Generated inference outputs
+reports/realworld/
+reports/test_predictions/
 
 .DS_Store
 node_modules/
 dist/
-.pytest_cache/

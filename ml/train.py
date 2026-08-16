@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import torch
@@ -76,7 +76,7 @@ def main() -> int:
         project=str(RUNS),
         name=cfg["name"],
         exist_ok=True,
-        plots=True,          # PR curves, confusion matrix, label distribution
+        plots=True,  # PR curves, confusion matrix, label distribution
         val=True,
         # Mild geometric augmentation only. Components are photographed from
         # arbitrary angles, but vertical flips would create RAM modules that
@@ -96,8 +96,10 @@ def main() -> int:
     run_dir = RUNS / cfg["name"]
     weights = run_dir / "weights"
     MODELS.mkdir(exist_ok=True)
-    for src, dst in (("best.pt", "aurum_vision_v0_1_best.pt"),
-                     ("last.pt", "aurum_vision_v0_1_last.pt")):
+    for src, dst in (
+        ("best.pt", "aurum_vision_v0_1_best.pt"),
+        ("last.pt", "aurum_vision_v0_1_last.pt"),
+    ):
         if (weights / src).exists():
             shutil.copy2(weights / src, MODELS / dst)
             print(f"  saved models/{dst}")
@@ -114,13 +116,13 @@ def main() -> int:
         "batch": cfg["batch"],
         "seed": cfg["seed"],
         "device": cfg["device"],
-        "trained_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "trained_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
         "dataset": "data/aurum (see reports/dataset_stats.json)",
         "run_dir": str(run_dir.relative_to(ROOT)),
         "weights": "models/aurum_vision_v0_1_best.pt",
     }
     (MODELS / "aurum_vision_v0_1_meta.json").write_text(json.dumps(meta, indent=2))
-    print(f"\nWrote models/aurum_vision_v0_1_meta.json")
+    print("\nWrote models/aurum_vision_v0_1_meta.json")
     print("Next: python -m ml.evaluate")
     return 0
 

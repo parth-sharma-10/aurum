@@ -44,16 +44,16 @@ def fetch_metadata(workspace: str, project: str, key: str) -> dict:
     return (_get_json(url).get("project")) or {}
 
 
-def request_export(workspace: str, project: str, version: int, key: str,
-                   attempts: int = 12, wait: int = 15) -> str:
+def request_export(
+    workspace: str, project: str, version: int, key: str, attempts: int = 12, wait: int = 15
+) -> str:
     """Ask Roboflow for a download link, waiting while it generates the export.
 
     A version that has never been exported in this format returns a 202-style
     'generating' response; polling is the documented way through it, so the
     retry lives here rather than in the caller's hands.
     """
-    url = (f"{API}/{workspace}/{project}/{version}/{EXPORT_FORMAT}"
-           f"?api_key={urllib.parse.quote(key)}")
+    url = f"{API}/{workspace}/{project}/{version}/{EXPORT_FORMAT}?api_key={urllib.parse.quote(key)}"
     last = ""
     for i in range(attempts):
         try:
@@ -66,7 +66,7 @@ def request_export(workspace: str, project: str, version: int, key: str,
         if link:
             return link
         last = json.dumps(data)[:200]
-        print(f"    export not ready ({i+1}/{attempts}), waiting {wait}s…")
+        print(f"    export not ready ({i + 1}/{attempts}), waiting {wait}s…")
         time.sleep(wait)
     raise RuntimeError(
         f"{workspace}/{project} v{version}: no export link after {attempts} "
@@ -97,8 +97,11 @@ def ingest_one(entry: dict, api_key: str, force: bool = False) -> dict:
     link = request_export(ws, proj, ver, api_key)
     download_zip(link, dest)
 
-    n_img = sum(len(list((dest / s / "images").glob("*")))
-                for s in ("train", "valid", "test") if (dest / s / "images").is_dir())
+    n_img = sum(
+        len(list((dest / s / "images").glob("*")))
+        for s in ("train", "valid", "test")
+        if (dest / s / "images").is_dir()
+    )
 
     record = {
         "key": key,
@@ -130,8 +133,10 @@ def main() -> int:
 
     api_key = os.environ.get("ROBOFLOW_API_KEY")
     if not api_key:
-        print("ROBOFLOW_API_KEY is not set. Get a free key at roboflow.com "
-              "(Settings -> API Keys).", file=sys.stderr)
+        print(
+            "ROBOFLOW_API_KEY is not set. Get a free key at roboflow.com (Settings -> API Keys).",
+            file=sys.stderr,
+        )
         return 1
 
     entries = yaml.safe_load(REGISTRY.read_text())["roboflow"]

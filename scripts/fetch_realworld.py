@@ -20,7 +20,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 import sys
 import time
 import urllib.parse
@@ -37,8 +39,14 @@ API = "https://commons.wikimedia.org/w/api.php"
 # Wikimedia's robot policy wants a descriptive agent with a contact route and a
 # request rate a human could plausibly produce. Both are honoured below: a
 # throttle between downloads and backoff on 429 rather than hammering through it.
-UA = ("AurumVision/0.1 (https://github.com/; SIH e-waste research prototype; "
-      "contact: parthrsharma1002@gmail.com) Python-urllib")
+# The contact address comes from the environment so no personal address is
+# committed to the repository.
+_CONTACT = os.environ.get("AURUM_CONTACT_EMAIL", "").strip()
+UA = (
+    "AurumVision/0.1 (e-waste component identification research prototype; "
+    f"{'contact: ' + _CONTACT + '; ' if _CONTACT else ''}"
+    "https://github.com/topics/e-waste) Python-urllib"
+)
 DOWNLOAD_DELAY = 1.5
 
 # Queries chosen to span the four classes and, deliberately, awkward conditions:
@@ -72,7 +80,7 @@ def download(url: str, dest: Path, attempts: int = 4) -> bool:
             return True
         except urllib.error.HTTPError as exc:
             if exc.code == 429 and i < attempts - 1:
-                wait = 5 * (2 ** i)
+                wait = 5 * (2**i)
                 print(f"    · rate-limited, waiting {wait}s")
                 time.sleep(wait)
                 continue
@@ -86,12 +94,18 @@ def download(url: str, dest: Path, attempts: int = 4) -> bool:
 
 def search(query: str, limit: int) -> list[dict]:
     try:
-        data = api({
-            "action": "query", "generator": "search",
-            "gsrsearch": f"filetype:bitmap {query}", "gsrnamespace": 6,
-            "gsrlimit": limit * 3, "prop": "imageinfo",
-            "iiprop": "url|extmetadata|size", "iiurlwidth": 1280,
-        })
+        data = api(
+            {
+                "action": "query",
+                "generator": "search",
+                "gsrsearch": f"filetype:bitmap {query}",
+                "gsrnamespace": 6,
+                "gsrlimit": limit * 3,
+                "prop": "imageinfo",
+                "iiprop": "url|extmetadata|size",
+                "iiurlwidth": 1280,
+            }
+        )
     except Exception as exc:
         print(f"  ! search failed for {query!r}: {exc}", file=sys.stderr)
         return []
@@ -99,8 +113,9 @@ def search(query: str, limit: int) -> list[dict]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--per-query", type=int, default=4)
     args = ap.parse_args()
 
@@ -139,15 +154,17 @@ def main() -> int:
 
                 seen_titles.add(title)
                 kept += 1
-                manifest.append({
-                    "file": dest.name,
-                    "expected_class_hint": aurum_class,
-                    "title": title,
-                    "descriptionurl": info.get("descriptionurl"),
-                    "license": meta.get("LicenseShortName", {}).get("value"),
-                    "artist": _strip_html(meta.get("Artist", {}).get("value", "")),
-                    "query": q,
-                })
+                manifest.append(
+                    {
+                        "file": dest.name,
+                        "expected_class_hint": aurum_class,
+                        "title": title,
+                        "descriptionurl": info.get("descriptionurl"),
+                        "license": meta.get("LicenseShortName", {}).get("value"),
+                        "artist": _strip_html(meta.get("Artist", {}).get("value", "")),
+                        "query": q,
+                    }
+                )
                 print(f"    + {dest.name}  [{manifest[-1]['license']}]")
 
     if not manifest:
@@ -159,6 +176,7 @@ def main() -> int:
     if TRAIN.is_dir():
         import imagehash
         from PIL import Image
+
         print("\nChecking downloads against the training split…")
 
         def ph(p):
@@ -168,10 +186,10 @@ def main() -> int:
         train_hashes = []
         for p in TRAIN.iterdir():
             if p.suffix.lower() in {".jpg", ".jpeg", ".png"}:
-                try:
+                # An unreadable training image just cannot participate in
+                # the comparison; it is not a reason to abort the check.
+                with contextlib.suppress(Exception):
                     train_hashes.append((p.name, ph(p)))
-                except Exception:
-                    pass
         for m in manifest:
             try:
                 h = ph(OUT / m["file"])
@@ -181,8 +199,7 @@ def main() -> int:
                 if bin(h ^ th).count("1") <= 5:
                     overlaps.append({"realworld": m["file"], "train": tn})
                     break
-        print(f"  {len(train_hashes)} training images compared; "
-              f"{len(overlaps)} overlap(s) found")
+        print(f"  {len(train_hashes)} training images compared; {len(overlaps)} overlap(s) found")
 
     out = {
         "source": "Wikimedia Commons",
@@ -205,6 +222,7 @@ def main() -> int:
 
 def _strip_html(s: str) -> str:
     import re
+
     return re.sub(r"<[^>]+>", "", s).strip()
 
 

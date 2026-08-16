@@ -15,12 +15,15 @@ from ml.prepare import SPLITS, DisjointSet, hamming, source_stem, split_clusters
 
 
 class TestSourceStem:
-    @pytest.mark.parametrize("name,expected", [
-        # Three Roboflow augmentations of one photograph collapse to one stem.
-        ("IMG_1234_jpg.rf.547b0b092e9b4a148a2dfed48da9b131.jpg", "img_1234_jpg"),
-        ("IMG_1234_jpg.rf.bffec6007116aec2b8fcf38902e99cad.jpg", "img_1234_jpg"),
-        ("IMG_1234_jpg.rf.cb1a771d142534bc32566d132aaf077f.jpg", "img_1234_jpg"),
-    ])
+    @pytest.mark.parametrize(
+        "name,expected",
+        [
+            # Three Roboflow augmentations of one photograph collapse to one stem.
+            ("IMG_1234_jpg.rf.547b0b092e9b4a148a2dfed48da9b131.jpg", "img_1234_jpg"),
+            ("IMG_1234_jpg.rf.bffec6007116aec2b8fcf38902e99cad.jpg", "img_1234_jpg"),
+            ("IMG_1234_jpg.rf.cb1a771d142534bc32566d132aaf077f.jpg", "img_1234_jpg"),
+        ],
+    )
     def test_augmented_copies_share_a_stem(self, name, expected):
         assert source_stem(Path(name)) == expected
 
@@ -88,7 +91,7 @@ class TestSplitClusters:
     def test_a_cluster_never_spans_splits(self):
         """Two images in one cluster share the cluster's single assignment."""
         recs = self._records({f"c{i}": {"PCB": 1} for i in range(30)})
-        recs += [{"cluster": "c0", "boxes": [("PCB", .5, .5, .2, .2)]}]  # duplicate
+        recs += [{"cluster": "c0", "boxes": [("PCB", 0.5, 0.5, 0.2, 0.2)]}]  # duplicate
         assignment = split_clusters(recs, self.CLASSES, seed=1)
         assert isinstance(assignment["c0"], str)
 

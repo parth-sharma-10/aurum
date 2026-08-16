@@ -54,9 +54,17 @@ def draw_detections(frame: np.ndarray, detections) -> np.ndarray:
     return out
 
 
-def _summary_panel(h: int, counts: dict, classes: list[str], total: int,
-                   avg_conf: float, batch_id: str, frames: int,
-                   weight: dict | None, recovery: dict | None) -> np.ndarray:
+def _summary_panel(
+    h: int,
+    counts: dict,
+    classes: list[str],
+    total: int,
+    avg_conf: float,
+    batch_id: str,
+    frames: int,
+    weight: dict | None,
+    recovery: dict | None,
+) -> np.ndarray:
     p = np.full((h, PANEL_W, 3), PANEL, dtype=np.uint8)
     y = 34
     _text(p, "DETECTION SUMMARY", (18, y), 0.52, GOLD, 1)
@@ -79,7 +87,7 @@ def _summary_panel(h: int, counts: dict, classes: list[str], total: int,
     _text(p, str(total), (PANEL_W - 46, y), 0.55, TEXT, 2)
     y += 26
     _text(p, "Avg Conf.", (18, y), 0.5, MUTED)
-    _text(p, f"{avg_conf*100:.1f}%" if total else "--", (PANEL_W - 66, y), 0.55, TEXT, 2)
+    _text(p, f"{avg_conf * 100:.1f}%" if total else "--", (PANEL_W - 66, y), 0.55, TEXT, 2)
     y += 34
 
     cv2.line(p, (18, y), (PANEL_W - 18, y), RULE, 1)
@@ -122,8 +130,9 @@ def _summary_panel(h: int, counts: dict, classes: list[str], total: int,
     return p
 
 
-def _status_bar(w: int, model_version: str, fps: float, mode: str,
-                status: str, status_color) -> np.ndarray:
+def _status_bar(
+    w: int, model_version: str, fps: float, mode: str, status: str, status_color
+) -> np.ndarray:
     bar = np.full((BAR_H, w, 3), PANEL, dtype=np.uint8)
     cv2.line(bar, (0, 0), (w, 0), RULE, 1)
     _text(bar, "Model", (24, 22), 0.42, MUTED)
@@ -141,11 +150,22 @@ def _status_bar(w: int, model_version: str, fps: float, mode: str,
     return bar
 
 
-def compose(frame: np.ndarray, detections, counts: dict, classes: list[str],
-            avg_conf: float, fps: float, model_version: str, batch_id: str,
-            frames: int, mode: str, status: str = "LIVE",
-            weight: dict | None = None, recovery: dict | None = None,
-            header: bool = True) -> np.ndarray:
+def compose(
+    frame: np.ndarray,
+    detections,
+    counts: dict,
+    classes: list[str],
+    avg_conf: float,
+    fps: float,
+    model_version: str,
+    batch_id: str,
+    frames: int,
+    mode: str,
+    status: str = "LIVE",
+    weight: dict | None = None,
+    recovery: dict | None = None,
+    header: bool = True,
+) -> np.ndarray:
     """Assemble the full dashboard frame."""
     vis = draw_detections(frame, detections)
     h, w = vis.shape[:2]
@@ -159,14 +179,12 @@ def compose(frame: np.ndarray, detections, counts: dict, classes: list[str],
         _text(canvas, "E-WASTE COMPONENT IDENTIFICATION", (24, 50), 0.44, MUTED)
         cv2.line(canvas, (0, head_h - 1), (w + PANEL_W, head_h - 1), RULE, 1)
 
-    canvas[head_h:head_h + h, 0:w] = vis
+    canvas[head_h : head_h + h, 0:w] = vis
 
     total = sum(counts.values())
-    panel = _summary_panel(h, counts, classes, total, avg_conf, batch_id,
-                           frames, weight, recovery)
-    canvas[head_h:head_h + h, w:w + PANEL_W] = panel
+    panel = _summary_panel(h, counts, classes, total, avg_conf, batch_id, frames, weight, recovery)
+    canvas[head_h : head_h + h, w : w + PANEL_W] = panel
 
     color = GREEN if status == "LIVE" else (AMBER if status == "SAVED" else RED)
-    canvas[head_h + h:, :] = _status_bar(w + PANEL_W, model_version, fps,
-                                         mode, status, color)
+    canvas[head_h + h :, :] = _status_bar(w + PANEL_W, model_version, fps, mode, status, color)
     return canvas

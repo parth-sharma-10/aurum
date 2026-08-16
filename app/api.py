@@ -15,15 +15,14 @@ import io
 import json
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
 from pathlib import Path
 
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 
-from app.batch import BatchSession, recovery_estimate
+from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
 from app.weight import get_weight_source
@@ -103,8 +102,7 @@ def model_info() -> dict:
         "model_version": d.model_version,
         "classes": d.classes,
         "metadata": d.meta,
-        "test_metrics": (json.loads(metrics_path.read_text())
-                         if metrics_path.exists() else None),
+        "test_metrics": (json.loads(metrics_path.read_text()) if metrics_path.exists() else None),
         "disclaimer": (
             "Aurum Vision identifies visible component categories from RGB "
             "imagery. It does not measure precious-metal composition."
@@ -120,8 +118,8 @@ async def detect(file: UploadFile = File(...)) -> dict:
     return {
         "model_version": d.model_version,
         "detections": [
-            {"class": x.cls, "confidence": round(x.conf, 4),
-             "box_xyxy": list(x.xyxy)} for x in res.detections
+            {"class": x.cls, "confidence": round(x.conf, 4), "box_xyxy": list(x.xyxy)}
+            for x in res.detections
         ],
         "counts": {c: res.counts.get(c, 0) for c in d.classes},
         "total_objects": len(res.detections),
@@ -157,31 +155,39 @@ async def batch_frame(batch_id: str, file: UploadFile = File(...)) -> dict:
         raise HTTPException(404, f"Unknown batch {batch_id}")
     res = detector().predict(_decode(await file.read()))
     s.add_frame(res.counts, res.mean_confidence)
-    return {"batch_id": batch_id, "frames_observed": s.frames_seen,
-            "frame_counts": res.counts, "stable_counts": s.stable_counts()}
+    return {
+        "batch_id": batch_id,
+        "frames_observed": s.frames_seen,
+        "frame_counts": res.counts,
+        "stable_counts": s.stable_counts(),
+    }
 
 
 @app.post("/batch/{batch_id}/close")
-def batch_close(batch_id: str, weight_mode: str = "off",
-                hx711_port: str | None = None) -> dict:
+def batch_close(batch_id: str, weight_mode: str = "off", hx711_port: str | None = None) -> dict:
     """Finalize a batch, persist it to SQLite, and return the record."""
     s = _sessions.pop(batch_id, None)
     if s is None:
         raise HTTPException(404, f"Unknown batch {batch_id}")
     d = detector()
     wsrc = get_weight_source(weight_mode, hx711_port) if weight_mode != "off" else None
-    rec = s.record(d.model_version, wsrc.read().as_dict() if wsrc else None,
-                   source="api")
+    rec = s.record(d.model_version, wsrc.read().as_dict() if wsrc else None, source="api")
     s.save(rec)
 
     w = rec.get("weight") or {}
     with closing(sqlite3.connect(DB)) as con:
         con.execute(
             "INSERT OR REPLACE INTO batches VALUES (?,?,?,?,?,?,?,?)",
-            (rec["batch_id"], rec["timestamp"], rec["model_version"],
-             rec["total_objects"], rec["average_confidence"],
-             w.get("grams"), int(bool(w.get("simulated"))) if w else None,
-             json.dumps(rec)),
+            (
+                rec["batch_id"],
+                rec["timestamp"],
+                rec["model_version"],
+                rec["total_objects"],
+                rec["average_confidence"],
+                w.get("grams"),
+                int(bool(w.get("simulated"))) if w else None,
+                json.dumps(rec),
+            ),
         )
         con.commit()
     return rec
@@ -201,8 +207,7 @@ def list_batches(limit: int = 50) -> dict:
 def get_batch(batch_id: str) -> dict:
     with closing(sqlite3.connect(DB)) as con:
         con.row_factory = sqlite3.Row
-        row = con.execute("SELECT * FROM batches WHERE batch_id=?",
-                          (batch_id,)).fetchone()
+        row = con.execute("SELECT * FROM batches WHERE batch_id=?", (batch_id,)).fetchone()
     if row is None:
         raise HTTPException(404, f"No batch {batch_id}")
     return json.loads(row["record_json"])

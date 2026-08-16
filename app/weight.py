@@ -9,6 +9,7 @@ measurement: `simulated` is true in the batch record and the dashboard renders
 
 from __future__ import annotations
 
+import contextlib
 import math
 import os
 import time
@@ -27,8 +28,11 @@ class WeightReading:
             "kg": round(self.grams / 1000.0, 3),
             "simulated": self.simulated,
             "source": self.source,
-            **({"warning": "SIMULATED SENSOR — not a physical measurement"}
-               if self.simulated else {}),
+            **(
+                {"warning": "SIMULATED SENSOR — not a physical measurement"}
+                if self.simulated
+                else {}
+            ),
         }
 
 
@@ -82,8 +86,7 @@ class HX711LoadCell(WeightSource):
             import serial  # pyserial, optional dependency
         except ImportError as exc:
             raise RuntimeError(
-                "pyserial is not installed; `pip install pyserial` to use a "
-                "real HX711 load cell"
+                "pyserial is not installed; `pip install pyserial` to use a real HX711 load cell"
             ) from exc
         self._ser = serial.Serial(port, baud, timeout=timeout)
         self._last = 0.0
@@ -91,10 +94,10 @@ class HX711LoadCell(WeightSource):
 
     def read(self) -> WeightReading:
         line = self._ser.readline().decode("ascii", errors="ignore").strip()
-        try:
+        # A partial or noisy line keeps the previous good reading rather than
+        # emitting garbage into a batch record.
+        with contextlib.suppress(ValueError):
             self._last = float(line)
-        except ValueError:
-            pass  # keep the previous good reading rather than emitting garbage
         return WeightReading(self._last, False, f"HX711 @ {self._ser.port}")
 
 

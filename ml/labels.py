@@ -97,8 +97,7 @@ def load_label_map(path: Path | str = CONFIG_PATH) -> LabelMap:
     conflicts = set(to_aurum) & set(dropped)
     if conflicts:
         raise ValueError(
-            f"{path.name}: label(s) {sorted(conflicts)} appear in both "
-            f"`mappings` and `drop`"
+            f"{path.name}: label(s) {sorted(conflicts)} appear in both `mappings` and `drop`"
         )
 
     return LabelMap(
