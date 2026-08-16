@@ -160,8 +160,10 @@ curl -F "file=@board.jpg" http://127.0.0.1:8000/detect
 python -m ml.train
 python -m ml.evaluate
 
-# Tests
+# Tests (needs the dev extras)
+pip install -r requirements-dev.txt
 python -m pytest -q
+ruff check . && ruff format --check .
 ```
 
 ### Batch record
