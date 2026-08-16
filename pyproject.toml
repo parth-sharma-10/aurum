@@ -31,6 +31,11 @@ ignore = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Put the repository root on sys.path so `app` and `ml` import without an
+# editable install. Without this, bare `pytest` fails while `python -m pytest`
+# succeeds — only the latter adds the working directory — which makes the test
+# command work or not depending on how it was typed.
+pythonpath = ["."]
 filterwarnings = [
     # Our own deprecated API usage is a build failure, not a note. This is how
     # FastAPI's removed on_event() handler was caught.

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # PyTorch has no stable wheels for 3.14; the project pins 3.12.
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # CPU-only torch: CI never trains, and the CUDA build is ~2 GB.
+          pip install torch==2.13.0 torchvision==0.28.0 \
+            --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Tests
+        # The suite runs on a clean checkout with no trained weights and no
+        # dataset: API tests use a stub detector, and the pipeline tests cover
+        # pure functions. Nothing here needs a Roboflow key.
+        run: pytest -q
+
+      - name: Verify documentation generators run
+        # These write docs/model-card.md and docs/evaluation.md from the
+        # pipeline's JSON outputs. The check is that they degrade gracefully:
+        # on a clean checkout the training run and test metrics are absent
+        # (runs/ and models/*.pt are gitignored), and the generators must say
+        # "not yet measured" rather than crashing or inventing figures.
+        #
+        # Their output is deliberately NOT diffed against the committed docs:
+        # some inputs are gitignored, so CI legitimately produces a shorter
+        # document than a developer machine. Comparing them would fail for a
+        # reason that has nothing to do with correctness.
+        run: |
+          python scripts/gen_model_card.py
+          python scripts/gen_evaluation.py
+          grep -q "Not yet evaluated" docs/model-card.md \
+            || { echo "::error::model card should report evaluation as pending on a clean checkout"; exit 1; }
