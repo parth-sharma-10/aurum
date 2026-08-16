@@ -6,12 +6,17 @@ __pycache__/
 data/raw/
 data/interim/
 data/aurum/
+data/realworld/
+data/batches/
+data/*.db
 
 # Training runs are large; curated outputs are copied into models/ and reports/.
 runs/
-*.pt
-!models/**/*.pt
+
+# Model weights are build artifacts, not source. Rebuild via TRAINING.md.
+models/*.pt
 
 .DS_Store
 node_modules/
 dist/
+.pytest_cache/

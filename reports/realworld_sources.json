@@ -1,0 +1,253 @@
+{
+  "source": "Wikimedia Commons",
+  "retrieved_for": "real-world spot check of Aurum Vision v0.1",
+  "n_images": 27,
+  "license_filter": "CC0 / CC BY / Public Domain only",
+  "overlap_with_training": [],
+  "caveat": "These images are NOT annotated. Running the model over them produces detections to inspect, not an accuracy measurement.",
+  "images": [
+    {
+      "file": "PCB__Acer_Aspire_One_ZG5_motherboard_DA0ZG5MB8F0_-_top_view.jpg",
+      "expected_class_hint": "PCB",
+      "title": "File:Acer Aspire One ZG5 motherboard DA0ZG5MB8F0 - top view.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Acer_Aspire_One_ZG5_motherboard_DA0ZG5MB8F0_-_top_view.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Siarhei Besarab",
+      "query": "printed circuit board motherboard"
+    },
+    {
+      "file": "PCB__Amazon_Echo_Dot_RS03QR_-_motherboard-0552.jpg",
+      "expected_class_hint": "PCB",
+      "title": "File:Amazon Echo Dot (RS03QR) - motherboard-0552.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Amazon_Echo_Dot_(RS03QR)_-_motherboard-0552.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Raimond Spekking",
+      "query": "printed circuit board motherboard"
+    },
+    {
+      "file": "PCB__Amazon_Echo_Dot_RS03QR_-_motherboard-0557.jpg",
+      "expected_class_hint": "PCB",
+      "title": "File:Amazon Echo Dot (RS03QR) - motherboard-0557.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Amazon_Echo_Dot_(RS03QR)_-_motherboard-0557.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Raimond Spekking",
+      "query": "printed circuit board motherboard"
+    },
+    {
+      "file": "PCB__Amiga_3000T_motherboard_without_annotations.jpg",
+      "expected_class_hint": "PCB",
+      "title": "File:Amiga 3000T motherboard without annotations.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Amiga_3000T_motherboard_without_annotations.jpg",
+      "license": "CC0",
+      "artist": "Podstawko",
+      "query": "printed circuit board motherboard"
+    },
+    {
+      "file": "PCB__AAEON_ETX-CX700M_-_Top_View.jpg",
+      "expected_class_hint": "PCB",
+      "title": "File:AAEON ETX-CX700M - Top View.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:AAEON_ETX-CX700M_-_Top_View.jpg",
+      "license": "CC BY 2.0",
+      "artist": "VIA Gallery from Hsintien, Taiwan",
+      "query": "computer motherboard top view"
+    },
+    {
+      "file": "PCB__Apple-IIc-Motherboard-Flat-Top.jpg",
+      "expected_class_hint": "PCB",
+      "title": "File:Apple-IIc-Motherboard-Flat-Top.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Apple-IIc-Motherboard-Flat-Top.jpg",
+      "license": "Public domain",
+      "artist": "Evan-Amos",
+      "query": "computer motherboard top view"
+    },
+    {
+      "file": "PCB__Fujitsu_Siemens_Computers_Amilo_L7300_-_motherboard_-_Intel_Celeron_M_360_SL8ML_.jpg",
+      "expected_class_hint": "PCB",
+      "title": "File:Fujitsu Siemens Computers Amilo L7300 - motherboard - Intel Celeron M 360 (SL8ML) in socket 479-0459.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Fujitsu_Siemens_Computers_Amilo_L7300_-_motherboard_-_Intel_Celeron_M_360_(SL8ML)_in_socket_479-0459.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Raimond Spekking",
+      "query": "computer motherboard top view"
+    },
+    {
+      "file": "PCB__Fujitsu_Siemens_Computers_Amilo_L7300_-_motherboard_-_Renesas_M38857M8-A03HP-276.jpg",
+      "expected_class_hint": "PCB",
+      "title": "File:Fujitsu Siemens Computers Amilo L7300 - motherboard - Renesas M38857M8-A03HP-2766.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Fujitsu_Siemens_Computers_Amilo_L7300_-_motherboard_-_Renesas_M38857M8-A03HP-2766.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Raimond Spekking",
+      "query": "computer motherboard top view"
+    },
+    {
+      "file": "RAM__16_GiB-DDR4-RAM-Riegel_RAM019FIX_Small_Crop_90_PCNT.png",
+      "expected_class_hint": "RAM",
+      "title": "File:16 GiB-DDR4-RAM-Riegel RAM019FIX Small Crop 90 PCNT.png",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:16_GiB-DDR4-RAM-Riegel_RAM019FIX_Small_Crop_90_PCNT.png",
+      "license": "CC BY 4.0",
+      "artist": "PantheraLeo1359531",
+      "query": "DDR4 DIMM memory module"
+    },
+    {
+      "file": "RAM__28Go_DDR4_Corsair_-_2018-05-08.jpg",
+      "expected_class_hint": "RAM",
+      "title": "File:2*8Go DDR4 Corsair - 2018-05-08.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:2*8Go_DDR4_Corsair_-_2018-05-08.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Bretwa",
+      "query": "DDR4 DIMM memory module"
+    },
+    {
+      "file": "RAM__DDR_4_SO-DIMM_RAM_slot_PNr0837.jpg",
+      "expected_class_hint": "RAM",
+      "title": "File:DDR 4 SO-DIMM RAM slot PNr\u00b00837.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:DDR_4_SO-DIMM_RAM_slot_PNr%C2%B00837.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "D-Kuru",
+      "query": "DDR4 DIMM memory module"
+    },
+    {
+      "file": "RAM__Crucial_1gb_SDRAM_PC133_DIMM_Memory_Module.jpg",
+      "expected_class_hint": "RAM",
+      "title": "File:Crucial 1gb SDRAM PC133 DIMM Memory Module.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Crucial_1gb_SDRAM_PC133_DIMM_Memory_Module.jpg",
+      "license": "CC BY-SA 2.0",
+      "artist": "Matt Kieffer",
+      "query": "SDRAM memory module"
+    },
+    {
+      "file": "RAM__HYR186420G-653.jpg",
+      "expected_class_hint": "RAM",
+      "title": "File:HYR186420G-653.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:HYR186420G-653.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Mister rf",
+      "query": "SDRAM memory module"
+    },
+    {
+      "file": "RAM__HYR186420G-653_opened.jpg",
+      "expected_class_hint": "RAM",
+      "title": "File:HYR186420G-653 opened.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:HYR186420G-653_opened.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Mister rf",
+      "query": "SDRAM memory module"
+    },
+    {
+      "file": "RAM__Infineon_HYB25D256800AT-7_-_on_Infineon_memory_module-7226.jpg",
+      "expected_class_hint": "RAM",
+      "title": "File:Infineon HYB25D256800AT-7 - on Infineon memory module-7226.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Infineon_HYB25D256800AT-7_-_on_Infineon_memory_module-7226.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Raimond Spekking",
+      "query": "SDRAM memory module"
+    },
+    {
+      "file": "CPU__E5-2450v2_IvyBridge-EP_Package.jpg",
+      "expected_class_hint": "CPU",
+      "title": "File:E5-2450v2 IvyBridge-EP, Package.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:E5-2450v2_IvyBridge-EP,_Package.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "IrisChronomia",
+      "query": "CPU processor LGA package"
+    },
+    {
+      "file": "CPU__Intel_CPU_Celeron_G3930_Kaby_Lake_top.jpg",
+      "expected_class_hint": "CPU",
+      "title": "File:Intel CPU Celeron G3930 Kaby Lake top.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Intel_CPU_Celeron_G3930_Kaby_Lake_top.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Eric Gaba (Sting - fr:Sting)",
+      "query": "CPU processor LGA package"
+    },
+    {
+      "file": "CPU__Intel_CPU_Core_2_Duo_E8400_Wolfdale_bottom.jpg",
+      "expected_class_hint": "CPU",
+      "title": "File:Intel CPU Core 2 Duo E8400 Wolfdale bottom.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Intel_CPU_Core_2_Duo_E8400_Wolfdale_bottom.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Eric Gaba (Sting - fr:Sting)",
+      "query": "CPU processor LGA package"
+    },
+    {
+      "file": "CPU__Intel_CPU_Core_2_Duo_E8400_Wolfdale_perspective.jpg",
+      "expected_class_hint": "CPU",
+      "title": "File:Intel CPU Core 2 Duo E8400 Wolfdale perspective.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Intel_CPU_Core_2_Duo_E8400_Wolfdale_perspective.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Eric Gaba (Sting - fr:Sting)",
+      "query": "CPU processor LGA package"
+    },
+    {
+      "file": "Connector__3_Pin_Header_-_HEAD-03_4150701608.jpg",
+      "expected_class_hint": "Connector",
+      "title": "File:3 Pin Header - HEAD-03 (4150701608).jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:3_Pin_Header_-_HEAD-03_(4150701608).jpg",
+      "license": "CC BY-SA 2.0",
+      "artist": "oomlout",
+      "query": "motherboard connector header"
+    },
+    {
+      "file": "Connector__Basic_Measuring_Instruments_-_Math_Processor_83002190_-_Panduit_pin_header-3964..jpg",
+      "expected_class_hint": "Connector",
+      "title": "File:Basic Measuring Instruments - Math Processor 83002190 - Panduit pin header-3964.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Basic_Measuring_Instruments_-_Math_Processor_83002190_-_Panduit_pin_header-3964.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Raimond Spekking",
+      "query": "motherboard connector header"
+    },
+    {
+      "file": "Connector__Basic_Measuring_Instruments_-_Math_Processor_83002190_-_Panduit_pin_header-3965..jpg",
+      "expected_class_hint": "Connector",
+      "title": "File:Basic Measuring Instruments - Math Processor 83002190 - Panduit pin header-3965.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Basic_Measuring_Instruments_-_Math_Processor_83002190_-_Panduit_pin_header-3965.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Raimond Spekking",
+      "query": "motherboard connector header"
+    },
+    {
+      "file": "Connector__Basic_Measuring_Instruments_-_Math_Processor_83002190_-_Panduit_pin_header-3966..jpg",
+      "expected_class_hint": "Connector",
+      "title": "File:Basic Measuring Instruments - Math Processor 83002190 - Panduit pin header-3966.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Basic_Measuring_Instruments_-_Math_Processor_83002190_-_Panduit_pin_header-3966.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Raimond Spekking",
+      "query": "motherboard connector header"
+    },
+    {
+      "file": "Connector__2x13_pin_socket_on_NEC_XR385_MIDI_wavetable_synth_daughter_board.jpg",
+      "expected_class_hint": "Connector",
+      "title": "File:2x13 pin socket on NEC XR385 MIDI wavetable synth daughter board.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:2x13_pin_socket_on_NEC_XR385_MIDI_wavetable_synth_daughter_board.jpg",
+      "license": "CC BY-SA 4.0",
+      "artist": "Rob Kam",
+      "query": "pin header connector board"
+    },
+    {
+      "file": "Connector__ATX-Netzteil.jpg",
+      "expected_class_hint": "Connector",
+      "title": "File:ATX-Netzteil.jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:ATX-Netzteil.jpg",
+      "license": "CC BY-SA 2.0 de",
+      "artist": "User Smial on de.wikipedia",
+      "query": "pin header connector board"
+    },
+    {
+      "file": "Connector__Avrdevboard_315607630.jpg",
+      "expected_class_hint": "Connector",
+      "title": "File:Avrdevboard (315607630).jpg",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Avrdevboard_(315607630).jpg",
+      "license": "CC BY 2.0",
+      "artist": "Windell Oskay from Sunnyvale, CA, USA",
+      "query": "pin header connector board"
+    },
+    {
+      "file": "Connector__MinnowBoard_Max_-_Low-Speed_GPIO_Connector_14720326287.png",
+      "expected_class_hint": "Connector",
+      "title": "File:MinnowBoard Max - Low-Speed (GPIO) Connector (14720326287).png",
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:MinnowBoard_Max_-_Low-Speed_(GPIO)_Connector_(14720326287).png",
+      "license": "CC BY-SA 2.0",
+      "artist": "Gareth Halfacree from Bradford, UK",
+      "query": "pin header connector board"
+    }
+  ]
+}
