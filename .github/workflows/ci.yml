@@ -46,18 +46,30 @@ jobs:
         run: pytest -q
 
       - name: Verify documentation generators run
-        # These write docs/model-card.md and docs/evaluation.md from the
-        # pipeline's JSON outputs. The check is that they degrade gracefully:
-        # on a clean checkout the training run and test metrics are absent
-        # (runs/ and models/*.pt are gitignored), and the generators must say
-        # "not yet measured" rather than crashing or inventing figures.
-        #
-        # Their output is deliberately NOT diffed against the committed docs:
-        # some inputs are gitignored, so CI legitimately produces a shorter
-        # document than a developer machine. Comparing them would fail for a
-        # reason that has nothing to do with correctness.
+        # Output is deliberately NOT diffed against the committed docs: some
+        # inputs are gitignored (runs/, models/*.pt), so CI legitimately
+        # produces a shorter document than a developer machine, and comparing
+        # them would fail for a reason unrelated to correctness.
         run: |
           python scripts/gen_model_card.py
           python scripts/gen_evaluation.py
+
+      - name: Verify the generators degrade honestly without metrics
+        # The property that matters: with no measured results available, the
+        # documentation must say so rather than crashing or emitting a
+        # placeholder figure someone could quote. Tested by removing the
+        # metrics file rather than by assuming the checkout lacks it — the
+        # repository now commits reports/test_metrics.json as evidence, so
+        # asserting on repository state would test the wrong thing.
+        run: |
+          set -e
+          test -f reports/test_metrics.json || { echo "::error::reports/test_metrics.json should be committed as evidence"; exit 1; }
+          mv reports/test_metrics.json /tmp/test_metrics.json
+          python scripts/gen_model_card.py
+          python scripts/gen_evaluation.py
           grep -q "Not yet evaluated" docs/model-card.md \
-            || { echo "::error::model card should report evaluation as pending on a clean checkout"; exit 1; }
+            || { echo "::error::model card must report evaluation as pending when reports/test_metrics.json is absent"; exit 1; }
+          grep -q "Not yet measured" docs/evaluation.md \
+            || { echo "::error::evaluation report must report results as pending when reports/test_metrics.json is absent"; exit 1; }
+          mv /tmp/test_metrics.json reports/test_metrics.json
+          git checkout -- docs/
