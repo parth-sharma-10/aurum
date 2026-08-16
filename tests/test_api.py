@@ -55,9 +55,20 @@ def png_bytes(w=64, h=48, color=(30, 90, 40)) -> bytes:
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    """A client with a stub model and an isolated on-disk database."""
+    """A client with a stub model and an isolated on-disk database.
+
+    DEFAULT_WEIGHTS is pointed at a real file inside tmp_path because /health
+    reports readiness by stat-ing that path. Left alone, these tests would pass
+    on a machine that happens to have trained weights and fail on one that does
+    not — which is precisely what happened the first time CI ran them.
+    """
     monkeypatch.setattr(api_mod, "DB", tmp_path / "batches.db")
     monkeypatch.setattr(batch_mod, "BATCH_DIR", tmp_path / "batches")
+
+    weights = tmp_path / "aurum_vision_v0_1_best.pt"
+    weights.write_bytes(b"stub weights")
+    monkeypatch.setattr(api_mod, "DEFAULT_WEIGHTS", weights)
+
     stub = StubDetector()
     monkeypatch.setattr(api_mod, "detector", lambda: stub)
     api_mod._sessions.clear()
