@@ -1,0 +1,21 @@
+{
+  "model_version": "Aurum Vision v0.1",
+  "architecture": "yolo11n.pt",
+  "framework": "ultralytics 8.4.120",
+  "torch": "2.13.0",
+  "classes": [
+    "PCB",
+    "RAM",
+    "CPU",
+    "Connector"
+  ],
+  "image_size": 512,
+  "epochs_requested": 50,
+  "batch": 32,
+  "seed": 1337,
+  "device": "mps",
+  "trained_at": "2026-08-16 17:38:03 UTC",
+  "dataset": "data/aurum (see reports/dataset_stats.json)",
+  "run_dir": "runs/aurum_vision_v0_1",
+  "weights": "models/aurum_vision_v0_1_best.pt"
+}

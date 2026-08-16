@@ -7,13 +7,13 @@
 
 | | |
 |---|---|
-| Version | **v0.1** |
+| Version | **Aurum Vision v0.1** |
 | Task | Object detection (bounding boxes) |
 | Architecture | yolo11n.pt (COCO-pretrained, fine-tuned) |
-| Framework | ultralytics / torch — |
+| Framework | ultralytics 8.4.120 / torch 2.13.0 |
 | Classes | PCB, RAM, CPU, Connector |
-| Input size | — px |
-| Trained | — |
+| Input size | 512 px |
+| Trained | 2026-08-16 17:38:03 UTC |
 | Weights | `models/aurum_vision_v0_1_best.pt` |
 
 **What it does.** Identifies and counts four visible e-waste component categories in RGB imagery at webcam speed.
@@ -48,19 +48,39 @@ Independently verified by `python -m ml.validate`:
 
 | setting | value |
 |---|---|
-| Base weights | — |
-| Image size | — |
-| Epochs (max) | — |
-| Batch size | — |
-| Seed | — |
-| Device | — |
-| Epochs actually run | 15 |
+| Base weights | yolo11n.pt |
+| Image size | 512 |
+| Epochs (max) | 50 |
+| Batch size | 32 |
+| Seed | 1337 |
+| Device | mps |
+| Epochs actually run | 50 |
 
 Transfer learning only — nothing trained from scratch. Augmentation is horizontal flip, ±15° rotation and restrained HSV jitter. **No vertical flip**: an upside-down memory module is not a thing the bench will ever see, and colour is real class signal (green board, gold contacts).
 
 ## Evaluation — held-out test split
 
-> **Not yet evaluated.** Run `python -m ml.evaluate` to populate this section. No figures are stated until it has.
+Measured on **206 unseen images** (340 instances) that share no duplicate cluster with training data.
+
+| metric | value |
+|---|---|
+| Precision | **0.731** |
+| Recall | **0.724** |
+| mAP@50 | **0.742** |
+| mAP@50:95 | **0.471** |
+
+### Per class
+
+| class | test instances | precision | recall | mAP@50 | mAP@50:95 |
+|---|---|---|---|---|---|
+| PCB | 69 | 0.742 | 0.812 | 0.812 | 0.446 |
+| RAM | 139 | 0.671 | 0.588 | 0.628 | 0.310 |
+| CPU | 79 | 0.891 | 0.911 | 0.956 | 0.710 |
+| Connector | 53 | 0.621 | 0.585 | 0.572 | 0.420 |
+
+Artifacts in `reports/`: `confusion_matrix.png`, `BoxPR_curve.png`, `BoxF1_curve.png`, and example predictions under `reports/test_predictions/{correct,failures}/` with ground truth in white and predictions in gold.
+
+The weakest class is **Connector** (mAP@50 0.572). It has the fewest training instances and the widest visual range in the source data.
 
 ## Limitations and failure modes
 

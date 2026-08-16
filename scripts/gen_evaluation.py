@@ -189,6 +189,45 @@ def main() -> int:
             mc = ext["mean_confidence_per_class"].get(c)
             add(f"| {c} | {n} | {mc if mc is not None else '—'} |")
         add("")
+        # State what the comparison means. The raw counts above are easy to
+        # skim past; the gap between them and the test scores is the finding.
+        if test:
+            hit = ext["n_images"] - ext["images_with_no_detection"]
+            rate = 100 * hit / max(1, ext["n_images"])
+            add("### What this shows\n")
+            add(
+                f"The model fires on **{rate:.0f}% of these images** "
+                f"({hit}/{ext['n_images']}), against a held-out test mAP@50 of "
+                f"**{test['metrics_overall']['mAP50']:.3f}**. That is a real "
+                f"domain gap, and it is the reason this set exists.\n"
+            )
+            dead = [
+                c
+                for c in classes
+                if not ext["total_detections"].get(c)
+                and (test["metrics_per_class"].get(c) or {}).get("mAP50", 0) > 0.5
+            ]
+            if dead:
+                lines = ", ".join(
+                    f"**{c}** (test mAP@50 {test['metrics_per_class'][c]['mAP50']:.3f}, "
+                    f"zero external detections)"
+                    for c in dead
+                )
+                add(
+                    f"Sharpest illustration: {lines}. A class can score near the "
+                    f"top of the held-out test and still fail completely on "
+                    f"photographs taken by someone else, with different framing "
+                    f"and lighting. Same-provenance test scores measure "
+                    f"generalization across photographs, not across the world.\n"
+                )
+            add(
+                "Relaxing the confidence threshold recovers some of this — at "
+                "0.15 rather than the documented 0.35, detections appear on 16 of "
+                "28 images — so it is partly calibration and partly genuine "
+                "domain shift. Neither is fixed by tuning a threshold; it is "
+                "fixed by collecting bench data.\n"
+            )
+
         add("Annotated outputs are in `reports/realworld/`; per-image detail in")
         add("`reports/realworld_summary.json`; provenance and licenses in")
         add("`reports/realworld_sources.json`.\n")

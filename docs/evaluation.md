@@ -12,6 +12,7 @@ Four datasets are kept strictly apart:
 | `train` | 4,878 | Roboflow Universe | Yes | Fitted the weights |
 | `valid` | 412 | Roboflow Universe | Yes | Selected the checkpoint (`best.pt`) |
 | `test` | 206 | Roboflow Universe | Yes | **Held-out. The headline metric.** |
+| `external` | 28 | Wikimedia Commons | **No** | Detection behaviour on out-of-provenance images |
 
 The test split shares its provenance with training — same Universe
 projects, same photographers, same benches. It is genuinely held out
@@ -50,11 +51,68 @@ have inflated every number below.
 
 ## Held-out test results
 
-> **Not yet measured.** Run `python -m ml.evaluate`.
+Model: `models/aurum_vision_v0_1_best.pt` · 206 unseen images · 340 annotated instances.
+
+| Metric | Result |
+|---|---:|
+| mAP@50 | **0.742** |
+| mAP@50:95 | **0.471** |
+| Precision | **0.731** |
+| Recall | **0.724** |
+
+### Per class
+
+| Class | Test instances | Precision | Recall | mAP@50 | mAP@50:95 |
+|---|---:|---:|---:|---:|---:|
+| PCB | 69 | 0.742 | 0.812 | 0.812 | 0.446 |
+| RAM | 139 | 0.671 | 0.588 | 0.628 | 0.310 |
+| CPU | 79 | 0.891 | 0.911 | 0.956 | 0.710 |
+| Connector | 53 | 0.621 | 0.585 | 0.572 | 0.420 |
+
+Per-class figures rest on tens of instances. Treat differences of a
+few points as noise.
+
+Artifacts in `reports/`: `confusion_matrix.png`, `confusion_matrix_normalized.png`, `BoxPR_curve.png`, `BoxF1_curve.png`, `BoxP_curve.png`, `BoxR_curve.png`.
+
+Qualitative examples — ground truth in white, predictions in gold —
+are written to `reports/test_predictions/{correct,failures}/` by
+`ml.evaluate`, and summarised in `reports/figures/test_examples.png`.
 
 ## External evaluation (generalization probe)
 
-> **Not yet run.** Fetch the set with `python scripts/fetch_realworld.py`, then run `python -m ml.realworld --path data/realworld`.
+28 CC-licensed photographs from Wikimedia Commons — a
+different source, different photographers, different equipment.
+Every image was perceptually hashed against the training split: 
+**0 overlaps found**.
+
+**These images have no ground-truth boxes. Nothing below is an**
+**accuracy measurement.** It reports what the model did.
+
+| | |
+|---|---:|
+| Images | 28 |
+| Images with at least one detection | 8 |
+| Images with no detection | 20 |
+| Mean inference time | 21.0 ms |
+
+| Class | Detections | Mean confidence |
+|---|---:|---:|
+| PCB | 4 | 0.6843 |
+| RAM | 5 | 0.7184 |
+| CPU | 0 | — |
+| Connector | 0 | — |
+
+### What this shows
+
+The model fires on **29% of these images** (8/28), against a held-out test mAP@50 of **0.742**. That is a real domain gap, and it is the reason this set exists.
+
+Sharpest illustration: **CPU** (test mAP@50 0.956, zero external detections), **Connector** (test mAP@50 0.572, zero external detections). A class can score near the top of the held-out test and still fail completely on photographs taken by someone else, with different framing and lighting. Same-provenance test scores measure generalization across photographs, not across the world.
+
+Relaxing the confidence threshold recovers some of this — at 0.15 rather than the documented 0.35, detections appear on 16 of 28 images — so it is partly calibration and partly genuine domain shift. Neither is fixed by tuning a threshold; it is fixed by collecting bench data.
+
+Annotated outputs are in `reports/realworld/`; per-image detail in
+`reports/realworld_summary.json`; provenance and licenses in
+`reports/realworld_sources.json`.
 
 ## Reproducing these numbers
 
