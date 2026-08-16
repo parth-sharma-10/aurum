@@ -198,6 +198,63 @@ def main() -> int:
                 f"range in the source data.\n"
             )
 
+    # ------------------------------------------------- external / generalization
+    add("## Generalization — external images\n")
+    ext_p = REPORTS / "realworld_summary.json"
+    ext = json.loads(ext_p.read_text()) if ext_p.exists() else None
+    if not ext:
+        add("> **Not yet probed.** Run `python scripts/fetch_realworld.py` then")
+        add("> `python -m ml.realworld --path data/realworld`.\n")
+    else:
+        hit = ext["n_images"] - ext["images_with_no_detection"]
+        rate = 100 * hit / max(1, ext["n_images"])
+        add(
+            f"The held-out test set above shares its provenance with training — "
+            f"same source projects, same photographers. To probe whether the "
+            f"model survives a genuinely different camera, it was run over "
+            f"**{ext['n_images']} CC-licensed photographs from Wikimedia "
+            f"Commons**, verified by perceptual hash to have zero overlap with "
+            f"training.\n"
+        )
+        add(
+            "**These images carry no ground-truth boxes, so no accuracy figure "
+            "can be computed from them.** What follows is detection behaviour.\n"
+        )
+        add("| | |")
+        add("|---|---:|")
+        add(f"| Images | {ext['n_images']} |")
+        add(f"| Images with at least one detection | **{hit} ({rate:.0f}%)** |")
+        for c in classes:
+            add(f"| {c} detections | {ext['total_detections'].get(c, 0)} |")
+        add("")
+        dead = [
+            c
+            for c in classes
+            if not ext["total_detections"].get(c)
+            and (test or {}).get("metrics_per_class", {}).get(c, {})
+            and test["metrics_per_class"][c]["mAP50"] > 0.5
+        ]
+        if dead and test:
+            worst = ", ".join(
+                f"**{c}** scores {test['metrics_per_class'][c]['mAP50']:.3f} "
+                f"mAP@50 on the held-out test set and produces **zero** "
+                f"detections here"
+                for c in dead
+            )
+            add(
+                f"This is the single most important limitation of the model. "
+                f"{worst}. A class can sit near the top of a held-out benchmark "
+                f"and still fail outright on photographs taken by someone else, "
+                f"with different framing, lighting and working distance.\n"
+            )
+        add(
+            "Read the test figures accordingly: they measure generalization "
+            "across photographs of the same kind, not readiness for a scrap "
+            "dealer's bench. Closing this gap requires images collected on a "
+            "real bench, not threshold tuning. Full detail in "
+            "[evaluation.md](evaluation.md).\n"
+        )
+
     # --------------------------------------------------------------- limitations
     add("## Limitations and failure modes\n")
     add(
