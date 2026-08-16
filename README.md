@@ -7,7 +7,7 @@ invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-92%20passing-brightgreen) ![python](https://img.shields.io/badge/python-3.12-blue)
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-92%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.742-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
 
 ---
 
@@ -44,29 +44,36 @@ Keys: `B` new batch · `S` save batch · `SPACE` pause · `Q` quit
 
 ## Results
 
-> **Held-out test metrics are not published yet.** The v0.1 training run was
-> still in progress when this repository was first pushed. Nothing is quoted as
-> a result until `python -m ml.evaluate` has run on the held-out split — see
-> [docs/evaluation.md](docs/evaluation.md), which is generated from the
-> pipeline's own output and currently says the same thing.
-
-What *has* been measured:
-
-| | |
-|---|---:|
-| Live inference | **34.3 FPS** (1280×720 capture, 512 px inference, Apple M4) |
-| Classes | 4 — PCB, RAM, CPU, Connector |
-| Source images | 17,193 across 6 public datasets |
-| Held-out test set | 206 images, 340 instances, unique scenes |
-| Clusters spanning splits | **0** |
-| Exact duplicates across splits | **0** |
-| Near-duplicates train↔held-out | **0** |
+| Metric | Result |
+| --- | ---: |
+| Test mAP@50 | **0.742** |
+| Test mAP@50:95 | **0.471** |
+| Test precision | **0.731** |
+| Test recall | **0.724** |
+| Live inference | **56.8 FPS** (1280×720 capture, 512 px inference, Apple M4) |
+| Classes | 4 |
 | Tests | 92 passing |
 
+Per class, on 206 unseen images:
+
+| Class | Instances | mAP@50 | mAP@50:95 |
+| --- | ---: | ---: | ---: |
+| CPU | 79 | 0.956 | 0.710 |
+| PCB | 69 | 0.812 | 0.446 |
+| RAM | 139 | 0.628 | 0.310 |
+| Connector | 53 | 0.572 | 0.420 |
+
+![Test performance by class](reports/figures/test_metrics_by_class.png)
+
+**Read these with the external result below.** On 28 photographs from a
+different source, the model fires on only 29% of images and detects **zero**
+CPUs — despite CPU being its strongest test class. Same-provenance test scores
+measure generalization across photographs, not across the world.
 
 Measured on a held-out test split that shares **no duplicate cluster** with
-training data. Full methodology, per-class figures and the external
-generalization probe: [docs/evaluation.md](docs/evaluation.md).
+training data — verified: 0 clusters spanning splits, 0 exact duplicates, 0
+near-duplicates. Full methodology and the external probe:
+[docs/evaluation.md](docs/evaluation.md).
 
 ## Supported components
 
@@ -248,12 +255,17 @@ none is quoted. See [docs/evaluation.md](docs/evaluation.md).
   figures it needs must be citable and none were available. It fails closed:
   no numeric field is emitted at all. See
   [docs/model-card.md](docs/model-card.md#recovery-estimation).
-- **Dataset bias.** Training images are internet photography of PC hardware —
-  product shots, build photos, teardowns. A scrap dealer's bench has different
-  lighting, clutter and camera angles.
-- **Visually similar components.** `Connector` is deliberately broad (DIMM
-  socket to RC plug) and is the weakest class. Bare boards of unusual shape and
-  shrouded assemblies are common confusions.
+- **Dataset bias, and it is measured, not hypothetical.** Training images are
+  internet photography of PC hardware — product shots, build photos, teardowns.
+  On 28 photographs from a genuinely different source the model detects
+  something in only 29% of images, and finds **zero CPUs** despite CPU scoring
+  0.956 mAP@50 on the held-out test set. Closing that gap needs images
+  collected on a real bench; no amount of threshold tuning substitutes for it.
+  Run `python -m ml.realworld --path <your photos>` to measure it on yours.
+- **Two weak classes.** `Connector` is deliberately broad (DIMM socket to RC
+  plug) and scores 0.572 mAP@50. `RAM` scores 0.628 despite having the *most*
+  training data — memory modules are commonly photographed in rows, and
+  adjacent near-identical objects are hard to separate into distinct counts.
 - **Counting is per-frame detection, not tracking.** Stacked or occluding boards
   can undercount; the median window suppresses flicker, not occlusion.
 - **Small test set.** Per-class figures rest on tens of instances. Treat
