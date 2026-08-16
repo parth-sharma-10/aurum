@@ -82,6 +82,25 @@ Artifacts in `reports/`: `confusion_matrix.png`, `BoxPR_curve.png`, `BoxF1_curve
 
 The weakest class is **Connector** (mAP@50 0.572). It has the fewest training instances and the widest visual range in the source data.
 
+## Generalization — external images
+
+The held-out test set above shares its provenance with training — same source projects, same photographers. To probe whether the model survives a genuinely different camera, it was run over **28 CC-licensed photographs from Wikimedia Commons**, verified by perceptual hash to have zero overlap with training.
+
+**These images carry no ground-truth boxes, so no accuracy figure can be computed from them.** What follows is detection behaviour.
+
+| | |
+|---|---:|
+| Images | 28 |
+| Images with at least one detection | **8 (29%)** |
+| PCB detections | 4 |
+| RAM detections | 5 |
+| CPU detections | 0 |
+| Connector detections | 0 |
+
+This is the single most important limitation of the model. **CPU** scores 0.956 mAP@50 on the held-out test set and produces **zero** detections here, **Connector** scores 0.572 mAP@50 on the held-out test set and produces **zero** detections here. A class can sit near the top of a held-out benchmark and still fail outright on photographs taken by someone else, with different framing, lighting and working distance.
+
+Read the test figures accordingly: they measure generalization across photographs of the same kind, not readiness for a scrap dealer's bench. Closing this gap requires images collected on a real bench, not threshold tuning. Full detail in [evaluation.md](evaluation.md).
+
 ## Limitations and failure modes
 
 - **No composition sensing.** The model sees surfaces. It cannot tell a gold-plated connector from a tin-plated one of the same shape.

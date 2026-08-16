@@ -183,6 +183,7 @@ curl -F "file=@board.jpg" http://127.0.0.1:8000/detect
 
 # Train and evaluate
 python -m ml.train
+python scripts/watch_training.py    # live progress, in a second terminal
 python -m ml.evaluate
 
 # Tests (needs the dev extras)
@@ -226,6 +227,22 @@ run_demo.py  One-command demo entry point
 Key files: `configs/aurum_labels.yaml` (every label decision, with reasons),
 `ml/prepare.py` (the leakage-safe split), `app/batch.py` (batch composition and
 the recovery-estimate guard).
+
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [docs/model-card.md](docs/model-card.md) | Intended use, measured results, failure modes, recovery-estimation status |
+| [docs/evaluation.md](docs/evaluation.md) | Split design, leakage prevention, test and external results |
+| [docs/dataset.md](docs/dataset.md) | Every source dataset, license, label mapping and exclusion reason |
+| [docs/training.md](docs/training.md) | Reproducing the model end to end |
+| [docs/architecture.md](docs/architecture.md) | How the runtime pieces fit together |
+| [docs/demo.md](docs/demo.md) | Presentation runbook — setup, sequence, failure recovery, Q&A |
+
+`model-card.md`, `evaluation.md` and `dataset.md` are **generated** from the
+pipeline's own JSON output, so they cannot drift from the data they describe.
+CI verifies that when the metrics file is removed they report results as
+pending rather than emitting a placeholder figure.
 
 ## Evaluation methodology
 
