@@ -1,4 +1,4 @@
-"""Generate MODEL_CARD.md from the actual training and evaluation outputs.
+"""Generate docs/model-card.md from the actual training and evaluation outputs.
 
 Reads models/aurum_vision_v0_1_meta.json, reports/test_metrics.json,
 reports/dataset_stats.json and reports/dataset_validation.json. If evaluation
@@ -86,7 +86,7 @@ def main() -> int:
     add(
         f"Six public Roboflow Universe datasets normalized into {len(classes)} "
         f"Aurum classes. Full provenance, licenses and per-dataset counts are in "
-        f"[`DATA_SOURCES.md`](DATA_SOURCES.md).\n"
+        f"[`dataset.md`](dataset.md).\n"
     )
     add("| split | images | " + " | ".join(classes) + " |")
     add("|---|---|" + "---|" * len(classes))
@@ -247,11 +247,11 @@ def main() -> int:
 
     add("## Reproduction\n")
     add(
-        "See [`TRAINING.md`](TRAINING.md). The full chain is `ml.ingest` → "
+        "See [`training.md`](training.md). The full chain is `ml.ingest` → "
         "`ml.prepare` → `ml.validate` → `ml.train` → `ml.evaluate`.\n"
     )
 
-    out = ROOT / "MODEL_CARD.md"
+    out = ROOT / "docs" / "model-card.md"
     out.write_text("\n".join(L))
     print(
         f"wrote {out.relative_to(ROOT)} ({len(L)} lines)"

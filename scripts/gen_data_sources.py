@@ -1,4 +1,4 @@
-"""Generate DATA_SOURCES.md from what was actually downloaded.
+"""Generate docs/dataset.md from what was actually downloaded.
 
 Statistics and licenses come from the `_aurum_meta.json` written by ml.ingest
 (which records the Roboflow project metadata verbatim) and from
@@ -196,7 +196,7 @@ def main() -> int:
         "`data/` is gitignored and rebuilt with `python -m ml.ingest`.\n"
     )
 
-    out = ROOT / "DATA_SOURCES.md"
+    out = ROOT / "docs" / "dataset.md"
     out.write_text("\n".join(L))
     print(f"wrote {out.relative_to(ROOT)} ({len(L)} lines)")
     return 0

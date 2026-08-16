@@ -28,7 +28,7 @@ python -m ml.ingest
 Downloads the six pinned Universe projects listed in `configs/datasets.yaml`
 into `data/raw/<key>/` in YOLO format. Each gets an `_aurum_meta.json` recording
 the license, image count and per-class instance counts exactly as the Roboflow
-API reported them — this is what `DATA_SOURCES.md` is generated from, so the
+API reported them — this is what `dataset.md` is generated from, so the
 documentation cannot drift from the download.
 
 Versions are pinned. Re-running months later fetches the same export.
@@ -120,7 +120,7 @@ AURUM_WORKERS=4 AURUM_PATIENCE=15 python -m ml.train
 are large in frame — a RAM module held up to a bench camera — so the accuracy
 cost is small, while training time drops by about a third and demo inference
 gets faster on the same laptop. It is not the right default for the
-microscope-scale PCB inspection datasets discussed in `DATA_SOURCES.md`.
+microscope-scale PCB inspection datasets discussed in `dataset.md`.
 
 Augmentation is mild and deliberate: horizontal flip and ±15° rotation, but
 **no vertical flip** (an upside-down RAM module cannot sit in a slot) and
@@ -163,7 +163,7 @@ python -m ml.assets
 python scripts/gen_data_sources.py
 ```
 
-Writes `reports/figures/` and regenerates `DATA_SOURCES.md`. Every figure reads
+Writes `reports/figures/` and regenerates `dataset.md`. Every figure reads
 a JSON or CSV the pipeline produced; if a stage has not run, its figure is
 skipped rather than drawn from placeholder numbers.
 

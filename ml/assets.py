@@ -314,6 +314,59 @@ def architecture_diagram() -> None:
     _save(fig, "architecture.png")
 
 
+def test_examples(split: str = "test", per_row: int = 4, rows_each: int = 2) -> None:
+    """Composite grid of correct detections and failures from ml.evaluate.
+
+    The individual annotated images stay out of git — they are derived from
+    CC BY 4.0 source photographs and are regenerable. One composite figure
+    gives a README reader the visual evidence without the repository
+    redistributing the source dataset.
+    """
+    import matplotlib.image as mpimg
+
+    base = REPORTS / f"{split}_predictions"
+    good, bad = base / "correct", base / "failures"
+    if not good.is_dir() or not bad.is_dir():
+        print(f"  ! {base} missing — run ml.evaluate")
+        return
+
+    def pick(d):
+        return sorted(p for p in d.iterdir() if p.suffix.lower() in {".jpg", ".png"})
+
+    sets = [("Correct detections", pick(good)), ("Failure cases", pick(bad))]
+    if not any(s[1] for s in sets):
+        print("  ! no prediction images to compose")
+        return
+
+    n_rows = rows_each * 2
+    fig, axes = plt.subplots(n_rows, per_row, figsize=(per_row * 3.1, n_rows * 2.5))
+    axes = axes.reshape(n_rows, per_row)
+
+    for block, (title, files) in enumerate(sets):
+        for r in range(rows_each):
+            for c in range(per_row):
+                ax = axes[block * rows_each + r, c]
+                ax.axis("off")
+                i = r * per_row + c
+                if i < len(files):
+                    ax.imshow(mpimg.imread(files[i]))
+                if r == 0 and c == 0:
+                    ax.set_title(
+                        title, loc="left", fontsize=12, fontweight="bold", color=INK, pad=10
+                    )
+
+    fig.suptitle(
+        "Aurum Vision v0.1 — held-out test predictions\n"
+        "ground truth in white, model predictions in gold",
+        x=0.01,
+        ha="left",
+        fontsize=13,
+        fontweight="bold",
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    _save(fig, "test_examples.png")
+
+
 def main() -> int:
     FIGS.mkdir(parents=True, exist_ok=True)
     print("Generating presentation figures:")
@@ -338,6 +391,7 @@ def main() -> int:
     met = REPORTS / "test_metrics.json"
     if met.exists():
         test_metrics_chart(json.loads(met.read_text()))
+        test_examples()
     else:
         print("  ! reports/test_metrics.json missing — run ml.evaluate")
 

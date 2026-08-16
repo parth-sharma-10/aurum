@@ -28,7 +28,7 @@
 
 ## Training data
 
-Six public Roboflow Universe datasets normalized into 4 Aurum classes. Full provenance, licenses and per-dataset counts are in [`DATA_SOURCES.md`](DATA_SOURCES.md).
+Six public Roboflow Universe datasets normalized into 4 Aurum classes. Full provenance, licenses and per-dataset counts are in [`dataset.md`](dataset.md).
 
 | split | images | PCB | RAM | CPU | Connector |
 |---|---|---|---|---|---|
@@ -54,7 +54,7 @@ Independently verified by `python -m ml.validate`:
 | Batch size | — |
 | Seed | — |
 | Device | — |
-| Epochs actually run | 1 |
+| Epochs actually run | 9 |
 
 Transfer learning only — nothing trained from scratch. Augmentation is horizontal flip, ±15° rotation and restrained HSV jitter. **No vertical flip**: an upside-down memory module is not a thing the bench will ever see, and colour is real class signal (green board, gold contacts).
 
@@ -84,4 +84,4 @@ What can be said: *Aurum Vision identifies and counts visible e-waste component 
 
 ## Reproduction
 
-See [`TRAINING.md`](TRAINING.md). The full chain is `ml.ingest` → `ml.prepare` → `ml.validate` → `ml.train` → `ml.evaluate`.
+See [`training.md`](training.md). The full chain is `ml.ingest` → `ml.prepare` → `ml.validate` → `ml.train` → `ml.evaluate`.

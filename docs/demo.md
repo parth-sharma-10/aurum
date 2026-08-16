@@ -121,7 +121,7 @@ composition. Recovery figures are estimates from counts × published reference
 yields, labelled as estimates in the JSON itself.
 
 **"What's your accuracy?"**
-Quote only the figures in `MODEL_CARD.md`, measured on a held-out test split
+Quote only the figures in `model-card.md`, measured on a held-out test split
 whose images share no duplicate cluster with training. Do not round up, and do
 not quote the validation number as if it were the test number.
 
@@ -137,6 +137,6 @@ caught 18 leaks in an earlier version of the pipeline.
 ## What not to say
 
 - ❌ "detects gold/precious-metal content"
-- ❌ "95% accurate" (or any number not in `MODEL_CARD.md`)
+- ❌ "95% accurate" (or any number not in `model-card.md`)
 - ❌ "production-ready" / "industrial-grade sorting"
 - ❌ presenting the simulated weight as a measurement
