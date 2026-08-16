@@ -14,6 +14,8 @@ import csv
 import json
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 REPORTS = ROOT / "reports"
 MODELS = ROOT / "models"
@@ -228,6 +230,45 @@ def main() -> int:
         "- **Small test set.** Per-class figures rest on tens of instances, so "
         "treat differences of a few points as noise.\n"
     )
+
+    # ------------------------------------------------- recovery estimation
+    add("## Recovery estimation\n")
+    ref_path = ROOT / "configs" / "recovery_reference.yaml"
+    ref = yaml.safe_load(ref_path.read_text()) if ref_path.exists() else {}
+    enabled = bool((ref or {}).get("enabled"))
+    n_ref = len((ref or {}).get("per_component") or {})
+
+    add(
+        f"**Status: {'ENABLED' if enabled else 'DISABLED (intentionally)'}** — "
+        f"`configs/recovery_reference.yaml` defines "
+        f"{n_ref} component yield {'entry' if n_ref == 1 else 'entries'}.\n"
+    )
+    add("**What the mechanism does.** Aurum's economic claim is that component")
+    add("identity plus published reference yields gives an *estimated* recovery")
+    add("value: `estimate = Σ (count(component) × reference_yield) × spot_price`.")
+    add("The counts come from this model. The yields and prices do not — and")
+    add("cannot — come from an image.\n")
+    if not enabled:
+        add("**Why it is disabled.** Enabling it requires per-component precious-")
+        add("metal yield figures backed by a citable source (a paper, a standard,")
+        add("or an assayer's published figure). No such figures were available at")
+        add("the time of writing, and none were invented to fill the gap. A")
+        add("plausible-looking number with nothing behind it is worse than no")
+        add("number, because it would be quoted.\n")
+        add("**What is required to enable it.**\n")
+        add("1. Add an entry per Aurum class to `configs/recovery_reference.yaml`")
+        add("   with `value`, `unit` and a real `source` citation.")
+        add("2. Set `enabled: true`.\n")
+        add("**How it fails safely today.** `app/batch.recovery_estimate()` returns")
+        add('`{"available": false, "reason": ...}` and emits no numeric field at')
+        add("all, so no consumer can mistake a partial result for a value. The")
+        add("dashboard renders **REFERENCE DATA NOT LOADED**. This behaviour is")
+        add("covered by tests in `tests/test_batch.py` and `tests/test_api.py`,")
+        add("including an explicit check that no numeric value leaks over the")
+        add("wire.\n")
+    add("Whatever its state, every response carries the disclaimer that the")
+    add("figure is an estimate and that Aurum Vision does not measure")
+    add("precious-metal content.\n")
 
     # ------------------------------------------------------------------ ethics
     add("## Claims discipline\n")

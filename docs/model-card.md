@@ -54,7 +54,7 @@ Independently verified by `python -m ml.validate`:
 | Batch size | — |
 | Seed | — |
 | Device | — |
-| Epochs actually run | 9 |
+| Epochs actually run | 11 |
 
 Transfer learning only — nothing trained from scratch. Augmentation is horizontal flip, ±15° rotation and restrained HSV jitter. **No vertical flip**: an upside-down memory module is not a thing the bench will ever see, and colour is real class signal (green board, gold contacts).
 
@@ -70,6 +70,41 @@ Transfer learning only — nothing trained from scratch. Augmentation is horizon
 - **`gpu` is not a class.** Graphics cards are deliberately not mapped to PCB, because their camera-facing surface is a cooler shroud. A shrouded card in frame may go undetected — that is intended.
 - **Counting is per-frame detection, not tracking.** Stacked or occluding boards can undercount. The batch record uses a median over a frame window to suppress flicker, not to resolve occlusion.
 - **Small test set.** Per-class figures rest on tens of instances, so treat differences of a few points as noise.
+
+## Recovery estimation
+
+**Status: DISABLED (intentionally)** — `configs/recovery_reference.yaml` defines 0 component yield entries.
+
+**What the mechanism does.** Aurum's economic claim is that component
+identity plus published reference yields gives an *estimated* recovery
+value: `estimate = Σ (count(component) × reference_yield) × spot_price`.
+The counts come from this model. The yields and prices do not — and
+cannot — come from an image.
+
+**Why it is disabled.** Enabling it requires per-component precious-
+metal yield figures backed by a citable source (a paper, a standard,
+or an assayer's published figure). No such figures were available at
+the time of writing, and none were invented to fill the gap. A
+plausible-looking number with nothing behind it is worse than no
+number, because it would be quoted.
+
+**What is required to enable it.**
+
+1. Add an entry per Aurum class to `configs/recovery_reference.yaml`
+   with `value`, `unit` and a real `source` citation.
+2. Set `enabled: true`.
+
+**How it fails safely today.** `app/batch.recovery_estimate()` returns
+`{"available": false, "reason": ...}` and emits no numeric field at
+all, so no consumer can mistake a partial result for a value. The
+dashboard renders **REFERENCE DATA NOT LOADED**. This behaviour is
+covered by tests in `tests/test_batch.py` and `tests/test_api.py`,
+including an explicit check that no numeric value leaks over the
+wire.
+
+Whatever its state, every response carries the disclaimer that the
+figure is an estimate and that Aurum Vision does not measure
+precious-metal content.
 
 ## Claims discipline
 
