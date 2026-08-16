@@ -136,7 +136,7 @@ def main() -> int:
     ap.add_argument("--imgsz", type=int, default=640)
     args = ap.parse_args()
 
-    weights = Path(args.weights)
+    weights = Path(args.weights).resolve()
     if not weights.exists():
         raise SystemExit(f"No weights at {weights}. Run `python -m ml.train` first.")
 
@@ -144,7 +144,11 @@ def main() -> int:
     model = YOLO(str(weights))
 
     print(f"Evaluating {weights.name} on the {args.split} split…")
-    m = model.val(data=str(DATA), split=args.split, imgsz=args.imgsz,
+    # Ultralytics looks up `split` as a key in data.yaml and only path-resolves
+    # the canonical train/val/test keys, so the validation split must be asked
+    # for as "val" even though its directory is data/aurum/valid.
+    ul_split = "val" if args.split == "valid" else args.split
+    m = model.val(data=str(DATA), split=ul_split, imgsz=args.imgsz,
                   conf=0.001, iou=0.6, plots=True, verbose=True,
                   project=str(ROOT / "runs"), name=f"eval_{args.split}",
                   exist_ok=True)
@@ -188,7 +192,8 @@ def main() -> int:
 
     stats = json.loads((REPORTS / "dataset_stats.json").read_text())
     out = {
-        "weights": str(weights.relative_to(ROOT)),
+        "weights": str(weights.relative_to(ROOT)) if weights.is_relative_to(ROOT)
+                   else str(weights),
         "split": args.split,
         "n_images": stats["splits"][args.split]["images"],
         "n_instances": stats["splits"][args.split]["boxes"],
