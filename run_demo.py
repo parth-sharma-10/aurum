@@ -2,12 +2,13 @@
 """Aurum Vision — one command to start the demo.
 
     python run_demo.py                      # webcam
-    python run_demo.py --mode images --path reports/test_predictions
+    python run_demo.py --mode images --path data/aurum/test/images
     python run_demo.py --mode video --path clip.mp4
 
-Falls back from webcam to the bundled sample images if no camera can be opened,
-so the presentation still has something to show if the venue's laptop refuses
-camera access.
+If the webcam cannot be opened — on macOS the usual cause is that the terminal
+has not been granted camera permission — this falls back to IMAGE DEMO MODE over
+the held-out test images rather than exiting. A presentation should degrade, not
+die.
 """
 
 from __future__ import annotations
@@ -19,21 +20,43 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app.demo import build_parser, main  # noqa: E402
 
-FALLBACK_IMAGES = Path(__file__).resolve().parent / "data" / "aurum" / "test" / "images"
+ROOT = Path(__file__).resolve().parent
+FALLBACK_IMAGES = ROOT / "data" / "aurum" / "test" / "images"
+
+
+def _fallback_argv(argv: list[str], path: Path) -> list[str]:
+    """Rewrite the command line for image mode, keeping the user's other flags."""
+    out: list[str] = []
+    skip = False
+    for i, tok in enumerate(argv):
+        if skip:
+            skip = False
+            continue
+        if tok in ("--mode", "--path", "--camera"):
+            skip = True
+            continue
+        if tok.startswith(("--mode=", "--path=", "--camera=")):
+            continue
+        out.append(tok)
+    return ["--mode", "images", "--path", str(path), *out]
 
 
 def run() -> int:
-    args = build_parser().parse_args()
+    argv = sys.argv[1:]
+    args = build_parser().parse_args(argv)
     try:
-        return main(sys.argv[1:])
+        return main(argv)
     except RuntimeError as exc:
-        if args.mode == "webcam" and "camera" in str(exc).lower():
-            print(f"\n{exc}\n")
-            if FALLBACK_IMAGES.is_dir():
-                print(f"Falling back to IMAGE DEMO MODE using {FALLBACK_IMAGES}\n")
-                return main(["--mode", "images", "--path", str(FALLBACK_IMAGES),
-                             "--weights", args.weights, "--conf", str(args.conf)])
-        raise
+        if args.mode != "webcam" or "camera" not in str(exc).lower():
+            raise
+        print(f"\n{exc}\n", file=sys.stderr)
+        if not FALLBACK_IMAGES.is_dir():
+            print("No fallback images available at "
+                  f"{FALLBACK_IMAGES}. Run `python -m ml.prepare`, or pass "
+                  "--mode images --path <folder>.", file=sys.stderr)
+            return 1
+        print(f"Falling back to IMAGE DEMO MODE using {FALLBACK_IMAGES}\n")
+        return main(_fallback_argv(argv, FALLBACK_IMAGES))
 
 
 if __name__ == "__main__":
