@@ -84,14 +84,14 @@ The weakest class is **Connector** (mAP@50 0.607). It has the fewest training in
 
 ## Generalization — external images
 
-The held-out test set above shares its provenance with training — same source projects, same photographers. To probe whether the model survives a genuinely different camera, it was run over **28 CC-licensed photographs from Wikimedia Commons**, verified by perceptual hash to have zero overlap with training.
+The held-out test set above shares its provenance with training — same source projects, same photographers. To probe whether the model survives a genuinely different camera, it was run over **27 CC-licensed photographs from Wikimedia Commons**, verified by perceptual hash to have zero overlap with training.
 
 **These images carry no ground-truth boxes, so no accuracy figure can be computed from them.** What follows is detection behaviour.
 
 | | |
 |---|---:|
-| Images | 28 |
-| Images with at least one detection | **12 (43%)** |
+| Images | 27 |
+| Images with at least one detection | **12 (44%)** |
 | PCB detections | 5 |
 | RAM detections | 8 |
 | CPU detections | 0 |

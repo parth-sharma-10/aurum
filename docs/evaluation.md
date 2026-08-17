@@ -12,7 +12,7 @@ Four datasets are kept strictly apart:
 | `train` | 4,878 | Roboflow Universe | Yes | Fitted the weights |
 | `valid` | 412 | Roboflow Universe | Yes | Selected the checkpoint (`best.pt`) |
 | `test` | 206 | Roboflow Universe | Yes | **Held-out. The headline metric.** |
-| `external` | 28 | Wikimedia Commons | **No** | Detection behaviour on out-of-provenance images |
+| `external` | 27 | Wikimedia Commons | **No** | Detection behaviour on out-of-provenance images |
 
 The test split shares its provenance with training — same Universe
 projects, same photographers, same benches. It is genuinely held out
@@ -82,7 +82,7 @@ are written to `reports/test_predictions/{correct,failures}/` by
 
 ## External evaluation (generalization probe)
 
-28 CC-licensed photographs from Wikimedia Commons — a
+27 CC-licensed photographs from Wikimedia Commons — a
 different source, different photographers, different equipment.
 Every image was perceptually hashed against the training split: 
 **0 overlaps found**.
@@ -92,10 +92,10 @@ Every image was perceptually hashed against the training split:
 
 | | |
 |---|---:|
-| Images | 28 |
+| Images | 27 |
 | Images with at least one detection | 12 |
-| Images with no detection | 16 |
-| Mean inference time | 15.7 ms |
+| Images with no detection | 15 |
+| Mean inference time | 31.2 ms |
 
 | Class | Detections | Mean confidence |
 |---|---:|---:|
@@ -106,11 +106,11 @@ Every image was perceptually hashed against the training split:
 
 ### What this shows
 
-The model fires on **43% of these images** (12/28), against a held-out test mAP@50 of **0.806**. That is a real domain gap, and it is the reason this set exists.
+The model fires on **44% of these images** (12/27), against a held-out test mAP@50 of **0.806**. That is a real domain gap, and it is the reason this set exists.
 
 Sharpest illustration: **CPU** (test mAP@50 0.965, zero external detections), **Connector** (test mAP@50 0.607, zero external detections). A class can score near the top of the held-out test and still fail completely on photographs taken by someone else, with different framing and lighting. Same-provenance test scores measure generalization across photographs, not across the world.
 
-Relaxing the confidence threshold recovers some of this — at 0.15 rather than the documented 0.35, detections appear on 16 of 28 images — so it is partly calibration and partly genuine domain shift. Neither is fixed by tuning a threshold; it is fixed by collecting bench data.
+Relaxing the confidence threshold recovers some of this — at 0.15 rather than the documented 0.35, detections appear on 18 of 27 images — so it is partly calibration and partly genuine domain shift. Neither is fixed by tuning a threshold; it is fixed by collecting bench data.
 
 Annotated outputs are in `reports/realworld/`; per-image detail in
 `reports/realworld_summary.json`; provenance and licenses in
