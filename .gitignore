@@ -29,6 +29,7 @@ runs/
 
 # Generated inference outputs
 reports/realworld/
+reports/realworld_relaxed/
 reports/test_predictions/
 
 .DS_Store

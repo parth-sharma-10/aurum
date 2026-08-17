@@ -72,8 +72,8 @@ Per class, on 206 unseen images:
 
 ![Test performance by class](reports/figures/test_metrics_by_class.png)
 
-**Read these with the external result below.** On 28 photographs from a
-different source, the model fires on only 43% of images and detects **zero**
+**Read these with the external result below.** On 27 photographs from a
+different source, the model fires on only 44% of images and detects **zero**
 CPUs — despite CPU being its strongest test class. Same-provenance test scores
 measure generalization across photographs, not across the world.
 
@@ -114,6 +114,20 @@ are split 70/20/10**.
 `python -m ml.validate` re-checks this independently and exits non-zero if any
 photograph reaches the test set from training. It is not decoration — it caught
 18 near-duplicates that the first version of the grouping code missed.
+
+**Why 17,193 images become 5,496.** The ratio is applied to the 2,154 clusters,
+not to the file count, and two filters run afterwards: 8,464 images carry no
+label that survives the label map, and 3,233 augmented copies are removed from
+the held-out splits so that no test image is a rotation of another test image.
+What is left is **4,878 train / 412 valid / 206 test**. The held-out splits are
+small on purpose — they are counts of distinct photographed scenes, which is the
+only thing worth measuring on.
+
+| | Clusters split | Images kept |
+| --- | ---: | ---: |
+| train | 70% | 4,878 |
+| valid | 20% | 412 |
+| test | 10% | 206 |
 
 Per-dataset counts, licenses and attributions: [docs/dataset.md](docs/dataset.md).
 
@@ -199,6 +213,37 @@ python -m pytest -q
 ruff check . && ruff format --check .
 ```
 
+## HTTP API
+
+`uvicorn app.api:app` — interactive docs at `/docs`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Liveness, model version, classes, weights path |
+| `GET` | `/model` | Model metadata as recorded at training time |
+| `POST` | `/detect` | Detect on one image; returns detections, counts, timing |
+| `POST` | `/detect/annotated` | Same, returning the drawn image |
+| `POST` | `/batch/start` | Open a batch, returns its `batch_id` |
+| `POST` | `/batch/{id}/frame` | Add one observed frame to an open batch |
+| `POST` | `/batch/{id}/close` | Close it and persist the record |
+| `GET` | `/batches` | Every stored batch |
+| `GET` | `/batches/{id}` | One stored batch |
+
+A batch is several observations of the same pile, not a single photograph, so
+counts come from the median over the frames it saw rather than from whichever
+frame happened to be last. `close` takes `?weight_mode=simulated|hx711|off`
+(default `off`); anything not backed by a physical load cell is labelled
+`SIMULATED SENSOR` in the record.
+
+```bash
+curl -X POST localhost:8000/batch/start                     # -> {"batch_id": "AUR-..."}
+curl -F "file=@board.jpg" localhost:8000/batch/AUR-.../frame
+curl -X POST "localhost:8000/batch/AUR-.../close?weight_mode=simulated"
+```
+
+Unknown batch ids return 404 and undecodable uploads return 400 — the demo
+should fail loudly at the seam, not emit an empty record.
+
 ### Batch record
 
 ```json
@@ -281,8 +326,8 @@ none is quoted. See [docs/evaluation.md](docs/evaluation.md).
   [docs/model-card.md](docs/model-card.md#recovery-estimation).
 - **Dataset bias, and it is measured, not hypothetical.** Training images are
   internet photography of PC hardware — product shots, build photos, teardowns.
-  On 28 photographs from a genuinely different source the model detects
-  something in only 43% of images, and finds **zero CPUs** despite CPU scoring
+  On 27 photographs from a genuinely different source the model detects
+  something in only 44% of images, and finds **zero CPUs** despite CPU scoring
   0.965 mAP@50 on the held-out test set. Closing that gap needs images
   collected on a real bench; no amount of threshold tuning substitutes for it.
   Run `python -m ml.realworld --path <your photos>` to measure it on yours.

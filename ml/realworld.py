@@ -39,7 +39,13 @@ def main() -> int:
     ap.add_argument("--path", required=True, help="folder of unseen photographs")
     ap.add_argument("--weights", default=str(DEFAULT_WEIGHTS))
     ap.add_argument("--conf", type=float, default=0.35)
-    ap.add_argument("--out", default=str(ROOT / "reports" / "realworld"))
+    ap.add_argument("--out", default=str(ROOT / "reports" / "realworld"), help="annotated images")
+    ap.add_argument(
+        "--summary-out",
+        default=str(ROOT / "reports" / "realworld_summary.json"),
+        help="where to write the JSON summary; give a second path when sweeping --conf "
+        "so a comparison run does not overwrite the headline one",
+    )
     args = ap.parse_args()
 
     src = Path(args.path).expanduser()
@@ -118,9 +124,11 @@ def main() -> int:
             "may be quoted as model accuracy."
         ),
     }
-    (ROOT / "reports" / "realworld_summary.json").write_text(json.dumps(summary, indent=2))
+    summary_path = Path(args.summary_out)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, indent=2))
     print(f"\nAnnotated images -> {out}")
-    print("Summary -> reports/realworld_summary.json")
+    print(f"Summary -> {summary_path}")
     return 0
 
 

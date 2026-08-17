@@ -37,6 +37,7 @@ def main() -> int:
     test = load("test_metrics.json")
     ext = load("realworld_summary.json")
     ext_src = load("realworld_sources.json")
+    relaxed = load("realworld_summary_relaxed.json")
 
     if stats is None:
         raise SystemExit("reports/dataset_stats.json missing — run ml.prepare first")
@@ -229,13 +230,16 @@ def main() -> int:
                     f"and lighting. Same-provenance test scores measure "
                     f"generalization across photographs, not across the world.\n"
                 )
-            add(
-                "Relaxing the confidence threshold recovers some of this — at "
-                "0.15 rather than the documented 0.35, detections appear on 16 of "
-                "28 images — so it is partly calibration and partly genuine "
-                "domain shift. Neither is fixed by tuning a threshold; it is "
-                "fixed by collecting bench data.\n"
-            )
+            if relaxed:
+                r_hit = relaxed["n_images"] - relaxed["images_with_no_detection"]
+                add(
+                    "Relaxing the confidence threshold recovers some of this — at "
+                    f"{relaxed['conf_threshold']} rather than the documented "
+                    f"{ext['conf_threshold']}, detections appear on {r_hit} of "
+                    f"{relaxed['n_images']} images — so it is partly calibration "
+                    "and partly genuine domain shift. Neither is fixed by tuning a "
+                    "threshold; it is fixed by collecting bench data.\n"
+                )
 
         add("Annotated outputs are in `reports/realworld/`; per-image detail in")
         add("`reports/realworld_summary.json`; provenance and licenses in")
