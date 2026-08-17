@@ -20,6 +20,26 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_WEIGHTS = ROOT / "models" / "aurum_vision_v0_1_best.pt"
 DEFAULT_META = ROOT / "models" / "aurum_vision_v0_1_meta.json"
 
+# Used only when a checkpoint does not record what it was trained at.
+FALLBACK_IMGSZ = 640
+
+
+def resolve_imgsz(model: YOLO, requested: int | None) -> int:
+    """Inference size to use: the caller's, else the size the model was trained at.
+
+    Inferring at a different resolution than training costs real accuracy — this
+    model measures 0.806 mAP@50 at its trained 512 px and 0.742 at 640 — so the
+    default is read from the checkpoint rather than hardcoded, which is how the
+    two silently diverged before.
+    """
+    if requested is not None:
+        return requested
+    args = getattr(model.model, "args", None) or {}
+    if not isinstance(args, dict):
+        args = getattr(args, "__dict__", {})
+    trained = args.get("imgsz")
+    return int(trained) if isinstance(trained, (int, float)) else FALLBACK_IMGSZ
+
 
 @dataclass
 class Detection:
@@ -53,7 +73,7 @@ class AurumDetector:
         weights: Path | str = DEFAULT_WEIGHTS,
         conf: float = 0.35,
         iou: float = 0.5,
-        imgsz: int = 640,
+        imgsz: int | None = None,
         device: str | None = None,
     ) -> None:
         weights = Path(weights)
@@ -62,8 +82,9 @@ class AurumDetector:
                 f"No weights at {weights}. Train first (`python -m ml.train`) or pass --weights."
             )
         self.weights = weights
-        self.conf, self.iou, self.imgsz, self.device = conf, iou, imgsz, device
+        self.conf, self.iou, self.device = conf, iou, device
         self.model = YOLO(str(weights))
+        self.imgsz = resolve_imgsz(self.model, imgsz)
         self.classes: list[str] = [self.model.names[i] for i in sorted(self.model.names)]
 
         self.meta: dict = {}

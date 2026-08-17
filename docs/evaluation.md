@@ -51,23 +51,25 @@ have inflated every number below.
 
 ## Held-out test results
 
-Model: `models/aurum_vision_v0_1_best.pt` · 206 unseen images · 340 annotated instances.
+Model: `models/aurum_vision_v0_1_best.pt` · 206 unseen images · 340 annotated instances · measured at 512 px.
+
+Detection scores depend on inference resolution, so the size is recorded with the result: evaluating this model at 640 px rather than the 512 px it was trained at drops mAP@50 from 0.806 to 0.742. `ml.evaluate` reads the size from the checkpoint.
 
 | Metric | Result |
 |---|---:|
-| mAP@50 | **0.742** |
-| mAP@50:95 | **0.471** |
-| Precision | **0.731** |
+| mAP@50 | **0.806** |
+| mAP@50:95 | **0.594** |
+| Precision | **0.876** |
 | Recall | **0.724** |
 
 ### Per class
 
 | Class | Test instances | Precision | Recall | mAP@50 | mAP@50:95 |
 |---|---:|---:|---:|---:|---:|
-| PCB | 69 | 0.742 | 0.812 | 0.812 | 0.446 |
-| RAM | 139 | 0.671 | 0.588 | 0.628 | 0.310 |
-| CPU | 79 | 0.891 | 0.911 | 0.956 | 0.710 |
-| Connector | 53 | 0.621 | 0.585 | 0.572 | 0.420 |
+| PCB | 69 | 0.913 | 0.870 | 0.933 | 0.746 |
+| RAM | 139 | 0.901 | 0.511 | 0.717 | 0.390 |
+| CPU | 79 | 0.967 | 0.949 | 0.965 | 0.831 |
+| Connector | 53 | 0.721 | 0.566 | 0.607 | 0.411 |
 
 Per-class figures rest on tens of instances. Treat differences of a
 few points as noise.
@@ -91,22 +93,22 @@ Every image was perceptually hashed against the training split:
 | | |
 |---|---:|
 | Images | 28 |
-| Images with at least one detection | 8 |
-| Images with no detection | 20 |
-| Mean inference time | 21.0 ms |
+| Images with at least one detection | 12 |
+| Images with no detection | 16 |
+| Mean inference time | 15.7 ms |
 
 | Class | Detections | Mean confidence |
 |---|---:|---:|
-| PCB | 4 | 0.6843 |
-| RAM | 5 | 0.7184 |
+| PCB | 5 | 0.6901 |
+| RAM | 8 | 0.7511 |
 | CPU | 0 | — |
 | Connector | 0 | — |
 
 ### What this shows
 
-The model fires on **29% of these images** (8/28), against a held-out test mAP@50 of **0.742**. That is a real domain gap, and it is the reason this set exists.
+The model fires on **43% of these images** (12/28), against a held-out test mAP@50 of **0.806**. That is a real domain gap, and it is the reason this set exists.
 
-Sharpest illustration: **CPU** (test mAP@50 0.956, zero external detections), **Connector** (test mAP@50 0.572, zero external detections). A class can score near the top of the held-out test and still fail completely on photographs taken by someone else, with different framing and lighting. Same-provenance test scores measure generalization across photographs, not across the world.
+Sharpest illustration: **CPU** (test mAP@50 0.965, zero external detections), **Connector** (test mAP@50 0.607, zero external detections). A class can score near the top of the held-out test and still fail completely on photographs taken by someone else, with different framing and lighting. Same-provenance test scores measure generalization across photographs, not across the world.
 
 Relaxing the confidence threshold recovers some of this — at 0.15 rather than the documented 0.35, detections appear on 16 of 28 images — so it is partly calibration and partly genuine domain shift. Neither is fixed by tuning a threshold; it is fixed by collecting bench data.
 

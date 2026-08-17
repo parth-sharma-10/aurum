@@ -64,23 +64,23 @@ Measured on **206 unseen images** (340 instances) that share no duplicate cluste
 
 | metric | value |
 |---|---|
-| Precision | **0.731** |
+| Precision | **0.876** |
 | Recall | **0.724** |
-| mAP@50 | **0.742** |
-| mAP@50:95 | **0.471** |
+| mAP@50 | **0.806** |
+| mAP@50:95 | **0.594** |
 
 ### Per class
 
 | class | test instances | precision | recall | mAP@50 | mAP@50:95 |
 |---|---|---|---|---|---|
-| PCB | 69 | 0.742 | 0.812 | 0.812 | 0.446 |
-| RAM | 139 | 0.671 | 0.588 | 0.628 | 0.310 |
-| CPU | 79 | 0.891 | 0.911 | 0.956 | 0.710 |
-| Connector | 53 | 0.621 | 0.585 | 0.572 | 0.420 |
+| PCB | 69 | 0.913 | 0.870 | 0.933 | 0.746 |
+| RAM | 139 | 0.901 | 0.511 | 0.717 | 0.390 |
+| CPU | 79 | 0.967 | 0.949 | 0.965 | 0.831 |
+| Connector | 53 | 0.721 | 0.566 | 0.607 | 0.411 |
 
 Artifacts in `reports/`: `confusion_matrix.png`, `BoxPR_curve.png`, `BoxF1_curve.png`, and example predictions under `reports/test_predictions/{correct,failures}/` with ground truth in white and predictions in gold.
 
-The weakest class is **Connector** (mAP@50 0.572). It has the fewest training instances and the widest visual range in the source data.
+The weakest class is **Connector** (mAP@50 0.607). It has the fewest training instances and the widest visual range in the source data.
 
 ## Generalization — external images
 
@@ -91,13 +91,13 @@ The held-out test set above shares its provenance with training — same source 
 | | |
 |---|---:|
 | Images | 28 |
-| Images with at least one detection | **8 (29%)** |
-| PCB detections | 4 |
-| RAM detections | 5 |
+| Images with at least one detection | **12 (43%)** |
+| PCB detections | 5 |
+| RAM detections | 8 |
 | CPU detections | 0 |
 | Connector detections | 0 |
 
-This is the single most important limitation of the model. **CPU** scores 0.956 mAP@50 on the held-out test set and produces **zero** detections here, **Connector** scores 0.572 mAP@50 on the held-out test set and produces **zero** detections here. A class can sit near the top of a held-out benchmark and still fail outright on photographs taken by someone else, with different framing, lighting and working distance.
+This is the single most important limitation of the model. **CPU** scores 0.965 mAP@50 on the held-out test set and produces **zero** detections here, **Connector** scores 0.607 mAP@50 on the held-out test set and produces **zero** detections here. A class can sit near the top of a held-out benchmark and still fail outright on photographs taken by someone else, with different framing, lighting and working distance.
 
 Read the test figures accordingly: they measure generalization across photographs of the same kind, not readiness for a scrap dealer's bench. Closing this gap requires images collected on a real bench, not threshold tuning. Full detail in [evaluation.md](evaluation.md).
 

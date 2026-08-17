@@ -22,6 +22,8 @@ import cv2
 import yaml
 from ultralytics import YOLO
 
+from app.detector import resolve_imgsz
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "aurum" / "data.yaml"
 REPORTS = ROOT / "reports"
@@ -54,7 +56,13 @@ def load_gt(label_path: Path, w: int, h: int) -> list[tuple[int, list[float]]]:
 
 
 def qualitative(
-    model: YOLO, split_dir: Path, names: list[str], conf: float, out_dir: Path, n_each: int = 12
+    model: YOLO,
+    split_dir: Path,
+    names: list[str],
+    conf: float,
+    out_dir: Path,
+    imgsz: int,
+    n_each: int = 12,
 ) -> dict:
     """Split test images into clean successes and instructive failures."""
     img_dir, lbl_dir = split_dir / "images", split_dir / "labels"
@@ -75,7 +83,7 @@ def qualitative(
         gt = load_gt(lbl_dir / f"{img_path.stem}.txt", w, h)
         if not gt:
             continue
-        res = model.predict(img, conf=conf, verbose=False)[0]
+        res = model.predict(img, conf=conf, imgsz=imgsz, verbose=False)[0]
         preds = []
         if res.boxes is not None and len(res.boxes):
             for bb, cc, kk in zip(
@@ -160,7 +168,12 @@ def main() -> int:
     ap.add_argument("--weights", default=str(DEFAULT_WEIGHTS))
     ap.add_argument("--split", default="test", choices=["test", "valid"])
     ap.add_argument("--conf", type=float, default=0.35)
-    ap.add_argument("--imgsz", type=int, default=640)
+    ap.add_argument(
+        "--imgsz",
+        type=int,
+        default=None,
+        help="inference size; defaults to the size the checkpoint was trained at",
+    )
     args = ap.parse_args()
 
     weights = Path(args.weights).resolve()
@@ -169,8 +182,9 @@ def main() -> int:
 
     names = yaml.safe_load(DATA.read_text())["names"]
     model = YOLO(str(weights))
+    imgsz = resolve_imgsz(model, args.imgsz)
 
-    print(f"Evaluating {weights.name} on the {args.split} split…")
+    print(f"Evaluating {weights.name} on the {args.split} split at {imgsz} px…")
     # Ultralytics looks up `split` as a key in data.yaml and only path-resolves
     # the canonical train/val/test keys, so the validation split must be asked
     # for as "val" even though its directory is data/aurum/valid.
@@ -178,7 +192,7 @@ def main() -> int:
     m = model.val(
         data=str(DATA),
         split=ul_split,
-        imgsz=args.imgsz,
+        imgsz=imgsz,
         conf=0.001,
         iou=0.6,
         plots=True,
@@ -227,6 +241,7 @@ def main() -> int:
         names,
         args.conf,
         REPORTS / f"{args.split}_predictions",
+        imgsz,
     )
 
     eval_dir = ROOT / "runs" / f"eval_{args.split}"
@@ -249,6 +264,7 @@ def main() -> int:
     out = {
         "weights": str(weights.relative_to(ROOT)) if weights.is_relative_to(ROOT) else str(weights),
         "split": args.split,
+        "imgsz": imgsz,
         "n_images": stats["splits"][args.split]["images"],
         "n_instances": stats["splits"][args.split]["boxes"],
         "conf_threshold_for_examples": args.conf,
