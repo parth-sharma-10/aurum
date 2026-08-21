@@ -258,6 +258,10 @@ def merge_groups_by_similarity(records: list[dict], max_hamming: int) -> dict:
         f"  {n_groups} stem-groups -> {n_clusters} clusters "
         f"({n_merged} near-duplicate merges at Hamming<={max_hamming})"
     )
+    # `clusters` counts every cluster formed over the raw records, before the
+    # background cap and before held-out augmented copies are pruned. The count
+    # of clusters that actually survive into the built dataset is smaller and is
+    # reported separately by ml.validate.
     return {
         "images_hashed": n_img,
         "stem_groups": n_groups,

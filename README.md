@@ -1,86 +1,43 @@
 # Aurum
 
-**Real-time computer vision that identifies and counts e-waste components from a webcam, and turns each session into a structured batch record.**
+**Computer vision that identifies and counts e-waste components from a webcam,
+an image folder or a video, and turns each session into a structured batch
+record.**
 
 E-waste changes hands by gross weight, so what is actually inside a board is
 invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-98%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-144%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
+
+> **Before you clone with the intent to run it:** the trained weights are **not
+> in this repository** and there is no release asset to download. Detection,
+> the API and the dashboards all need `models/aurum_vision_v0_1_best.pt`, which
+> you must train yourself (~3 h) or obtain separately. See
+> [Model weights](#model-weights-read-this-before-running-anything).
 
 ---
 
 ## What it does
 
 ```
-Webcam / image / video
+webcam / image folder / video
         ↓
-YOLO11n detector  (fine-tuned, 512 px inference)
+YOLO11n detector          fine-tuned, 512 px inference, conf 0.35, IoU 0.5
         ↓
-Component detections  — class + confidence + box
+detections                class + confidence + bounding box
         ↓
-Median count over a frame window
+BatchSession              median per-class count over a 45-frame window
         ↓
-Batch record  →  OpenCV dashboard · FastAPI · SQLite
+batch record (JSON)  →  OpenCV dashboard
+                     →  FastAPI  →  SQLite ledger  →  React dashboard
 ```
 
-It identifies four component classes, counts them, and emits a batch record. It
-does **not** measure precious-metal content — see [Limitations](#limitations).
-
-## Demo
-
-![Aurum Vision live dashboard](reports/figures/live_webcam_inference.png)
-
-*Live webcam inference. Left: camera feed with detections. Right: per-class
-counts, object total, mean confidence, batch ID, and mass (flagged **SIMULATED
-SENSOR** when no load cell is attached). Bottom: model version, FPS, status.*
-
-```bash
-python run_demo.py          # webcam; falls back to image mode if no camera
-```
-
-Keys: `B` new batch · `S` save batch · `SPACE` pause · `Q` quit
-
-## Results
-
-| Metric | Result |
-| --- | ---: |
-| Test mAP@50 | **0.806** |
-| Test mAP@50:95 | **0.594** |
-| Test precision | **0.876** |
-| Test recall | **0.724** |
-| Live inference | **78.2 FPS** (1280×720 capture, 512 px inference, Apple M4 CPU) |
-| Classes | 4 |
-| Tests | 98 passing |
-
-Every figure here is measured at 512 px, the size the model was trained at.
-Inference resolution is read from the checkpoint rather than passed in, because
-for one release it was not: evaluation and the live demo both defaulted to
-640 px while every document said 512, which understated the model by 6.4 points
-of mAP@50 and 12.3 of mAP@50:95. `reports/test_metrics.json` now records the
-size each result was measured at.
-
-Per class, on 206 unseen images:
-
-| Class | Instances | mAP@50 | mAP@50:95 |
-| --- | ---: | ---: | ---: |
-| CPU | 79 | 0.965 | 0.831 |
-| PCB | 69 | 0.933 | 0.746 |
-| RAM | 139 | 0.717 | 0.390 |
-| Connector | 53 | 0.607 | 0.411 |
-
-![Test performance by class](reports/figures/test_metrics_by_class.png)
-
-**Read these with the external result below.** On 27 photographs from a
-different source, the model fires on only 44% of images and detects **zero**
-CPUs — despite CPU being its strongest test class. Same-provenance test scores
-measure generalization across photographs, not across the world.
-
-Measured on a held-out test split that shares **no duplicate cluster** with
-training data — verified: 0 clusters spanning splits, 0 exact duplicates, 0
-near-duplicates. Full methodology and the external probe:
-[docs/evaluation.md](docs/evaluation.md).
+It identifies **four** component classes, counts them, and emits a batch
+record. It does **not** measure precious-metal content, estimate material
+recovery, price anything, track objects across frames, or actuate any
+hardware. See [What is and is not implemented](#what-is-and-is-not-implemented).
 
 ## Supported components
 
@@ -97,7 +54,82 @@ because in the source data a GPU is a shrouded card whose camera-facing surface
 is a cooler shroud rather than an exposed board. Reasoning in
 [docs/dataset.md](docs/dataset.md).
 
-## Dataset
+## Results on the held-out test split
+
+206 unseen images, 340 instances, measured at **512 px** — the resolution the
+model was trained at, read from the checkpoint rather than passed in.
+
+| Metric | Value |
+| --- | ---: |
+| Precision | **0.876** |
+| Recall | **0.724** |
+| mAP@50 | **0.806** |
+| mAP@50:95 | **0.594** |
+
+| Class | Instances | Precision | Recall | mAP@50 | mAP@50:95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| CPU | 79 | 0.967 | 0.949 | 0.965 | 0.831 |
+| PCB | 69 | 0.913 | 0.870 | 0.933 | 0.746 |
+| RAM | 139 | 0.901 | 0.511 | 0.717 | 0.390 |
+| Connector | 53 | 0.721 | 0.566 | 0.607 | 0.411 |
+
+![Test performance by class](reports/figures/test_metrics_by_class.png)
+
+Source: `reports/test_metrics.json`, written by `python -m ml.evaluate` straight
+from the Ultralytics validator. Nothing here is recomputed or rounded up.
+
+Measured on a split that shares **no duplicate cluster** with training data —
+verified: 0 clusters spanning splits, 0 exact duplicates, 0 near-duplicates.
+
+## The generalization gap — read this next to the table above
+
+The test split above shares its **provenance** with training: same Roboflow
+projects, same photographers, same benches. To probe whether the model survives
+a genuinely different camera, it was run over **27 CC-licensed photographs from
+Wikimedia Commons**, verified by perceptual hash to have zero overlap with
+training.
+
+**These images have no ground-truth boxes. No accuracy figure can be computed
+from them and none is quoted.** What follows is detection behaviour only.
+
+| At the documented threshold (conf 0.35) | |
+| --- | ---: |
+| Images with at least one detection | **12 of 27 (44%)** |
+| PCB detections | 5 |
+| RAM detections | 8 |
+| CPU detections | **0** |
+| Connector detections | **0** |
+
+At a relaxed conf 0.15: detections on **18 of 27**, and **1** CPU.
+
+**CPU scores 0.965 mAP@50 on the held-out test set and detects nothing here.**
+A class can sit at the top of a benchmark and still fail outright on
+photographs taken by someone else, with different framing, lighting and working
+distance. Read the test table as generalization across photographs of the same
+kind — not as readiness for a scrap dealer's bench. Closing this gap needs
+images collected on a real bench; no threshold tuning substitutes for it.
+
+Run it on your own photos: `python -m ml.realworld --path <folder>`.
+Full detail in [docs/evaluation.md](docs/evaluation.md).
+
+## Performance — inference throughput, not pipeline throughput
+
+Every figure below times **`model.predict` only**. Capture, batch aggregation
+and rendering are excluded, so these are *not* end-to-end camera FPS. The FPS
+readout on the OpenCV dashboard uses the same inference-only definition.
+
+| Measurement | Result |
+| --- | ---: |
+| Test images at native size, 512 px inference | 19.5 ms mean → **~51 FPS** |
+| 1280×720 input, 512 px inference | 12.2 ms mean → **~82 FPS** |
+| `AurumDetector.fps` over a 30-frame window | ~52.6 |
+
+Measured on an Apple M4. Note that inference runs on **CPU** by default —
+Ultralytics does not select MPS on its own, and `AurumDetector` only passes a
+device when one is given. No end-to-end pipeline FPS is currently published,
+because none has been measured with an artifact to back it.
+
+## Dataset and the leakage-safe split
 
 Six public [Roboflow Universe](https://universe.roboflow.com) datasets — 17,193
 images under **CC BY 4.0** and **Public Domain** — normalized into the four
@@ -111,53 +143,63 @@ train and test. So images are grouped into **duplicate clusters** (source stem,
 then SHA-256 and perceptual hash across datasets) and **clusters, not images,
 are split 70/20/10**.
 
-`python -m ml.validate` re-checks this independently and exits non-zero if any
-photograph reaches the test set from training. It is not decoration — it caught
-18 near-duplicates that the first version of the grouping code missed.
+**Two cluster counts appear in the reports, and they measure different things:**
 
-**Why 17,193 images become 5,496.** The ratio is applied to the 2,154 clusters,
-not to the file count, and two filters run afterwards: 8,464 images carry no
-label that survives the label map, and 3,233 augmented copies are removed from
-the held-out splits so that no test image is a rotation of another test image.
-What is left is **4,878 train / 412 valid / 206 test**. The held-out splits are
-small on purpose — they are counts of distinct photographed scenes, which is the
-only thing worth measuring on.
+| Number | Meaning | Source |
+| ---: | --- | --- |
+| **4,353** | clusters *formed* over all 17,193 ingested images | `reports/dataset_stats.json` |
+| **2,154** | clusters that *survive into the built dataset* after background capping and held-out pruning | `reports/dataset_validation.json` |
 
-| | Clusters split | Images kept |
-| --- | ---: | ---: |
-| train | 70% | 4,878 |
-| valid | 20% | 412 |
-| test | 10% | 206 |
+**Why 17,193 images become 5,496.** Two filters run after the split: 8,464
+images carry no label that survives the label map, and 3,233 augmented copies
+are removed from the held-out splits so no test image is a rotation of another
+test image. What is left is **4,878 train / 412 valid / 206 test**. The held-out
+splits are small on purpose — they count distinct photographed scenes, which is
+the only thing worth measuring on.
+
+`python -m ml.validate` re-checks all of this independently and exits non-zero
+if any photograph reaches the test set from training. It is not decoration — it
+caught 18 near-duplicates the first version of the grouping code missed.
 
 Per-dataset counts, licenses and attributions: [docs/dataset.md](docs/dataset.md).
 
-## Architecture
+## Model weights — read this before running anything
 
-```mermaid
-flowchart LR
-    CAM[Webcam / image / video] --> DET[YOLO11n<br/>512 px]
-    DET --> ID[Detections<br/>class + confidence]
-    ID --> CNT[Median count<br/>over frame window]
-    CNT --> REC[Batch record]
-    W[HX711 load cell<br/>or SIMULATED] -.-> REC
-    REC --> UI[OpenCV dashboard]
-    REC --> API[FastAPI]
-    API --> DB[(SQLite)]
+**Weights are not committed and are not downloadable from this repository.**
+`models/*.pt` is gitignored; there is no release asset and no published
+checksum binding a weights file to the metrics above. A fresh clone can run the
+test suite, the dataset pipeline and the doc generators, but **cannot run
+detection, the API, the OpenCV demo or the React dashboard** until
+`models/aurum_vision_v0_1_best.pt` exists.
+
+Two ways to get there:
+
+**1. Train it** (~3 h on an Apple M4). The v0.1 release configuration is *not*
+the default in `ml/train.py` — the defaults are 100 epochs / 640 px / batch 16,
+while the shipped model was trained at 50 / 512 / 32. Running bare
+`python -m ml.train` produces a **different model to which none of the published
+metrics apply.** Use the release configuration explicitly:
+
+```bash
+cp env.example .env                # add your free Roboflow API key
+export ROBOFLOW_API_KEY="..."
+python -m ml.ingest                # download the 6 source datasets
+python -m ml.prepare               # normalize, deduplicate, split
+python -m ml.validate              # prove the split is leak-free (gates training)
+AURUM_EPOCHS=50 AURUM_BATCH=32 AURUM_IMGSZ=512 \
+  AURUM_WORKERS=4 AURUM_PATIENCE=15 python -m ml.train
+python -m ml.evaluate
 ```
 
-| Piece | Role |
-|---|---|
-| **Ultralytics YOLO11n** | Detection. Nano variant for real-time laptop inference; fine-tuned from COCO weights |
-| **OpenCV** | Capture and dashboard rendering — the demo is one process, no browser, no server |
-| **FastAPI** | HTTP surface for the rest of the stack |
-| **SQLite** | Batch ledger, persists offline at the point of collection |
-
-More detail: [docs/architecture.md](docs/architecture.md).
+**2. Obtain an existing `aurum_vision_v0_1_best.pt`** and drop it in `models/`.
+Inference resolution is read from the checkpoint, so a model trained at another
+size will infer at that size rather than silently at 640.
 
 ## Installation
 
 Prerequisites: **Python 3.12** (PyTorch has no stable 3.14 wheels), a webcam for
-the live demo, and ~1 GB disk if you rebuild the dataset.
+the live demo, ~1 GB disk to rebuild the dataset, and **Node 20.19+ or 22.12+** (what Vite 7
+requires) for the web dashboard.
 
 ```bash
 git clone https://github.com/parth-sharma-10/aurum.git
@@ -168,117 +210,284 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-**Model weights.** Weights are not committed (they are build artifacts derived
-from CC BY 4.0 data). Either train them — about 3 hours on an Apple M4 —
-
-```bash
-cp env.example .env                # add your free Roboflow API key
-export ROBOFLOW_API_KEY="..."      # or: set -a; source .env; set +a
-python -m ml.ingest                # download the 6 source datasets
-python -m ml.prepare               # normalize, deduplicate, split
-python -m ml.validate              # prove the split is leak-free
-python -m ml.train                 # fine-tune YOLO11n
-```
-
-— or drop an existing `aurum_vision_v0_1_best.pt` into `models/`.
-
-No environment variable is needed to *run* the demo or API against existing
-weights. `env.example` documents every variable; copy it to `.env` (gitignored)
-if you prefer a file.
+No environment variable is needed to *run* against existing weights.
+`env.example` documents every variable; copy it to `.env` (gitignored) if you
+prefer a file.
 
 macOS: grant your terminal camera permission in **System Settings → Privacy &
-Security → Camera** before the first webcam run.
+Security → Camera** before the first webcam run. Without it the camera reports
+itself open and never delivers a frame; the demo detects exactly that and falls
+back to image mode rather than exiting.
 
-## Usage
+## The OpenCV demo
 
 ```bash
-# Live webcam dashboard
-python run_demo.py
-
-# Image folder (no camera needed)
+python run_demo.py                                        # webcam
 python run_demo.py --mode images --path data/aurum/test/images
-
-# API — docs at http://127.0.0.1:8000/docs
-uvicorn app.api:app --port 8000
-curl -F "file=@board.jpg" http://127.0.0.1:8000/detect
-
-# Train and evaluate
-python -m ml.train
-python scripts/watch_training.py    # live progress, in a second terminal
-python -m ml.evaluate
-
-# Tests (needs the dev extras)
-pip install -r requirements-dev.txt
-python -m pytest -q
-ruff check . && ruff format --check .
+python run_demo.py --mode video  --path clip.mp4
 ```
+
+![Aurum Vision live dashboard](reports/figures/live_webcam_inference.png)
+
+Camera feed with boxes on the left; per-class counts, object total, mean
+confidence, batch ID and mass on the right; model version, inference FPS and
+status along the bottom. If no load cell is attached the mass panel reads
+**SIMULATED SENSOR**.
+
+Keys: `B` new batch · `S` save batch · `SPACE` pause · `←`/`→` (or `,`/`.`)
+step images · `Q` quit
+
+Useful flags: `--conf` (default 0.35), `--iou` (0.5), `--window` (45),
+`--imgsz` (defaults to the checkpoint's), `--weight-mode`
+(`auto|hx711|simulated|off`), `--no-window --frames N` for headless.
+
+Presentation runbook, including failure recovery: [docs/demo.md](docs/demo.md).
+
+## How a batch is composed
+
+Per-frame detection flickers — a module drops out for two frames when a hand
+crosses it. If the record used whatever the last frame said, it would be a
+function of *when the operator clicked*. So `BatchSession` keeps a trailing
+window of **45 frames** (~1.5 s at 30 fps) and the count for each class is the
+**median** over that window. The median ignores brief dropouts and brief
+double-counts without inventing anything.
+
+A batch **closes** when the operator presses `S` in the demo, or when
+`POST /batch/{id}/close` is called. In image mode the window is cleared whenever
+the file changes, because a median across unrelated photographs is meaningless.
+
+```json
+{
+  "batch_id": "AUR-48442B02",
+  "detections": { "PCB": 0, "RAM": 0, "CPU": 1, "Connector": 0 },
+  "total_objects": 1,
+  "average_confidence": 0.8823,
+  "frames_observed": 1,
+  "counting_method": "median per-class count over a trailing 45-frame window",
+  "started_at": "2026-08-16T18:17:42+00:00",
+  "timestamp": "2026-08-16T18:17:42+00:00",
+  "model_version": "Aurum Vision v0.1",
+  "source": "api",
+  "weight": { "grams": 1840.0, "kg": 1.84, "simulated": true,
+              "source": "simulated load cell",
+              "warning": "SIMULATED SENSOR — not a physical measurement" },
+  "recovery_estimate": { "available": false, "reason": "No reference yield data loaded. …" }
+}
+```
+
+## Persistence — two separate paths
+
+This is worth being explicit about, because the two do not currently meet:
+
+| Path | Writes JSON to `data/batches/` | Writes the SQLite ledger |
+|---|---|---|
+| OpenCV demo (`S` key, or `--no-window`) | **yes** | **no** |
+| API (`POST /batch/{id}/close`) | **yes** | **yes** (`data/aurum_batches.db`) |
+
+**The OpenCV demo does not write to SQLite.** A batch saved from the live demo
+exists only as a JSON file, and will not appear in `/batches`, `/stats`, or the
+React dashboard. Only batches closed through the API reach the ledger.
+
+The `batches` table is flat — `batch_id`, `created_at` (the *close* timestamp),
+`model_version`, `total_objects`, `avg_confidence`, `weight_grams`,
+`weight_simulated` — plus `record_json` holding the complete record, so nothing
+is lost to the flattening.
 
 ## HTTP API
 
-`uvicorn app.api:app` — interactive docs at `/docs`.
+```bash
+python -m uvicorn app.api:app --reload      # interactive docs at /docs
+```
 
-| Method | Path | Purpose |
+| Method | Path | Semantics |
 | --- | --- | --- |
-| `GET` | `/health` | Liveness, model version, classes, weights path |
-| `GET` | `/model` | Model metadata as recorded at training time |
-| `POST` | `/detect` | Detect on one image; returns detections, counts, timing |
-| `POST` | `/detect/annotated` | Same, returning the drawn image |
-| `POST` | `/batch/start` | Open a batch, returns its `batch_id` |
-| `POST` | `/batch/{id}/frame` | Add one observed frame to an open batch |
-| `POST` | `/batch/{id}/close` | Close it and persist the record |
-| `GET` | `/batches` | Every stored batch |
-| `GET` | `/batches/{id}` | One stored batch |
+| `GET` | `/health` | `status` is `ok` or `model_missing`; returns model version, classes, weights path. Never 503s |
+| `GET` | `/model` | Training metadata as recorded at training time, plus `reports/test_metrics.json` if present, plus the no-composition disclaimer |
+| `POST` | `/detect` | multipart `file`; returns detections (class, confidence, `box_xyxy`), counts for **every** class, `total_objects`, `average_confidence`, `inference_ms` |
+| `POST` | `/detect/annotated` | Same input; returns the drawn JPEG |
+| `POST` | `/batch/start` | Opens an in-memory session; returns `batch_id` and `started_at` |
+| `POST` | `/batch/{id}/frame` | multipart `file`; adds one observed frame; returns this frame's counts and the running `stable_counts` |
+| `POST` | `/batch/{id}/close` | Finalizes, writes JSON **and** SQLite, returns the record. Optional `?weight_mode=simulated\|hx711\|off` (default `off`) and `?hx711_port=` |
+| `GET` | `/batches` | Stored records, newest first, `?limit=` (default 50) |
+| `GET` | `/batches/{id}` | One stored record |
+| `GET` | `/stats` | Ledger aggregates, computed in SQL |
 
-A batch is several observations of the same pile, not a single photograph, so
-counts come from the median over the frames it saw rather than from whichever
-frame happened to be last. `close` takes `?weight_mode=simulated|hx711|off`
-(default `off`); anything not backed by a physical load cell is labelled
-`SIMULATED SENSOR` in the record.
+Unknown batch ids return **404**; empty or undecodable uploads return **400**;
+every endpoint that needs the model returns **503** when weights are absent.
 
 ```bash
-curl -X POST localhost:8000/batch/start                     # -> {"batch_id": "AUR-..."}
+curl -X POST localhost:8000/batch/start                      # -> {"batch_id": "AUR-..."}
 curl -F "file=@board.jpg" localhost:8000/batch/AUR-.../frame
 curl -X POST "localhost:8000/batch/AUR-.../close?weight_mode=simulated"
 ```
 
-Unknown batch ids return 404 and undecodable uploads return 400 — the demo
-should fail loudly at the seam, not emit an empty record.
-
-### Batch record
+### `/stats`
 
 ```json
 {
-  "batch_id": "AUR-559179A3",
-  "detections": { "PCB": 2, "RAM": 1, "CPU": 1, "Connector": 0 },
-  "total_objects": 4,
-  "average_confidence": 0.934,
-  "counting_method": "median per-class count over a trailing 45-frame window",
-  "model_version": "Aurum Vision v0.1",
-  "weight": { "kg": 1.841, "simulated": true,
-              "warning": "SIMULATED SENSOR — not a physical measurement" },
-  "recovery_estimate": { "available": false, "reason": "No reference yield data loaded." }
+  "batch_count": 3,
+  "total_count": 3,
+  "total_weight": {
+    "measured_grams": 0.0,
+    "simulated_grams": 3680.0,
+    "batches_with_weight": 2,
+    "note": "Simulated grams come from a labelled stand-in for the HX711 load cell and are not physical measurements."
+  },
+  "component_breakdown": { "CPU": 3, "RAM": 0, "PCB": 0, "Connector": 0 },
+  "bin_breakdown": {},
+  "bin_breakdown_note": "Aurum does not implement physical bin routing or servo actuation. …"
 }
 ```
 
-Counts are the **median** over a trailing frame window, not whatever the last
-frame said — otherwise the record would depend on when the operator clicked.
+Two deliberate properties:
+
+- **Mass is never one number.** `measured_grams` and `simulated_grams` are
+  separate fields, because summing them would produce a figure that reads as
+  measured. Only a record that explicitly stored `weight_simulated = 0` counts
+  as measured, so missing provenance falls to the cautious side.
+- **`bin_breakdown` is empty by fact, not omission.** Aurum has no bin routing
+  and no actuator, so no record carries a bin assignment.
+
+Aggregation is three SQL statements (`COUNT`/`SUM`, a `GROUP BY` on the
+simulated flag, and `json_each` over the stored record for per-class counts).
+No row is deserialized in Python to add up integers.
+
+## React dashboard
+
+A small browser view of the ledger, in `frontend/`. React 19 + Vite 7 and
+nothing else — no UI kit, no chart library, no state manager.
+
+```bash
+# terminal 1 — backend must be running first
+python -m uvicorn app.api:app --reload
+
+# terminal 2
+cd frontend
+npm install
+npm run dev            # http://localhost:5173
+```
+
+It shows aggregate metrics from `/stats`, a ledger table from `/batches`, and
+the complete stored record for any batch you select. It **polls every 5
+seconds**; there is no websocket.
+
+**It is not a live camera view.** There is no video stream, no live detection
+overlay and no control over the detector. It visualizes **closed batch records
+that reached the SQLite ledger through the API** — which, per
+[Persistence](#persistence--two-separate-paths), excludes anything saved from
+the OpenCV demo. Simulated mass is badged `SIMULATED` everywhere it appears and
+is never added to measured mass.
+
+Point it at a different backend with `VITE_AURUM_API=http://host:port npm run dev`.
+`npm run build` emits a static bundle to `frontend/dist/` (gitignored).
+
+### CORS
+
+The API allows exactly two origins — `http://localhost:5173` and
+`http://127.0.0.1:5173` — for **`GET` only**, without credentials. This is a
+development policy for the Vite dev server, deliberately not a wildcard: the API
+has no authentication, so `allow_origins=["*"]` would let any page a developer
+visits read their local ledger. Vite is pinned to 5173 (`strictPort`); change
+both sides together.
+
+## Prototype constraints
+
+Not production-ready, and specifically:
+
+- **No authentication.** Any client that can reach the port can read and write.
+- **No upload size limit** on `/detect` and `/batch/{id}/frame`.
+- **Batch sessions are in-memory and process-local.** An open batch lives in a
+  dict in one process: it is lost on restart, it never expires, and **more than
+  one uvicorn worker is not safe** — a frame can land on a worker that has never
+  heard of the batch. Only *closed* batches are durable.
+- **CORS is scoped to localhost Vite origins** and nothing else.
+- No rate limiting, no request logging, no TLS.
+
+## Weight: simulated versus measured
+
+Mass is optional and always labelled. With no load cell attached,
+`SimulatedLoadCell` produces a drifting value that is flagged
+`"simulated": true`, carries `"warning": "SIMULATED SENSOR — not a physical
+measurement"`, renders as **SIMULATED SENSOR** in the OpenCV dashboard, badges
+`SIMULATED` in the React dashboard, and lands in `simulated_grams` in `/stats`.
+
+`HX711LoadCell` exists and reads calibrated grams from a serial line, but
+**it has never been run against physical hardware**, and no Arduino sketch is
+included in this repository. A class existing is not a working load cell.
+
+## Recovery estimation — disabled
+
+`configs/recovery_reference.yaml` ships with `enabled: false` and zero yield
+entries, so `recovery_estimate` in every batch record returns
+`{"available": false, "reason": ...}` and emits **no numeric field at all**.
+
+The mechanism is counts × published reference yields. Enabling it requires
+per-component figures with real citations, and none were available at the time
+of writing — so none were invented. A plausible-looking number with nothing
+behind it is worse than no number, because it gets quoted. Tests in
+`tests/test_batch.py` and `tests/test_api.py` assert that no numeric value
+leaks while it is disabled.
+
+## What is and is not implemented
+
+| Capability | Status |
+|---|---|
+| YOLO11n detection (PCB / RAM / CPU / Connector) | **implemented** |
+| Webcam, image-folder and video inference | **implemented** |
+| Median-window batch aggregation | **implemented** |
+| Batch records as JSON | **implemented** |
+| SQLite ledger | **implemented — via the API only** |
+| FastAPI service (10 endpoints) | **implemented** |
+| OpenCV dashboard | **implemented** |
+| React dashboard (closed batches) | **implemented** |
+| Leakage-safe dataset split + independent validator | **implemented** |
+| External-image evaluation (no ground truth) | **implemented** |
+| Simulated load cell | **implemented, labelled** |
+| HX711 serial class | **exists, never verified against hardware** |
+| Arduino integration / sketch | **not implemented** |
+| Servo sorting, physical routing, bin actuation | **not implemented** |
+| Material / recovery estimation | **not implemented** (mechanism present, disabled) |
+| PMDI | **not implemented** |
+| Valuation, pricing, carbon figures | **not implemented** |
+| Object tracking across frames | **not implemented** |
+| Cyber-physical state machine | **not implemented** |
+| Live camera stream in the browser | **not implemented** |
 
 ## Project structure
 
 ```
 app/         Runtime: detector, dashboard, demo loop, batch logic, weight, API
-ml/          Pipeline: ingest → prepare → validate → train → evaluate → assets
+frontend/    React/Vite browser view of the ledger (reads the API only)
+ml/          Pipeline: ingest → prepare → validate → train → evaluate → realworld → assets
 configs/     Label map, pinned datasets, recovery reference (disabled)
-scripts/     Doc generators and the external evaluation fetcher
-tests/       98 tests
+scripts/     Doc generators, training monitor, external-image fetcher, Universe search
+tests/       144 tests
 docs/        dataset · training · evaluation · model-card · architecture · demo
 reports/     Generated metrics, figures and validation output
+models/      Weights + training metadata (weights gitignored, not distributed)
+data/        Datasets, batch JSON and the SQLite ledger (all gitignored)
 run_demo.py  One-command demo entry point
 ```
 
 Key files: `configs/aurum_labels.yaml` (every label decision, with reasons),
 `ml/prepare.py` (the leakage-safe split), `app/batch.py` (batch composition and
-the recovery-estimate guard).
+the recovery-estimate guard), `app/api.py` (HTTP surface and `/stats`).
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q                  # 144 tests
+ruff check . && ruff format --check .
+
+cd frontend && npm run build         # static bundle to frontend/dist/
+```
+
+`docs/model-card.md`, `docs/evaluation.md` and `docs/dataset.md` are
+**generated** from the pipeline's own JSON output by `scripts/gen_*.py` — edit
+the generator, never the document. CI verifies that when the metrics file is
+removed they report results as pending rather than emitting a placeholder
+figure.
 
 ## Documentation
 
@@ -291,69 +500,41 @@ the recovery-estimate guard).
 | [docs/architecture.md](docs/architecture.md) | How the runtime pieces fit together |
 | [docs/demo.md](docs/demo.md) | Presentation runbook — setup, sequence, failure recovery, Q&A |
 
-`model-card.md`, `evaluation.md` and `dataset.md` are **generated** from the
-pipeline's own JSON output, so they cannot drift from the data they describe.
-CI verifies that when the metrics file is removed they report results as
-pending rather than emitting a placeholder figure.
-
-## Evaluation methodology
-
-Four datasets are kept strictly apart, because conflating them is how detection
-results get oversold:
-
-| | Provenance | Ground truth | Role |
-|---|---|---|---|
-| train | Roboflow Universe | yes | fits the weights |
-| validation | Roboflow Universe | yes | selects the checkpoint |
-| **test** | Roboflow Universe | yes | **the headline metric** |
-| external | Wikimedia Commons | **no** | detection behaviour only |
-
-The external set is 27 CC-licensed photographs from a different source,
-verified by perceptual hash to have zero overlap with training. Those images
-carry no annotations, so **no accuracy figure can be computed from them** and
-none is quoted. See [docs/evaluation.md](docs/evaluation.md).
-
 ## Limitations
 
 - **No composition sensing.** The model sees surfaces. It cannot tell a
   gold-plated connector from a tin-plated one of the same shape, and it does not
-  determine composition, purity or recoverable value. Component detection is a
-  *precursor* to valuation, not a substitute for assay.
-- **Recovery estimation is disabled.** The mechanism (counts × reference yield ×
-  spot price) is implemented but ships off, because the per-component yield
-  figures it needs must be citable and none were available. It fails closed:
-  no numeric field is emitted at all. See
-  [docs/model-card.md](docs/model-card.md#recovery-estimation).
-- **Dataset bias, and it is measured, not hypothetical.** Training images are
-  internet photography of PC hardware — product shots, build photos, teardowns.
-  On 27 photographs from a genuinely different source the model detects
-  something in only 44% of images, and finds **zero CPUs** despite CPU scoring
-  0.965 mAP@50 on the held-out test set. Closing that gap needs images
-  collected on a real bench; no amount of threshold tuning substitutes for it.
-  Run `python -m ml.realworld --path <your photos>` to measure it on yours.
+  determine composition, purity or recoverable value. Detection is a *precursor*
+  to valuation, not a substitute for assay.
+- **Measured domain gap.** On 27 photographs from a different source the model
+  detects something in 44% of images and finds **zero CPUs** despite CPU scoring
+  0.965 mAP@50 on the held-out test set.
 - **Two weak classes.** `Connector` is deliberately broad (DIMM socket to RC
-  plug) and scores 0.607 mAP@50. `RAM` recalls only 0.511 of its instances
-  despite having the *most* training data — memory modules are commonly
-  photographed in rows, and adjacent near-identical objects are hard to
-  separate into distinct counts.
+  plug) at 0.607 mAP@50. `RAM` recalls only 0.511 of its instances despite
+  having the most training data — memory modules are commonly photographed in
+  rows, and adjacent near-identical objects are hard to separate into counts.
 - **Counting is per-frame detection, not tracking.** Stacked or occluding boards
   can undercount; the median window suppresses flicker, not occlusion.
 - **Small test set.** Per-class figures rest on tens of instances. Treat
   differences of a few points as noise.
-- **Prototype.** Not production-ready, not industrial-grade sorting. No claim is
-  made about sustained field accuracy or throughput.
+- **Weights are not distributed with the repository**, so a fresh clone is not
+  runnable end to end.
+- **Prototype.** No claim is made about sustained field accuracy or throughput.
 
 ## Roadmap
 
 Realistic next steps, none of which are implemented:
 
+- Publish the weights as a release asset with a checksum, so the metrics above
+  are bound to a specific file.
+- Make `ml/train.py`'s defaults the release configuration, so
+  `python -m ml.train` reproduces the documented model.
 - Collect and annotate images on an actual collection bench to close the domain
   gap the external evaluation exposes.
 - Object tracking across frames so counts survive occlusion.
 - Populate `configs/recovery_reference.yaml` with cited yield figures and enable
   recovery estimation behind the existing guard.
-- Wire the HX711 load-cell path to real hardware (the serial backend exists and
-  is untested against a physical cell).
+- Wire the HX711 path to real hardware.
 
 ## License and attribution
 

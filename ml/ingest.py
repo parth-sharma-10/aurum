@@ -2,7 +2,7 @@
 
 Writes each dataset to data/raw/<key>/ in YOLO format, plus a
 data/raw/<key>/_aurum_meta.json capturing the project metadata (license, image
-count, per-class instance counts) exactly as the API reported it. DATA_SOURCES.md
+count, per-class instance counts) exactly as the API reported it. docs/dataset.md
 is generated from those files, so the documented statistics cannot drift from
 what was actually downloaded.
 
@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile

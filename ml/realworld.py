@@ -32,6 +32,12 @@ ROOT = Path(__file__).resolve().parent.parent
 IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic"}
 
 
+def _rel(p: Path) -> str:
+    """Repo-relative path for the summary. An absolute path would bake one
+    developer's home directory into a committed report."""
+    return str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -107,7 +113,7 @@ def main() -> int:
 
     summary = {
         "model_version": det.model_version,
-        "weights": args.weights,
+        "weights": _rel(Path(args.weights).resolve()),
         "conf_threshold": args.conf,
         "source": str(src),
         "n_images": len(rows),

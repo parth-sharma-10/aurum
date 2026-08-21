@@ -182,6 +182,8 @@ def main() -> int:
     report = {
         "images": {s: len(v) for s, v in images.items()},
         "boxes": n_boxes,
+        # Clusters present in the built dataset — smaller than the cluster count
+        # in dataset_stats.json, which counts clusters formed before filtering.
         "clusters": len(spanning),
         "clusters_spanning_splits": len(multi),
         "exact_duplicates_across_splits": len(exact_leaks),

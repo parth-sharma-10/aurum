@@ -36,7 +36,7 @@ Six public Roboflow Universe datasets normalized into 4 Aurum classes. Full prov
 | valid | 412 | 138 | 254 | 172 | 107 |
 | test | 206 | 69 | 139 | 79 | 53 |
 
-Splits are assigned over **4,353 duplicate clusters**, not individual images: 17,193 images were grouped by source stem and merged across datasets by SHA-256 and perceptual hash (310 near-duplicate merges). Held-out splits keep one image per cluster.
+Splits are assigned over duplicate clusters, not individual images: 17,193 images were grouped by source stem and merged across datasets by SHA-256 and perceptual hash into **4,353 clusters** (310 near-duplicate merges). Held-out splits keep one image per cluster. Of those, **2,154 carry the images kept in the final dataset**; the remainder held only images removed by the background cap or by held-out pruning.
 
 Independently verified by `python -m ml.validate`:
 

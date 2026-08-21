@@ -101,12 +101,19 @@ def main() -> int:
         )
     add("")
     g = stats["grouping"]
+    survivors = (
+        f" Of those, **{val['clusters']:,} carry the images kept in the final dataset**; "
+        f"the remainder held only images removed by the background cap or by held-out "
+        f"pruning."
+        if val
+        else ""
+    )
     add(
-        f"Splits are assigned over **{g['clusters']:,} duplicate clusters**, not "
-        f"individual images: {g['images_hashed']:,} images were grouped by source "
-        f"stem and merged across datasets by SHA-256 and perceptual hash "
-        f"({g['merges']} near-duplicate merges). Held-out splits keep one image "
-        f"per cluster.\n"
+        f"Splits are assigned over duplicate clusters, not individual images: "
+        f"{g['images_hashed']:,} images were grouped by source stem and merged across "
+        f"datasets by SHA-256 and perceptual hash into **{g['clusters']:,} clusters** "
+        f"({g['merges']} near-duplicate merges). Held-out splits keep one image per "
+        f"cluster.{survivors}\n"
     )
     if val:
         add("Independently verified by `python -m ml.validate`:\n")

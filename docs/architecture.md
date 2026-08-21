@@ -11,12 +11,18 @@ flowchart LR
     CAM[Webcam / image / video] --> DET[YOLO11n detector<br/>512 px inference]
     DET --> ID[Component identities<br/>+ confidence + boxes]
     ID --> CNT[Median count<br/>over frame window]
-    CNT --> REC[Batch record JSON]
+    CNT --> REC[Batch record JSON<br/>data/batches/]
     W[HX711 load cell<br/>or SIMULATED] -.-> REC
-    REC --> DB[(SQLite)]
-    REC --> UI[OpenCV dashboard]
+    CNT --> UI[OpenCV dashboard]
     REC --> API[FastAPI]
+    API --> DB[(SQLite ledger)]
+    DB --> WEB[React dashboard<br/>closed batches only]
 ```
+
+**The two persistence paths do not meet.** Saving from the OpenCV demo writes a
+JSON file and nothing else; only `POST /batch/{id}/close` writes the SQLite
+ledger. A batch saved on stage will not appear in `/batches`, `/stats` or the
+React dashboard.
 
 The dashed line matters: mass is optional and, when no load cell is attached,
 the reading is flagged `simulated: true` and rendered as **SIMULATED SENSOR**.
@@ -29,7 +35,8 @@ It is never presented as a measurement.
 | **Ultralytics YOLO11n** | Object detection | Nano variant runs real-time on a laptop CPU/GPU. Fine-tuned from COCO weights; nothing trains from scratch. |
 | **OpenCV** | Capture + dashboard rendering | The demo is one process with no browser and no server. A web UI adds two failure modes that kill live presentations. |
 | **FastAPI** | HTTP surface for the rest of the stack | The seam where the Aurum backend consumes identifications and batch records. |
-| **SQLite** | Batch ledger | Persists offline at the point of collection, which is the field constraint the concept doc calls out. |
+| **SQLite** | Batch ledger | Persists offline at the point of collection, which is the field constraint the concept doc calls out. Written by the API only. |
+| **React + Vite** | Browser view of the ledger | Reads `/stats` and `/batches` over HTTP and computes nothing of its own. Not a live camera view. |
 
 ## Module map
 
@@ -41,7 +48,13 @@ app/
   demo.py        Frame sources (webcam / video / images) and the key loop.
   batch.py       Batch composition + the recovery-estimate guard.
   weight.py      HX711 backend, or a clearly-labelled simulation.
-  api.py         FastAPI endpoints + SQLite persistence.
+  api.py         FastAPI endpoints + SQLite persistence + /stats aggregates.
+
+frontend/
+  src/App.jsx    Header, metric row, ledger table, batch-record modal.
+  src/index.css  Design tokens, panels, badges, ledger table. The palette is
+                 converted from the BGR constants in app/dashboard.py so the
+                 browser and OpenCV views stay one instrument.
 
 ml/
   ingest.py      Download pinned Roboflow datasets, record their metadata.
