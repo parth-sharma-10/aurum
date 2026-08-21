@@ -31,6 +31,11 @@ ROOT = Path(__file__).resolve().parent.parent
 IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 WINDOW = "Aurum Vision"
 
+# How long to wait for a camera to deliver its first frame before giving up on
+# it. Three seconds covers an AVFoundation capture session warming up; a slower
+# camera can be given longer through FrameSource(first_frame_timeout=...).
+FIRST_FRAME_TIMEOUT_S = 3.0
+
 
 class FrameSource:
     """Uniform iterator over webcam / video / image-folder."""
@@ -43,9 +48,11 @@ class FrameSource:
         width: int,
         height: int,
         image_seconds: float,
+        first_frame_timeout: float = FIRST_FRAME_TIMEOUT_S,
     ) -> None:
         self.mode = mode
         self.image_seconds = image_seconds
+        self.first_frame_timeout = first_frame_timeout
         self._cap = None
         self._images: list[Path] = []
         self._idx = 0
@@ -53,14 +60,15 @@ class FrameSource:
 
         if mode == "webcam":
             self._cap = cv2.VideoCapture(camera)
-            if not self._cap.isOpened():
+            self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            if not (self._cap.isOpened() and self._first_frame_arrives()):
+                self._cap.release()
                 raise RuntimeError(
                     f"Could not open camera {camera}. On macOS, grant camera "
                     f"permission to your terminal in System Settings > Privacy & "
                     f"Security > Camera. Or run with --mode images --path <folder>."
                 )
-            self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         elif mode == "video":
             if not path:
                 raise RuntimeError("--mode video requires --path")
@@ -79,6 +87,23 @@ class FrameSource:
             self._last_advance = time.time()
         else:
             raise RuntimeError(f"unknown mode {mode!r}")
+
+    def _first_frame_arrives(self) -> bool:
+        """Wait for the camera to actually deliver a frame.
+
+        isOpened() is not enough: AVFoundation reports the device open before the
+        capture session has produced anything, and a first read that fails is the
+        same signal as one denied by camera permissions. Without this the demo
+        exits on frame zero as "source exhausted" instead of falling back to
+        image mode.
+        """
+        deadline = time.time() + self.first_frame_timeout
+        while time.time() < deadline:
+            ok, frame = self._cap.read()
+            if ok and frame is not None:
+                return True
+            time.sleep(0.05)
+        return False
 
     @property
     def label(self) -> str:
