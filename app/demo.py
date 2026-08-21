@@ -16,12 +16,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
 import time
 from pathlib import Path
 
 import cv2
 
+from app import ledger
 from app.batch import BatchSession
 from app.dashboard import compose
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
@@ -180,6 +182,26 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _persist(session: BatchSession, record: dict) -> Path:
+    """Write a saved batch to both stores, and say so if the ledger refuses.
+
+    The JSON file is the demo's own artifact; the SQLite ledger is what the API
+    and the browser dashboard read. Writing only the first is what made a batch
+    saved on stage invisible everywhere else. The ledger write goes through
+    app.ledger, so there is one INSERT in the codebase rather than two.
+
+    A ledger failure must not lose the batch or end the demo: the JSON is on
+    disk before the ledger is touched, and the operator is told what happened
+    rather than the demo dying mid-presentation over a locked database.
+    """
+    path = session.save(record)
+    try:
+        ledger.save(record)
+    except sqlite3.Error as exc:
+        print(f"[batch] WARNING: saved {path} but the ledger write failed: {exc}")
+    return path
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -256,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"[batch] started {session.batch_id}")
             elif key == ord("s"):
                 rec = session.record(det.model_version, weight, source=src.label)
-                saved_path = session.save(rec)
+                saved_path = _persist(session, rec)
                 status, status_until = "SAVED", time.time() + 2.0
                 print(f"[batch] saved {saved_path}")
                 print(json.dumps(rec, indent=2))
@@ -277,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\n=== BATCH COMPOSITION ===")
     print(json.dumps(rec, indent=2))
     if args.no_window:
-        session.save(rec)
+        _persist(session, rec)
     return 0
 
 

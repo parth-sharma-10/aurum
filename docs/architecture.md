@@ -14,15 +14,22 @@ flowchart LR
     CNT --> REC[Batch record JSON<br/>data/batches/]
     W[HX711 load cell<br/>or SIMULATED] -.-> REC
     CNT --> UI[OpenCV dashboard]
-    REC --> API[FastAPI]
-    API --> DB[(SQLite ledger)]
-    DB --> WEB[React dashboard<br/>closed batches only]
+    REC --> LED[app/ledger.py<br/>single INSERT]
+    API[FastAPI] --> LED
+    LED --> DB[(SQLite ledger)]
+    DB --> WEB[React dashboard]
+    DB -.-> VAL[Recovery -> Pricing<br/>DISABLED: no cited data]
 ```
 
-**The two persistence paths do not meet.** Saving from the OpenCV demo writes a
-JSON file and nothing else; only `POST /batch/{id}/close` writes the SQLite
-ledger. A batch saved on stage will not appear in `/batches`, `/stats` or the
-React dashboard.
+**Both save paths meet at `app/ledger.py`.** The demo's `S` key and
+`POST /batch/{id}/close` call the same `save()`, so a batch saved on stage
+appears in `/batches`, `/stats` and the React dashboard. There is one `INSERT`
+in the codebase and a test fails if a second appears.
+
+The dotted branch is built but inert: `app/batch.recovery_estimate` and
+`app/pricing.value_recovery` return explicit refusals until
+`configs/recovery_reference.yaml` and `configs/price_reference.yaml` are given
+cited figures.
 
 The dashed line matters: mass is optional and, when no load cell is attached,
 the reading is flagged `simulated: true` and rendered as **SIMULATED SENSOR**.
@@ -48,7 +55,10 @@ app/
   demo.py        Frame sources (webcam / video / images) and the key loop.
   batch.py       Batch composition + the recovery-estimate guard.
   weight.py      HX711 backend, or a clearly-labelled simulation.
-  api.py         FastAPI endpoints + SQLite persistence + /stats aggregates.
+  ledger.py      Every read and write of the SQLite store. One INSERT.
+  pricing.py     Price providers and estimated_quantity x price. Disabled by
+                 default; no price data ships.
+  api.py         FastAPI endpoints. Holds no SQL of its own.
 
 frontend/
   src/App.jsx    Header, metric row, ledger table, batch-record modal.

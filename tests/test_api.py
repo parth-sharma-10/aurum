@@ -20,6 +20,7 @@ from PIL import Image
 
 from app import api as api_mod
 from app import batch as batch_mod
+from app import ledger as ledger_mod
 from app.detector import Detection, FrameResult
 
 
@@ -62,7 +63,7 @@ def client(tmp_path, monkeypatch):
     on a machine that happens to have trained weights and fail on one that does
     not — which is precisely what happened the first time CI ran them.
     """
-    monkeypatch.setattr(api_mod, "DB", tmp_path / "batches.db")
+    monkeypatch.setattr(ledger_mod, "DB", tmp_path / "batches.db")
     monkeypatch.setattr(batch_mod, "BATCH_DIR", tmp_path / "batches")
 
     weights = tmp_path / "aurum_vision_v0_1_best.pt"
@@ -142,7 +143,7 @@ class TestBatchLifecycle:
         assert listed["count"] == 1
         assert client.get(f"/batches/{bid}").json()["batch_id"] == bid
 
-        with closing(sqlite3.connect(api_mod.DB)) as con:
+        with closing(sqlite3.connect(ledger_mod.DB)) as con:
             rows = con.execute("SELECT batch_id FROM batches").fetchall()
         assert [r[0] for r in rows] == [bid]
 
@@ -279,7 +280,7 @@ class TestCORS:
 class TestMissingModel:
     def test_health_reports_model_missing_when_weights_absent(self, tmp_path, monkeypatch):
         """A service started before training must say so, not crash obscurely."""
-        monkeypatch.setattr(api_mod, "DB", tmp_path / "b.db")
+        monkeypatch.setattr(ledger_mod, "DB", tmp_path / "b.db")
         monkeypatch.setattr(api_mod, "DEFAULT_WEIGHTS", tmp_path / "absent.pt")
         monkeypatch.setattr(api_mod, "_detector", None)
         with TestClient(api_mod.app) as c:
@@ -288,7 +289,7 @@ class TestMissingModel:
         assert r.json()["status"] == "model_missing"
 
     def test_detect_returns_503_when_weights_absent(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(api_mod, "DB", tmp_path / "b.db")
+        monkeypatch.setattr(ledger_mod, "DB", tmp_path / "b.db")
         monkeypatch.setattr(api_mod, "DEFAULT_WEIGHTS", tmp_path / "absent.pt")
         monkeypatch.setattr(api_mod, "_detector", None)
         with TestClient(api_mod.app) as c:

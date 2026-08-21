@@ -13,9 +13,8 @@ from __future__ import annotations
 
 import io
 import json
-import sqlite3
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, closing
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import cv2
@@ -24,19 +23,19 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
+from app import ledger, pricing
 from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
 from app.weight import get_weight_source
 
 ROOT = Path(__file__).resolve().parent.parent
-DB = ROOT / "data" / "aurum_batches.db"
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Create the batch ledger before the first request is served."""
-    init_db()
+    ledger.init_db()
     yield
 
 
@@ -73,24 +72,6 @@ def detector() -> AurumDetector:
         _detector = AurumDetector(DEFAULT_WEIGHTS)
         _detector.warmup()
     return _detector
-
-
-def init_db() -> None:
-    DB.parent.mkdir(parents=True, exist_ok=True)
-    with closing(sqlite3.connect(DB)) as con:
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS batches (
-                batch_id       TEXT PRIMARY KEY,
-                created_at     TEXT NOT NULL,
-                model_version  TEXT NOT NULL,
-                total_objects  INTEGER NOT NULL,
-                avg_confidence REAL NOT NULL,
-                weight_grams   REAL,
-                weight_simulated INTEGER,
-                record_json    TEXT NOT NULL
-            )
-        """)
-        con.commit()
 
 
 def _rel(p: Path) -> str:
@@ -202,76 +183,24 @@ def batch_close(batch_id: str, weight_mode: str = "off", hx711_port: str | None 
     wsrc = get_weight_source(weight_mode, hx711_port) if weight_mode != "off" else None
     rec = s.record(d.model_version, wsrc.read().as_dict() if wsrc else None, source="api")
     s.save(rec)
-
-    w = rec.get("weight") or {}
-    with closing(sqlite3.connect(DB)) as con:
-        con.execute(
-            "INSERT OR REPLACE INTO batches VALUES (?,?,?,?,?,?,?,?)",
-            (
-                rec["batch_id"],
-                rec["timestamp"],
-                rec["model_version"],
-                rec["total_objects"],
-                rec["average_confidence"],
-                w.get("grams"),
-                int(bool(w.get("simulated"))) if w else None,
-                json.dumps(rec),
-            ),
-        )
-        con.commit()
+    ledger.save(rec)
     return rec
 
 
 @app.get("/stats")
 def stats() -> dict:
-    """Aggregates over the stored ledger, computed in SQL.
+    """Aggregates over the stored ledger. See app.ledger.aggregates for the SQL.
 
-    Mass is reported as two separate totals rather than one. Aurum's weight
-    input is either a real HX711 reading or a labelled simulation, and summing
-    the two would produce a figure that reads as measured. Only a row that
-    explicitly recorded `weight_simulated = 0` counts as measured, so a record
-    with missing provenance falls on the cautious side instead of inflating the
-    measured number.
+    `bin_breakdown` is empty by fact rather than omission, and stays that way
+    until an actuator exists to fill it.
     """
-    with closing(sqlite3.connect(DB)) as con:
-        con.row_factory = sqlite3.Row
-        totals = con.execute(
-            "SELECT COUNT(*) AS batches, COALESCE(SUM(total_objects), 0) AS objects FROM batches"
-        ).fetchone()
-        weights = con.execute("""
-            SELECT weight_simulated = 0 AS measured,
-                   COALESCE(SUM(weight_grams), 0) AS grams,
-                   COUNT(*) AS n
-            FROM batches
-            WHERE weight_grams IS NOT NULL
-            GROUP BY weight_simulated = 0
-        """).fetchall()
-        # Per-class counts live inside the stored record, not in a column.
-        # json_each does the summation in SQLite rather than deserializing every
-        # record in Python to add up four integers.
-        components = con.execute("""
-            SELECT d.key AS component, SUM(CAST(d.value AS INTEGER)) AS n
-            FROM batches, json_each(batches.record_json, '$.detections') AS d
-            GROUP BY d.key
-            ORDER BY n DESC
-        """).fetchall()
-
-    weight = {"measured_grams": 0.0, "simulated_grams": 0.0, "batches_with_weight": 0}
-    for row in weights:
-        weight["measured_grams" if row["measured"] else "simulated_grams"] = round(
-            float(row["grams"]), 1
-        )
-        weight["batches_with_weight"] += row["n"]
-    weight["note"] = (
+    agg = ledger.aggregates()
+    agg["total_weight"]["note"] = (
         "Simulated grams come from a labelled stand-in for the HX711 load cell "
         "and are not physical measurements."
     )
-
     return {
-        "batch_count": totals["batches"],
-        "total_count": totals["objects"],
-        "total_weight": weight,
-        "component_breakdown": {r["component"]: int(r["n"]) for r in components},
+        **agg,
         "bin_breakdown": {},
         "bin_breakdown_note": (
             "Aurum does not implement physical bin routing or servo actuation. No "
@@ -283,19 +212,36 @@ def stats() -> dict:
 
 @app.get("/batches")
 def list_batches(limit: int = 50) -> dict:
-    with closing(sqlite3.connect(DB)) as con:
-        con.row_factory = sqlite3.Row
-        rows = con.execute(
-            "SELECT * FROM batches ORDER BY created_at DESC LIMIT ?", (limit,)
-        ).fetchall()
-    return {"count": len(rows), "batches": [json.loads(r["record_json"]) for r in rows]}
+    records = ledger.recent(limit)
+    return {"count": len(records), "batches": records}
 
 
 @app.get("/batches/{batch_id}")
 def get_batch(batch_id: str) -> dict:
-    with closing(sqlite3.connect(DB)) as con:
-        con.row_factory = sqlite3.Row
-        row = con.execute("SELECT * FROM batches WHERE batch_id=?", (batch_id,)).fetchone()
-    if row is None:
+    record = ledger.get(batch_id)
+    if record is None:
         raise HTTPException(404, f"No batch {batch_id}")
-    return json.loads(row["record_json"])
+    return record
+
+
+@app.get("/batches/{batch_id}/valuation")
+def batch_valuation(batch_id: str) -> dict:
+    """Estimated value of a stored batch, priced at request time.
+
+    Not stored on the record and not part of `/batches`: a price is
+    time-varying external data, so baking one into a batch would make the record
+    silently wrong the next day. The quote's own source and timestamp travel
+    with the result instead.
+
+    Returns `available: false` with a reason whenever recovery estimation or the
+    price source is unconfigured, which is the current shipped state.
+    """
+    record = ledger.get(batch_id)
+    if record is None:
+        raise HTTPException(404, f"No batch {batch_id}")
+    return {
+        "batch_id": batch_id,
+        "detected_components": record.get("detections", {}),
+        "recovery_estimate": record.get("recovery_estimate", {}),
+        "valuation": pricing.value_recovery(record.get("recovery_estimate", {})),
+    }

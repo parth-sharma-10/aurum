@@ -25,10 +25,15 @@ basis: >
   recovery yields. Not a measurement of the batch's actual metal content.
 
 per_component: {}
-  # Example of the required shape — replace with cited values:
+  # Example of the required shape — replace with cited values. `material`,
+  # `unit` and `source` are all mandatory: an entry missing any of them is
+  # treated as absent rather than partially used, because it can be neither
+  # priced nor audited. `unit` must be a bare unit ("g"), not prose, since
+  # app/pricing.py matches it against the price's unit and refuses to convert.
   #
   # RAM:
+  #   material: gold
   #   value: 0.0
-  #   unit: "g gold per module"
+  #   unit: "g"
   #   source: "<author, title, year, DOI/URL>"
   #   notes: "<which module generation the figure applies to>"

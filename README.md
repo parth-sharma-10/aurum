@@ -9,7 +9,7 @@ invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-157%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-186%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
 
 > **The weights are a release asset, not a tracked file.** `models/*.pt` is
 > gitignored, so a fresh clone has no model until you download one. One command
@@ -308,12 +308,16 @@ This is worth being explicit about, because the two do not currently meet:
 
 | Path | Writes JSON to `data/batches/` | Writes the SQLite ledger |
 |---|---|---|
-| OpenCV demo (`S` key, or `--no-window`) | **yes** | **no** |
-| API (`POST /batch/{id}/close`) | **yes** | **yes** (`data/aurum_batches.db`) |
+| OpenCV demo (`S` key, or `--no-window`) | **yes** | **yes** |
+| API (`POST /batch/{id}/close`) | **yes** | **yes** |
 
-**The OpenCV demo does not write to SQLite.** A batch saved from the live demo
-exists only as a JSON file, and will not appear in `/batches`, `/stats`, or the
-React dashboard. Only batches closed through the API reach the ledger.
+Both go through the single `save()` in `app/ledger.py` — there is one `INSERT`
+in the codebase, and a test fails if a second appears. A batch saved on stage
+shows up in `/batches`, `/stats` and the browser dashboard within one poll.
+
+If the ledger write fails (a locked database, say) the demo prints a warning and
+keeps going: the JSON is already on disk, and a persistence hiccup should not
+end a presentation.
 
 The `batches` table is flat — `batch_id`, `created_at` (the *close* timestamp),
 `model_version`, `total_objects`, `avg_confidence`, `weight_grams`,
@@ -338,6 +342,7 @@ python -m uvicorn app.api:app --reload      # interactive docs at /docs
 | `GET` | `/batches` | Stored records, newest first, `?limit=` (default 50) |
 | `GET` | `/batches/{id}` | One stored record |
 | `GET` | `/stats` | Ledger aggregates, computed in SQL |
+| `GET` | `/batches/{id}/valuation` | Estimated value of a stored batch, priced at request time. **Currently always unavailable** — see below |
 
 Unknown batch ids return **404**; empty or undecodable uploads return **400**;
 every endpoint that needs the model returns **503** when weights are absent.
@@ -442,18 +447,44 @@ measurement"`, renders as **SIMULATED SENSOR** in the OpenCV dashboard, badges
 **it has never been run against physical hardware**, and no Arduino sketch is
 included in this repository. A class existing is not a working load cell.
 
-## Recovery estimation — disabled
+## Recovery and valuation — both disabled, and why
 
-`configs/recovery_reference.yaml` ships with `enabled: false` and zero yield
-entries, so `recovery_estimate` in every batch record returns
-`{"available": false, "reason": ...}` and emits **no numeric field at all**.
+The chain past detection is built but carries no data:
 
-The mechanism is counts × published reference yields. Enabling it requires
-per-component figures with real citations, and none were available at the time
-of writing — so none were invented. A plausible-looking number with nothing
-behind it is worse than no number, because it gets quoted. Tests in
-`tests/test_batch.py` and `tests/test_api.py` assert that no numeric value
-leaks while it is disabled.
+```
+detected components   ← the only measured thing here
+      ↓  × published reference yield   (configs/recovery_reference.yaml)
+estimated recovery    ← ESTIMATE
+      ↓  × price per unit              (configs/price_reference.yaml)
+estimated value       ← ESTIMATE of an ESTIMATE
+```
+
+**Both config files ship empty and disabled**, so `recovery_estimate` returns
+`{"available": false, "reason": ...}` with **no numeric field at all**, and
+`/batches/{id}/valuation` returns an explicit refusal. Enabling either requires
+figures with real citations, and none were available — so none were invented. A
+plausible-looking number with nothing behind it is worse than no number, because
+it gets quoted and outlives the conversation that qualified it.
+
+Every batch record names three different quantities so they cannot be confused:
+
+| Field | Meaning |
+|---|---|
+| `detected_components` | what the model counted — measured, by the model |
+| `components[].total` | count × reference yield — an **estimate** |
+| `measured_material` | **always unavailable.** Aurum has no assay or XRF |
+
+Valuation is computed at request time, never stored on the record: a metal price
+is time-varying external data, so baking one into a batch would make the record
+silently wrong the next day. Each priced line carries the quote's material,
+unit, currency, timestamp and source, plus a `calculation_version`.
+
+`app/pricing.py` refuses rather than guesses — no provider, a material it cannot
+quote, a unit mismatch (grams priced per troy ounce would be wrong by 31× and
+look plausible), or mixed currencies all produce `available: false`.
+
+**PMDI is not implemented and no formula for it exists in this repository.** It
+is named only in the capability table below. Nothing computes it.
 
 ## What is and is not implemented
 
@@ -473,9 +504,10 @@ leaks while it is disabled.
 | HX711 serial class | **exists, never verified against hardware** |
 | Arduino integration / sketch | **not implemented** |
 | Servo sorting, physical routing, bin actuation | **not implemented** |
-| Material / recovery estimation | **not implemented** (mechanism present, disabled) |
+| Material / recovery estimation | **not implemented** — mechanism and interfaces present, disabled, no cited yields |
+| Valuation / pricing | **not implemented** — provider interface present, disabled, no price source |
 | PMDI | **not implemented** |
-| Valuation, pricing, carbon figures | **not implemented** |
+| Carbon figures | **not implemented** |
 | Object tracking across frames | **not implemented** |
 | Cyber-physical state machine | **not implemented** |
 | Live camera stream in the browser | **not implemented** |
@@ -483,12 +515,12 @@ leaks while it is disabled.
 ## Project structure
 
 ```
-app/         Runtime: detector, dashboard, demo loop, batch logic, weight, API
+app/         Runtime: detector, dashboard, demo loop, batch, weight, ledger, pricing, API
 frontend/    React/Vite browser view of the ledger (reads the API only)
 ml/          Pipeline: ingest → prepare → validate → train → evaluate → realworld → assets
-configs/     Label map, pinned datasets, recovery reference (disabled)
+configs/     Label map, pinned datasets, recovery + price references (both disabled)
 scripts/     Doc generators, training monitor, external-image fetcher, Universe search
-tests/       157 tests
+tests/       186 tests
 docs/        dataset · training · evaluation · model-card · architecture · demo
 reports/     Generated metrics, figures and validation output
 models/      Training metadata (tracked) + weights (gitignored, released separately)
@@ -504,7 +536,7 @@ the recovery-estimate guard), `app/api.py` (HTTP surface and `/stats`).
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q                  # 157 tests
+python -m pytest -q                  # 186 tests
 ruff check . && ruff format --check .
 
 cd frontend && npm run build         # static bundle to frontend/dist/
