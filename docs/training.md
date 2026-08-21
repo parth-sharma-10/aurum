@@ -97,24 +97,30 @@ Transfer learning from COCO-pretrained `yolo11n.pt` — nothing trains from
 scratch. Configuration is by environment variable so a second developer changes
 nothing in the source:
 
+The defaults **are** the v0.1 release configuration (`RELEASE_CONFIG` in
+`ml/train.py`, read back from the released checkpoint's own `train_args`), so
+`python -m ml.train` targets the model the published metrics describe. Every
+value is still overridable:
+
 | Variable | Default | Notes |
 |---|---|---|
 | `AURUM_MODEL` | `yolo11n.pt` | nano; `yolo11s.pt` if you have the compute |
-| `AURUM_EPOCHS` | `100` | |
-| `AURUM_IMGSZ` | `640` | |
-| `AURUM_BATCH` | `16` | |
-| `AURUM_PATIENCE` | `25` | early stop |
-| `AURUM_SEED` | `1337` | |
+| `AURUM_EPOCHS` | `50` | release configuration |
+| `AURUM_IMGSZ` | `512` | release configuration |
+| `AURUM_BATCH` | `32` | release configuration |
+| `AURUM_PATIENCE` | `15` | early stop; release configuration |
+| `AURUM_SEED` | `1337` | release configuration |
 | `AURUM_DEVICE` | auto | `mps`, `0`, `cpu` |
-| `AURUM_WORKERS` | `8` | |
+| `AURUM_WORKERS` | `8` | dataloader only; does not change the weights |
 | `AURUM_RUN` | `aurum_vision_v0_1` | run directory name |
 
-The v0.1 release run:
+The release run itself was resumed from a checkpoint partway through, so it
+recorded `workers: 0`. That is a loader setting, not a result-affecting one, and
+it is the reason `AURUM_WORKERS` is not part of `RELEASE_CONFIG`.
 
-```bash
-AURUM_EPOCHS=50 AURUM_BATCH=32 AURUM_IMGSZ=512 \
-AURUM_WORKERS=4 AURUM_PATIENCE=15 python -m ml.train
-```
+`tests/test_detector.py::TestReleaseTrainingDefaults` pins these against
+`models/aurum_vision_v0_1_meta.json`, so the code and the shipped model cannot
+drift apart again silently.
 
 512 px rather than 640 was a deliberate trade. The targets in this application
 are large in frame — a RAM module held up to a bench camera — so the accuracy
@@ -174,7 +180,7 @@ export ROBOFLOW_API_KEY="…"
 python -m ml.ingest
 python -m ml.prepare
 python -m ml.validate            # must pass before training
-AURUM_EPOCHS=50 AURUM_BATCH=32 AURUM_IMGSZ=512 python -m ml.train
+python -m ml.train               # defaults are the release configuration
 python -m ml.evaluate
 python -m ml.assets
 python scripts/gen_data_sources.py

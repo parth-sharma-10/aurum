@@ -15,6 +15,8 @@
 | Input size | 512 px |
 | Trained | 2026-08-16 17:38:03 UTC |
 | Weights | `models/aurum_vision_v0_1_best.pt` |
+| Artifact SHA-256 | `cd1a3c2cd2c99c1ff5315c073f01fd236767b4425ee5d99598e6f8fedee312e9` |
+| Artifact size | 5,454,554 bytes |
 
 **What it does.** Identifies and counts four visible e-waste component categories in RGB imagery at webcam speed.
 

@@ -9,12 +9,11 @@ invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-144%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-157%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
 
-> **Before you clone with the intent to run it:** the trained weights are **not
-> in this repository** and there is no release asset to download. Detection,
-> the API and the dashboards all need `models/aurum_vision_v0_1_best.pt`, which
-> you must train yourself (~3 h) or obtain separately. See
+> **The weights are a release asset, not a tracked file.** `models/*.pt` is
+> gitignored, so a fresh clone has no model until you download one. One command
+> and a checksum: see
 > [Model weights](#model-weights-read-this-before-running-anything).
 
 ---
@@ -165,20 +164,45 @@ Per-dataset counts, licenses and attributions: [docs/dataset.md](docs/dataset.md
 
 ## Model weights — read this before running anything
 
-**Weights are not committed and are not downloadable from this repository.**
-`models/*.pt` is gitignored; there is no release asset and no published
-checksum binding a weights file to the metrics above. A fresh clone can run the
-test suite, the dataset pipeline and the doc generators, but **cannot run
-detection, the API, the OpenCV demo or the React dashboard** until
-`models/aurum_vision_v0_1_best.pt` exists.
+`models/*.pt` is gitignored — the weights are **not** in Git history. They are
+published as a release asset, identified by digest so the metrics above are
+bound to one exact file rather than to a filename.
 
-Two ways to get there:
+| | |
+|---|---|
+| Release | [`model-v0.1`](https://github.com/parth-sharma-10/aurum/releases/tag/model-v0.1) |
+| Asset | `aurum_vision_v0_1_best.pt` |
+| SHA-256 | `cd1a3c2cd2c99c1ff5315c073f01fd236767b4425ee5d99598e6f8fedee312e9` |
+| Size | 5,454,554 bytes |
+| Model version | Aurum Vision v0.1 |
 
-**1. Train it** (~3 h on an Apple M4). The v0.1 release configuration is *not*
-the default in `ml/train.py` — the defaults are 100 epochs / 640 px / batch 16,
-while the shipped model was trained at 50 / 512 / 32. Running bare
-`python -m ml.train` produces a **different model to which none of the published
-metrics apply.** Use the release configuration explicitly:
+### Download and verify
+
+```bash
+mkdir -p models
+curl -L -o models/aurum_vision_v0_1_best.pt \
+  https://github.com/parth-sharma-10/aurum/releases/download/model-v0.1/aurum_vision_v0_1_best.pt
+
+shasum -a 256 models/aurum_vision_v0_1_best.pt
+# cd1a3c2cd2c99c1ff5315c073f01fd236767b4425ee5d99598e6f8fedee312e9
+```
+
+The same digest is recorded in `models/aurum_vision_v0_1_meta.json` under
+`artifact.sha256` and in `docs/model-card.md`. If your download disagrees with
+those, the file is not the model the reports describe — do not use it.
+
+Then run anything:
+
+```bash
+python run_demo.py --mode images --path <a folder of photos>
+python -m uvicorn app.api:app --reload
+```
+
+### Or rebuild it from scratch
+
+`ml/train.py`'s defaults **are** the release configuration (50 epochs / 512 px /
+batch 32 / patience 15 / seed 1337), so no flags are needed and a rebuild
+targets the same model the published metrics describe:
 
 ```bash
 cp env.example .env                # add your free Roboflow API key
@@ -186,12 +210,15 @@ export ROBOFLOW_API_KEY="..."
 python -m ml.ingest                # download the 6 source datasets
 python -m ml.prepare               # normalize, deduplicate, split
 python -m ml.validate              # prove the split is leak-free (gates training)
-AURUM_EPOCHS=50 AURUM_BATCH=32 AURUM_IMGSZ=512 \
-  AURUM_WORKERS=4 AURUM_PATIENCE=15 python -m ml.train
+python -m ml.train                 # ~3 h on an Apple M4
 python -m ml.evaluate
 ```
 
-**2. Obtain an existing `aurum_vision_v0_1_best.pt`** and drop it in `models/`.
+A retrained model will not be byte-identical — GPU non-determinism sees to that
+— so `ml/train.py` records the digest of whatever it produced into
+`models/aurum_vision_v0_1_meta.json`. Compare your `reports/test_metrics.json`
+against the published one rather than expecting the same hash.
+
 Inference resolution is read from the checkpoint, so a model trained at another
 size will infer at that size rather than silently at 640.
 
@@ -461,10 +488,10 @@ frontend/    React/Vite browser view of the ledger (reads the API only)
 ml/          Pipeline: ingest → prepare → validate → train → evaluate → realworld → assets
 configs/     Label map, pinned datasets, recovery reference (disabled)
 scripts/     Doc generators, training monitor, external-image fetcher, Universe search
-tests/       144 tests
+tests/       157 tests
 docs/        dataset · training · evaluation · model-card · architecture · demo
 reports/     Generated metrics, figures and validation output
-models/      Weights + training metadata (weights gitignored, not distributed)
+models/      Training metadata (tracked) + weights (gitignored, released separately)
 data/        Datasets, batch JSON and the SQLite ledger (all gitignored)
 run_demo.py  One-command demo entry point
 ```
@@ -477,7 +504,7 @@ the recovery-estimate guard), `app/api.py` (HTTP surface and `/stats`).
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q                  # 144 tests
+python -m pytest -q                  # 157 tests
 ruff check . && ruff format --check .
 
 cd frontend && npm run build         # static bundle to frontend/dist/
@@ -517,18 +544,14 @@ figure.
   can undercount; the median window suppresses flicker, not occlusion.
 - **Small test set.** Per-class figures rest on tens of instances. Treat
   differences of a few points as noise.
-- **Weights are not distributed with the repository**, so a fresh clone is not
-  runnable end to end.
+- **Weights are a separate download.** A clone is not runnable until the
+  release asset is fetched; the checksum above is what makes that safe.
 - **Prototype.** No claim is made about sustained field accuracy or throughput.
 
 ## Roadmap
 
 Realistic next steps, none of which are implemented:
 
-- Publish the weights as a release asset with a checksum, so the metrics above
-  are bound to a specific file.
-- Make `ml/train.py`'s defaults the release configuration, so
-  `python -m ml.train` reproduces the documented model.
 - Collect and annotate images on an actual collection bench to close the domain
   gap the external evaluation exposes.
 - Object tracking across frames so counts survive occlusion.

@@ -56,6 +56,12 @@ def main() -> int:
     add(f"| Input size | {meta.get('image_size', '—')} px |")
     add(f"| Trained | {meta.get('trained_at', '—')} |")
     add(f"| Weights | `{meta.get('weights', 'models/aurum_vision_v0_1_best.pt')}` |")
+    art = meta.get("artifact") or {}
+    if art.get("sha256"):
+        # The digest is what ties every metric below to one specific file. A
+        # filename does not: two runs produce the same name and different weights.
+        add(f"| Artifact SHA-256 | `{art['sha256']}` |")
+        add(f"| Artifact size | {art['size_bytes']:,} bytes |")
     add("")
 
     add(
