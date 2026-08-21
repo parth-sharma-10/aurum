@@ -180,6 +180,102 @@ class TestBatchLifecycle:
         assert "SIMULATED" in rec["weight"]["warning"]
 
 
+def _closed_batch(client, weight_mode="off"):
+    bid = client.post("/batch/start").json()["batch_id"]
+    client.post(f"/batch/{bid}/frame", files={"file": ("x.png", png_bytes(), "image/png")})
+    client.post(f"/batch/{bid}/close?weight_mode={weight_mode}")
+    return bid
+
+
+class TestStats:
+    """The aggregate the browser dashboard reads.
+
+    Its job is to stay inside what the ledger actually recorded: counts and
+    mass that exist, an empty bin breakdown because routing is not implemented,
+    and simulated mass kept apart from measured mass so a UI cannot add them
+    into one number that reads as a measurement.
+    """
+
+    def test_empty_ledger_reports_zeros_not_nulls(self, client):
+        body = client.get("/stats").json()
+        assert body["batch_count"] == 0
+        assert body["total_count"] == 0
+        assert body["total_weight"]["measured_grams"] == 0.0
+        assert body["total_weight"]["simulated_grams"] == 0.0
+        assert body["component_breakdown"] == {}
+
+    def test_counts_aggregate_across_batches(self, client):
+        _closed_batch(client)
+        _closed_batch(client)
+        body = client.get("/stats").json()
+        assert body["batch_count"] == 2
+        assert body["total_count"] == 4  # the stub detects PCB + RAM per frame
+
+    def test_component_breakdown_comes_from_the_stored_records(self, client):
+        """Every class the record names, including the ones counted zero.
+
+        A class that was looked for and not found is evidence; dropping it would
+        make an absent component indistinguishable from an unsupported one.
+        """
+        _closed_batch(client)
+        body = client.get("/stats").json()
+        assert body["component_breakdown"] == {"PCB": 1, "RAM": 1, "CPU": 0, "Connector": 0}
+
+    def test_simulated_mass_is_never_added_to_measured_mass(self, client):
+        _closed_batch(client, weight_mode="simulated")
+        w = client.get("/stats").json()["total_weight"]
+        assert w["simulated_grams"] > 0
+        assert w["measured_grams"] == 0.0
+        assert w["batches_with_weight"] == 1
+        assert "not physical measurements" in w["note"]
+
+    def test_batches_without_a_reading_are_not_counted_as_weighed(self, client):
+        _closed_batch(client, weight_mode="off")
+        w = client.get("/stats").json()["total_weight"]
+        assert w["batches_with_weight"] == 0
+        assert w["simulated_grams"] == 0.0
+
+    def test_bin_breakdown_is_empty_because_routing_does_not_exist(self, client):
+        """Guard against a bin field appearing before an actuator does."""
+        _closed_batch(client, weight_mode="simulated")
+        body = client.get("/stats").json()
+        assert body["bin_breakdown"] == {}
+        assert "does not implement physical bin routing" in body["bin_breakdown_note"]
+
+    def test_stats_exposes_no_valuation_or_recovery_figure(self, client):
+        _closed_batch(client, weight_mode="simulated")
+        blob = client.get("/stats").text.lower()
+        for forbidden in ("value", "price", "gold_g", "recovery_g", "carbon", "pmdi"):
+            assert forbidden not in blob
+
+
+class TestCORS:
+    """Only the Vite dev origin may read this service, and only by reading."""
+
+    def test_dev_origin_is_allowed(self, client):
+        r = client.get("/stats", headers={"Origin": "http://localhost:5173"})
+        assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+    def test_unknown_origin_gets_no_allow_header(self, client):
+        r = client.get("/stats", headers={"Origin": "https://evil.example"})
+        assert "access-control-allow-origin" not in r.headers
+
+    def test_credentials_are_not_allowed(self, client):
+        r = client.get("/stats", headers={"Origin": "http://localhost:5173"})
+        assert "access-control-allow-credentials" not in r.headers
+
+    def test_preflight_refuses_a_write_method(self, client):
+        r = client.options(
+            "/batches",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "DELETE",
+            },
+        )
+        assert r.status_code == 400
+        assert r.headers.get("access-control-allow-methods") == "GET"
+
+
 class TestMissingModel:
     def test_health_reports_model_missing_when_weights_absent(self, tmp_path, monkeypatch):
         """A service started before training must say so, not crash obscurely."""

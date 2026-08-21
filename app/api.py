@@ -21,6 +21,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from app.batch import BatchSession
@@ -47,6 +48,17 @@ app = FastAPI(
         "and confidences. Does NOT measure precious-metal content."
     ),
     lifespan=lifespan,
+)
+
+# The browser dashboard in frontend/ is served by Vite on 5173 during
+# development, which is a different origin from this service. Only that origin
+# is allowed, only for reads, and without credentials: the API has no auth, so a
+# wildcard would let any page a developer visits read their local ledger.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
 )
 
 _detector: AurumDetector | None = None
@@ -208,6 +220,65 @@ def batch_close(batch_id: str, weight_mode: str = "off", hx711_port: str | None 
         )
         con.commit()
     return rec
+
+
+@app.get("/stats")
+def stats() -> dict:
+    """Aggregates over the stored ledger, computed in SQL.
+
+    Mass is reported as two separate totals rather than one. Aurum's weight
+    input is either a real HX711 reading or a labelled simulation, and summing
+    the two would produce a figure that reads as measured. Only a row that
+    explicitly recorded `weight_simulated = 0` counts as measured, so a record
+    with missing provenance falls on the cautious side instead of inflating the
+    measured number.
+    """
+    with closing(sqlite3.connect(DB)) as con:
+        con.row_factory = sqlite3.Row
+        totals = con.execute(
+            "SELECT COUNT(*) AS batches, COALESCE(SUM(total_objects), 0) AS objects FROM batches"
+        ).fetchone()
+        weights = con.execute("""
+            SELECT weight_simulated = 0 AS measured,
+                   COALESCE(SUM(weight_grams), 0) AS grams,
+                   COUNT(*) AS n
+            FROM batches
+            WHERE weight_grams IS NOT NULL
+            GROUP BY weight_simulated = 0
+        """).fetchall()
+        # Per-class counts live inside the stored record, not in a column.
+        # json_each does the summation in SQLite rather than deserializing every
+        # record in Python to add up four integers.
+        components = con.execute("""
+            SELECT d.key AS component, SUM(CAST(d.value AS INTEGER)) AS n
+            FROM batches, json_each(batches.record_json, '$.detections') AS d
+            GROUP BY d.key
+            ORDER BY n DESC
+        """).fetchall()
+
+    weight = {"measured_grams": 0.0, "simulated_grams": 0.0, "batches_with_weight": 0}
+    for row in weights:
+        weight["measured_grams" if row["measured"] else "simulated_grams"] = round(
+            float(row["grams"]), 1
+        )
+        weight["batches_with_weight"] += row["n"]
+    weight["note"] = (
+        "Simulated grams come from a labelled stand-in for the HX711 load cell "
+        "and are not physical measurements."
+    )
+
+    return {
+        "batch_count": totals["batches"],
+        "total_count": totals["objects"],
+        "total_weight": weight,
+        "component_breakdown": {r["component"]: int(r["n"]) for r in components},
+        "bin_breakdown": {},
+        "bin_breakdown_note": (
+            "Aurum does not implement physical bin routing or servo actuation. No "
+            "stored record carries a bin assignment, so this is empty by fact, not "
+            "by omission."
+        ),
+    }
 
 
 @app.get("/batches")

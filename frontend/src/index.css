@@ -1,0 +1,404 @@
+/* Aurum web dashboard.
+ *
+ * The palette is not chosen here — it is converted from the BGR constants in
+ * app/dashboard.py so the browser view and the OpenCV view are recognisably the
+ * same instrument. Change one and change the other.
+ *
+ * Badge roles are fixed and semantic, not decorative:
+ *   badge-a  identity        batch ids, model version
+ *   badge-b  measured/live   values backed by a real reading or a live service
+ *   badge-c  simulated/stale values that must never be read as measurements
+ */
+
+:root {
+  --bg: #0e1012;
+  --bg-card: #181b1e;
+  --bg-raised: #1f2327;
+  --rule: #30352c;
+  --hairline: rgba(255, 255, 255, 0.07);
+
+  --text: #eeeef0;
+  --muted: #91908f;
+  --faint: #6b6a68;
+
+  --gold: #d6af3c;
+  --emerald: #35c08a;
+  --amber: #f5b43c;
+  --red: #e14646;
+
+  /* Class colours, converted from CLASS_COLORS in app/dashboard.py. */
+  --cls-pcb: #5ac878;
+  --cls-ram: #3cafd6;
+  --cls-cpu: #f5965a;
+  --cls-connector: #dc78c8;
+
+  --radius: 12px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  /* Grid-lined ground, the way a bench surface or a schematic is ruled. */
+  background-image:
+    linear-gradient(var(--hairline) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hairline) 1px, transparent 1px);
+  background-size: 64px 64px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+/* --- panels ------------------------------------------------------------- */
+.glass-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  background-color: var(--bg-card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+/* --- header ------------------------------------------------------------- */
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+
+.wordmark {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  color: var(--gold);
+  margin: 0;
+}
+
+.tagline {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 2px 0 0;
+}
+
+/* --- badges ------------------------------------------------------------- */
+.badge-a,
+.badge-b,
+.badge-c {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  border: 1px solid;
+}
+
+.badge-a {
+  color: var(--gold);
+  border-color: rgba(214, 175, 60, 0.35);
+  background: rgba(214, 175, 60, 0.1);
+}
+
+.badge-b {
+  color: var(--emerald);
+  border-color: rgba(53, 192, 138, 0.35);
+  background: rgba(53, 192, 138, 0.1);
+}
+
+.badge-c {
+  color: var(--amber);
+  border-color: rgba(245, 180, 60, 0.35);
+  background: rgba(245, 180, 60, 0.1);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.badge-b .dot {
+  box-shadow: 0 0 0 3px rgba(53, 192, 138, 0.18);
+}
+
+/* --- metric row --------------------------------------------------------- */
+.metric-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.metric {
+  padding: 18px 20px;
+}
+
+.metric-label {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-unit {
+  font-size: 15px;
+  color: var(--faint);
+  margin-left: 4px;
+}
+
+.metric-foot {
+  margin-top: 10px;
+  min-height: 22px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.chip::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  margin-right: 5px;
+  background: var(--swatch, var(--gold));
+}
+
+/* --- ledger table ------------------------------------------------------- */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 18px 20px 12px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.section-note {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  padding: 0 8px 8px;
+}
+
+.ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-table th {
+  text-align: left;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+
+.ledger-table td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+}
+
+.ledger-table tbody tr {
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.ledger-table tbody tr:hover {
+  background: rgba(214, 175, 60, 0.06);
+}
+
+.ledger-table tbody tr:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: -1px;
+}
+
+.num {
+  text-align: right;
+}
+
+.empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--faint);
+}
+
+/* --- modal -------------------------------------------------------------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 7, 8, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 10;
+}
+
+.modal {
+  width: min(640px, 100%);
+  max-height: 84vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.close {
+  background: none;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+.close:hover {
+  color: var(--text);
+  border-color: var(--rule);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.field-label {
+  color: var(--muted);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.field-value {
+  font-family: var(--mono);
+  font-size: 14px;
+  margin-top: 3px;
+  word-break: break-word;
+}
+
+.notice {
+  border-left: 2px solid var(--amber);
+  background: rgba(245, 180, 60, 0.07);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 0 8px 8px 0;
+  font-size: 12.5px;
+  margin-bottom: 18px;
+}
+
+.notice.neutral {
+  border-left-color: var(--rule);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+}
+
+pre.record {
+  background: #101315;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 14px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: #c9c8c6;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.banner {
+  color: var(--red);
+  font-size: 12.5px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+}
+
+/* --- scrollbar ---------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2d3236;
+  border: 2px solid var(--bg);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3d4348;
+}
+
+* {
+  scrollbar-color: #2d3236 transparent;
+  scrollbar-width: thin;
+}
