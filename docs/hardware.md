@@ -1,0 +1,217 @@
+# Hardware
+
+What is physically built, what the software talks to, and what has actually
+been validated. The last distinction matters most: **software-tested is not
+physically validated**, and this document keeps them apart.
+
+## Wiring as built
+
+Bench-assembled and tested on 2026-08-22.
+
+| Signal | Arduino pin | Notes |
+|---|---|---|
+| HX711 `DOUT` | `D2` | data |
+| HX711 `SCK` | `D3` | clock |
+| HX711 `VCC` / `GND` | `5V` / `GND` | powered from the Arduino |
+| Servo A signal | `D9` | Physically present, bench-tested |
+| Servo B signal | `D10` | Physically present, bench-tested |
+
+**Serial: 115200 baud.**
+
+### Servo parameters — bench values, not final geometry
+
+| Servo | Pin | REST | PUSH | Hold |
+|---|---|---|---|---|
+| A | `D9` | 0 deg | 90 deg | 700 ms |
+| B | `D10` | 0 deg | 90 deg | 700 ms |
+
+These came from independent bench testing. They are **configurable engineering
+parameters**, not validated mechanical geometry — no paddle has ever deflected
+an item, because there is no belt for an item to travel on.
+
+### KNOWN DISCREPANCY — reconcile before the bench test
+
+`configs/conveyor.yaml` and `hardware/arduino/aurum_weight/aurum_weight.ino`
+both use **9600** baud. The hardware runs at **115200**. They must agree or
+the link produces garbage. Deliberately left unchanged at checkpoint rather
+than edited without a board to test against. **First action next session.**
+
+### Power
+
+- Servos are powered from an **external AKSHA 5 V / 3 A supply**.
+- The Arduino ground and the servo-supply ground are **deliberately common**.
+- The external **+5 V rail is NOT connected to the Arduino +5 V pin**.
+
+Do not change this. An earlier setup attempt caused a high-current short that
+melted jumper wires; the arrangement above is the corrected, working one.
+
+The Phase 5 sketch does not reference the servo pins at all. Keeping actuation
+out of the sketch that runs during weighing means a bug in the weight path
+cannot move anything physical — **use it for calibration.**
+
+**NO PHYSICAL CONVEYOR CURRENTLY EXISTS.** There is no belt, no motor and no
+frame. Every routing time in this project comes from the simulated profile.
+
+## Firmware
+
+`hardware/arduino/aurum_weight/aurum_weight.ino` — **weight only**.
+
+No external HX711 library: the part is two pins and a shift register, and the
+bit-banged read is shorter than the dependency would be.
+
+### Serial protocol
+
+One line per sample, at 10 Hz:
+
+```
+W,<version>,<board_millis>,<raw_counts>,<status>
+```
+
+for example `W,1,10432,-261605,OK`.
+
+| Field | Meaning |
+|---|---|
+| `W` | Weight frame. The only frame type in this phase. |
+| `version` | Protocol version. Currently `1`. A different version is dropped. |
+| `board_millis` | `millis()` on the Arduino, for ordering and drift checks. |
+| `raw_counts` | **Raw 24-bit HX711 counts. Never grams.** |
+| `status` | `OK`, or `ERR` when the cell did not become ready. |
+
+Python drops any line that is not well-formed and `OK`. A bare number is
+rejected too: it could be counts or grams, and guessing which is exactly the
+assumption this project refuses to make. A failed read emits `ERR` with a zero
+count rather than repeating the last good value, so a stuck cell reads as
+absent and never as a mass.
+
+**Raw counts, because calibration belongs in Python.** A calibration factor is
+measured, auditable data. In `configs/calibration.yaml` it sits in version
+control next to the workflow that produced it and the second known mass that
+verified it. Compiled into firmware it is a number nobody can check.
+
+## Calibration
+
+```
+empty pan -> tare -> known mass -> factor -> SECOND known mass -> verified
+```
+
+```
+python -m app.calibrate --port COM3 --reference-mass 180 --verify-mass 100
+```
+
+**Two masses, not one.** A single reference mass proves the cell responds and
+lets you compute a factor, but it cannot tell you whether the factor is right —
+the mass you derived it from will always read back correctly. A second,
+different mass is the only thing that catches a wrong factor, a non-linear
+cell, or a tare taken with something still on the pan. The workflow refuses if
+both masses are the same.
+
+`verified` becomes true only when the prediction for the second mass lands
+within `--tolerance` (default **0.1 g**, an engineering approximation, not
+research-derived).
+
+### Current state: NOT CALIBRATED
+
+`configs/calibration.yaml` ships `UNMEASURED`.
+
+A bench experiment on 2026-08-22 with a 180 g reference mass produced roughly
+**361.9 counts/g** (empty ≈ −261 600 counts, loaded ≈ −196 470). That is
+evidence the hardware responds correctly and is recorded in the file's notes.
+**It is not a calibration:** it was not produced by this workflow, and it was
+never checked against a second known mass. The software therefore continues to
+report `UNMEASURED`, and no reading can reach `MEASURED` until the workflow is
+run on the machine.
+
+## Weight states
+
+| Status | Meaning | Usable for a metal estimate? |
+|---|---|---|
+| `RAW` | One unfiltered sample. | No |
+| `UNSTABLE` | Still moving beyond `stability_tolerance_g`. | No |
+| `STABLE` | Settled, but on an **unverified** calibration. | No |
+| `SIMULATED` | From the labelled simulation. | No |
+| `MEASURED` | Settled, on a **verified** calibration, real hardware. | **Yes** |
+| `UNAVAILABLE` | Uncalibrated, timed out, disconnected, or bad data. | No |
+
+`app/materials.py` accepts only `MEASURED` for concentration-based estimates.
+A PCB weighed on an unverified calibration therefore produces no metal figure —
+it routes to Bin C instead, which is the correct fail-closed behaviour.
+
+The first reading is never accepted: a cell settles, a belt vibrates, and a
+hand leaving the pan takes a moment, so whichever number arrives first is the
+least trustworthy in the series. Samples pass through a **median** filter
+(mean would smear a spike in), then a stability window.
+
+**Zero grams is a valid measurement.** An empty pan after tare weighs nothing,
+and that is a real reading — never confused with an absent one.
+
+## What has actually been validated
+
+| Item | Status |
+|---|---|
+| HX711 hardware response | **VERIFIED** — 180 g moved the reading by ~65 000 counts |
+| Initial calibration experiment | **VERIFIED** — factor ≈ 361.9 counts/g derived |
+| **Final calibration validation** | **NOT VERIFIED** — no independent second-mass check |
+| Servo A movement (D9) | **BENCH VERIFIED**, independently, outside this software |
+| Servo B movement (D10) | **BENCH VERIFIED**, independently, outside this software |
+| Corrected power wiring | **WORKING** after the earlier short |
+| Aurum weight sketch on the board | **NOT tested** — never uploaded |
+| **Python ↔ Arduino communication** | **NOT VERIFIED** — never run |
+| Servo moved by Aurum code | **NEVER** |
+| Calibration workflow end to end | **NOT run** on hardware |
+| Physical conveyor | **DOES NOT EXIST** |
+| Conveyor motion, belt speed, distances | **NOT measured** |
+
+### The five levels, kept apart
+
+`SOFTWARE-TESTED` · `SIMULATION-VERIFIED` · `HARDWARE-BENCH-VERIFIED` ·
+`PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
+
+Aurum currently reaches level 3 for the servos and the HX711, level 2 for
+routing, and **level 4 and 5 for nothing at all.**
+
+Everything in the "NOT" rows is software-tested against a scripted reader and
+nothing more.
+
+
+## Routing geometry — the measurement checklist
+
+None of these has been measured. Each goes into `configs/conveyor.yaml`, and
+**no Python changes when they do**.
+
+| # | Quantity | Config key | How to measure |
+|---|---|---|---|
+| 1 | Belt speed | `conveyor.belt.speed_cm_s` | Time a marked item over a known distance. Repeat 5x, take the median. |
+| 2 | Camera to load cell | `conveyor.geometry.camera_to_load_cell_cm` | Along the belt, from the camera's field-of-view centre to the pan centre. |
+| 3 | Camera to Servo A | `conveyor.geometry.camera_to_servo_a_cm` | Along the belt, FOV centre to the paddle's line of action. |
+| 4 | Camera to Servo B | `conveyor.geometry.camera_to_servo_b_cm` | Same, for the second paddle. |
+| 5 | Servo actuation delay | `conveyor.timing.servo_actuation_delay_ms` | Command sent to paddle physically in the stream. Film at high frame rate, or measure with a switch. |
+| 6 | Timing offset | `conveyor.timing.offset_ms` | Calibrate last, on the running machine: watch where items land and trim. Negative fires earlier. |
+
+Until 1, 3 and 5 exist, an A route is refused with a reason code naming the
+missing quantity. Until 1, 4 and 5 exist, so is a B route. Bin C works
+regardless, because it needs no actuator.
+
+### Sequence
+
+Measure 1–5 with the belt running and the servos idle. Set them, confirm the
+`/routing` endpoint reports `routable: true`, then tune 6 with real items.
+
+## Hardware status
+
+Accurate as of Phase 6. **Do not read this as a working machine.**
+
+| Item | Status |
+|---|---|
+| HX711 | Physically connected and responding |
+| Load cell | Physically responding — 180 g moved it ~65 000 counts |
+| HX711 calibration | **Not yet fully physically verified** |
+| Arduino to Python link | **Not yet validated end to end** |
+| Servo A (D9) | Bench-tested independently, outside this software |
+| Servo B (D10) | Bench-tested independently, outside this software |
+| External 5 V supply, common ground | Working after the earlier short |
+| **Physical conveyor** | **Does not exist yet** |
+| Routing geometry | **UNMEASURED** — all six quantities |
+| Routing scheduler | Software-tested only, against TEST geometry |
+
+The demonstration runs on the simulated conveyor profile. That is a model of a
+machine, not a machine.

@@ -1,0 +1,46 @@
+# Aurum — material price reference
+#
+# ============================ NOT POPULATED ================================
+# This file is intentionally empty of figures and `enabled` is false.
+#
+# Valuation in Aurum is: estimated material quantity × price per unit. The
+# quantity comes from configs/material_reference.yaml, and the price comes from
+# here. No prices were invented to fill this file, so valuation reports itself
+# unavailable and the API returns an explicit refusal rather than a number.
+#
+# This file is read only when configs/pricing.yaml sets `provider: static`, and
+# every price it yields is labelled TEST. It is never a live market quote.
+#
+# A spot price with no source and no timestamp is worse than no price: it gets
+# screenshotted, quoted, and outlives the conversation that qualified it.
+# ===========================================================================
+#
+# To enable valuation:
+#   1. Add an entry per material with price_per_unit, unit, currency,
+#      timestamp and a real source.
+#   2. Set `enabled: true`.
+#
+# The unit must match the unit the recovery estimate is expressed in.
+# app/pricing.py refuses to quote across mismatched units rather than
+# converting, because multiplying grams by a per-ounce price produces a
+# plausible-looking number that is wrong by a factor of 31.
+#
+# Prices are a snapshot, not a feed. If you need live pricing, implement the
+# PriceProvider protocol in app/pricing.py against a real market data source;
+# this file is the pinned-snapshot implementation.
+
+enabled: false
+
+source: >
+  Unset. Name the price source here — an exchange, a refiner's published buy
+  price, or a dated market snapshot — so a stored valuation stays auditable.
+
+prices: {}
+  # Example of the required shape — replace with cited values:
+  #
+  # gold:
+  #   price_per_unit: 0.0
+  #   unit: "g"
+  #   currency: "USD"
+  #   timestamp: "YYYY-MM-DDTHH:MM:SSZ"
+  #   source: "<exchange or publication, with a URL or document reference>"

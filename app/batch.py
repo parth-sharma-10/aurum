@@ -22,9 +22,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app import materials
+
 ROOT = Path(__file__).resolve().parent.parent
 BATCH_DIR = ROOT / "data" / "batches"
-REFERENCE = ROOT / "configs" / "recovery_reference.yaml"
 
 
 @dataclass
@@ -109,7 +110,7 @@ class BatchSession:
         }
         if weight is not None:
             rec["weight"] = weight
-        rec["recovery_estimate"] = recovery_estimate(counts)
+        rec["recovery_estimate"] = recovery_estimate(counts, weight)
         return rec
 
     def save(self, record: dict) -> Path:
@@ -119,64 +120,32 @@ class BatchSession:
         return path
 
 
-def recovery_estimate(counts: dict[str, int]) -> dict:
-    """Component counts -> estimated recovery, or an explicit refusal.
+# Re-exported so a consumer of a batch record does not need to know that the
+# material layer lives in another module. `app.materials` is the single owner.
+DISCLAIMER = materials.DISCLAIMER
+NOT_MEASURED = materials.NOT_MEASURED
 
-    Aurum's claim is that identification plus reference yield data gives an
-    *estimate*. That requires reference yield data with a citation. Until
-    configs/recovery_reference.yaml is populated with sourced figures, this
-    returns unavailable rather than a number, because a plausible-looking
-    number with no source behind it is worse than no number at all.
+
+def recovery_estimate(counts: dict[str, int], mass: dict | None = None) -> dict:
+    """Component counts -> estimated material present, or an explicit refusal.
+
+    Three quantities must never be confused, so all three are named in the
+    output:
+
+      detected_components  what the model counted — the only measured thing here
+      components/material_estimate
+                           counts x cited reference composition, an ESTIMATE
+      recovery             kept separate, and unavailable unless a source
+                           measured recovery from a feed matching the detection
+      measured_material    always unavailable; Aurum has no assay
+
+    The figures and their citations live in configs/material_reference.yaml,
+    resolved through docs/sources/material_sources.yaml. This function is only
+    the seam between batch composition and that layer; see `app.materials` for
+    the rules it enforces. It fails closed: a detected class with no cited
+    figure blocks the estimate rather than contributing a silent zero.
+
+    `mass` is the batch weight record, consulted only for concentration-based
+    evidence and only when the reading is a real measurement.
     """
-    unavailable = {
-        "available": False,
-        "basis": None,
-        "reason": (
-            "No reference yield data loaded. Populate configs/recovery_reference.yaml "
-            "with cited per-component figures to enable estimation."
-        ),
-        "disclaimer": (
-            "ESTIMATE ONLY — derived from component counts and published "
-            "reference yields. Aurum Vision does not measure precious-metal "
-            "content; RGB imagery cannot determine composition."
-        ),
-    }
-    if not REFERENCE.exists():
-        return unavailable
-
-    import yaml
-
-    ref = yaml.safe_load(REFERENCE.read_text()) or {}
-    if not ref.get("enabled"):
-        return unavailable
-
-    yields = ref.get("per_component") or {}
-    missing = [c for c, n in counts.items() if n and c not in yields]
-    if missing:
-        return {**unavailable, "reason": f"No cited reference yield for: {sorted(missing)}"}
-
-    lines = []
-    for c, n in sorted(counts.items()):
-        if not n:
-            continue
-        y = yields[c]
-        lines.append(
-            {
-                "component": c,
-                "count": n,
-                "per_unit": y.get("value"),
-                "unit": y.get("unit"),
-                "total": round(n * float(y.get("value", 0)), 6),
-                "source": y.get("source"),
-            }
-        )
-    return {
-        "available": True,
-        "basis": ref.get("basis", "published reference yields"),
-        "components": lines,
-        "disclaimer": (
-            "ESTIMATE ONLY — derived from component counts and published "
-            "reference yields. Aurum Vision does not measure precious-metal "
-            "content; RGB imagery cannot determine composition."
-        ),
-    }
+    return materials.estimate(counts, mass)

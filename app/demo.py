@@ -16,12 +16,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sqlite3
 import sys
 import time
 from pathlib import Path
 
 import cv2
 
+from app import ledger
 from app.batch import BatchSession
 from app.dashboard import compose
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
@@ -30,6 +33,34 @@ from app.weight import get_weight_source
 ROOT = Path(__file__).resolve().parent.parent
 IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 WINDOW = "Aurum Vision"
+
+# How long to wait for a camera to deliver its first frame before giving up on
+# it. Three seconds covers an AVFoundation capture session warming up; a slower
+# camera can be given longer through FrameSource(first_frame_timeout=...).
+FIRST_FRAME_TIMEOUT_S = 3.0
+
+# cv2's automatic backend choice is wrong often enough to be worth naming.
+# On Windows the default (MSMF) can take seconds to open a webcam and sometimes
+# never does; DirectShow opens immediately. On macOS AVFoundation is the only
+# one that works at all. Neither is hardcoded: a given laptop's camera may need
+# the other, so AURUM_CAMERA_BACKEND overrides by cv2 constant name.
+PLATFORM_CAMERA_BACKENDS = {"darwin": "CAP_AVFOUNDATION", "win32": "CAP_DSHOW"}
+
+
+def camera_backend() -> int:
+    """The cv2 capture backend to open a webcam with, for this platform.
+
+    Falls back to cv2's own choice rather than failing: an unknown name is a
+    misconfiguration that should cost a warning, not the demo.
+    """
+    name = os.environ.get("AURUM_CAMERA_BACKEND") or PLATFORM_CAMERA_BACKENDS.get(
+        sys.platform, "CAP_ANY"
+    )
+    backend = getattr(cv2, name, None)
+    if not isinstance(backend, int):
+        print(f"[camera] unknown backend {name!r}; falling back to cv2's default")
+        return cv2.CAP_ANY
+    return backend
 
 
 class FrameSource:
@@ -43,24 +74,33 @@ class FrameSource:
         width: int,
         height: int,
         image_seconds: float,
+        first_frame_timeout: float = FIRST_FRAME_TIMEOUT_S,
     ) -> None:
         self.mode = mode
         self.image_seconds = image_seconds
+        self.first_frame_timeout = first_frame_timeout
         self._cap = None
         self._images: list[Path] = []
         self._idx = 0
         self._last_advance = 0.0
 
         if mode == "webcam":
-            self._cap = cv2.VideoCapture(camera)
-            if not self._cap.isOpened():
-                raise RuntimeError(
-                    f"Could not open camera {camera}. On macOS, grant camera "
-                    f"permission to your terminal in System Settings > Privacy & "
-                    f"Security > Camera. Or run with --mode images --path <folder>."
-                )
+            self._cap = cv2.VideoCapture(camera, camera_backend())
             self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            if not (self._cap.isOpened() and self._first_frame_arrives()):
+                self._cap.release()
+                hint = (
+                    "On macOS, grant camera permission to your terminal in System "
+                    "Settings > Privacy & Security > Camera."
+                    if sys.platform == "darwin"
+                    else "Check that no other application holds the camera, and try "
+                    "another --camera index or AURUM_CAMERA_BACKEND=CAP_MSMF."
+                )
+                raise RuntimeError(
+                    f"Could not open camera {camera}. {hint} "
+                    f"Or run with --mode images --path <folder>."
+                )
         elif mode == "video":
             if not path:
                 raise RuntimeError("--mode video requires --path")
@@ -79,6 +119,23 @@ class FrameSource:
             self._last_advance = time.time()
         else:
             raise RuntimeError(f"unknown mode {mode!r}")
+
+    def _first_frame_arrives(self) -> bool:
+        """Wait for the camera to actually deliver a frame.
+
+        isOpened() is not enough: AVFoundation reports the device open before the
+        capture session has produced anything, and a first read that fails is the
+        same signal as one denied by camera permissions. Without this the demo
+        exits on frame zero as "source exhausted" instead of falling back to
+        image mode.
+        """
+        deadline = time.time() + self.first_frame_timeout
+        while time.time() < deadline:
+            ok, frame = self._cap.read()
+            if ok and frame is not None:
+                return True
+            time.sleep(0.05)
+        return False
 
     @property
     def label(self) -> str:
@@ -153,6 +210,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--frames", type=int, default=60, help="frames to process in --no-window mode")
     return ap
+
+
+def _persist(session: BatchSession, record: dict) -> Path:
+    """Write a saved batch to both stores, and say so if the ledger refuses.
+
+    The JSON file is the demo's own artifact; the SQLite ledger is what the API
+    and the browser dashboard read. Writing only the first is what made a batch
+    saved on stage invisible everywhere else. The ledger write goes through
+    app.ledger, so there is one INSERT in the codebase rather than two.
+
+    A ledger failure must not lose the batch or end the demo: the JSON is on
+    disk before the ledger is touched, and the operator is told what happened
+    rather than the demo dying mid-presentation over a locked database.
+    """
+    path = session.save(record)
+    try:
+        ledger.save(record)
+    except sqlite3.Error as exc:
+        print(f"[batch] WARNING: saved {path} but the ledger write failed: {exc}")
+    return path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -231,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"[batch] started {session.batch_id}")
             elif key == ord("s"):
                 rec = session.record(det.model_version, weight, source=src.label)
-                saved_path = session.save(rec)
+                saved_path = _persist(session, rec)
                 status, status_until = "SAVED", time.time() + 2.0
                 print(f"[batch] saved {saved_path}")
                 print(json.dumps(rec, indent=2))
@@ -252,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\n=== BATCH COMPOSITION ===")
     print(json.dumps(rec, indent=2))
     if args.no_window:
-        session.save(rec)
+        _persist(session, rec)
     return 0
 
 

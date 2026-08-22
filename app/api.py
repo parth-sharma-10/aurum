@@ -13,29 +13,34 @@ from __future__ import annotations
 
 import io
 import json
-import sqlite3
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, closing
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
+from app import ledger, pricing
 from app.batch import BatchSession
 from app.dashboard import draw_detections
+from app.decision import engine as decision_engine
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
+from app.pipeline import ItemPipeline
+from app.routing import RoutingScheduler
+from app.valuation import prices as prices_module
+from app.valuation import valuation as valuation_module
 from app.weight import get_weight_source
 
 ROOT = Path(__file__).resolve().parent.parent
-DB = ROOT / "data" / "aurum_batches.db"
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Create the batch ledger before the first request is served."""
-    init_db()
+    ledger.init_db()
     yield
 
 
@@ -49,8 +54,40 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# The browser dashboard in frontend/ is served by Vite on 5173 during
+# development, which is a different origin from this service. Only that origin
+# is allowed, only for reads, and without credentials: the API has no auth, so a
+# wildcard would let any page a developer visits read their local ledger.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
+
 _detector: AurumDetector | None = None
 _sessions: dict[str, BatchSession] = {}
+_pipeline: ItemPipeline | None = None
+_routing: RoutingScheduler | None = None
+
+
+def _scheduler() -> RoutingScheduler:
+    """The routing queue for this process, sharing the tracker's identities."""
+    global _routing
+    if _routing is None:
+        _routing = RoutingScheduler(lifecycle=pipeline().tracker)
+    return _routing
+
+
+def pipeline() -> ItemPipeline:
+    """The tracking session this process is running.
+
+    One per process, because item identity is only meaningful within a run.
+    """
+    global _pipeline
+    if _pipeline is None:
+        _pipeline = ItemPipeline(detector=detector())
+    return _pipeline
 
 
 def detector() -> AurumDetector:
@@ -61,24 +98,6 @@ def detector() -> AurumDetector:
         _detector = AurumDetector(DEFAULT_WEIGHTS)
         _detector.warmup()
     return _detector
-
-
-def init_db() -> None:
-    DB.parent.mkdir(parents=True, exist_ok=True)
-    with closing(sqlite3.connect(DB)) as con:
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS batches (
-                batch_id       TEXT PRIMARY KEY,
-                created_at     TEXT NOT NULL,
-                model_version  TEXT NOT NULL,
-                total_objects  INTEGER NOT NULL,
-                avg_confidence REAL NOT NULL,
-                weight_grams   REAL,
-                weight_simulated INTEGER,
-                record_json    TEXT NOT NULL
-            )
-        """)
-        con.commit()
 
 
 def _rel(p: Path) -> str:
@@ -157,6 +176,64 @@ async def detect_annotated(file: UploadFile = File(...)) -> Response:
     return Response(io.BytesIO(buf.tobytes()).getvalue(), media_type="image/jpeg")
 
 
+@app.get("/routing")
+def routing_status() -> dict:
+    """The routing queue: what is scheduled, what is due, and what was refused.
+
+    A route is a time, not a movement. Nothing in this phase actuates a servo;
+    a DUE route is one Phase 7 will act on.
+    """
+    import time as _time
+
+    return _scheduler().snapshot(now=_time.monotonic())
+
+
+@app.post("/track")
+async def track(file: UploadFile = File(...)) -> dict:
+    """One frame of a tracking run: detections folded into item lifecycles.
+
+    Unlike `/detect`, this is stateful. Repeated calls with the same object
+    continue one item rather than reporting a new one each time, which is what
+    keeps a single physical component from becoming several ledger rows.
+    """
+    p = pipeline()
+    items = p.process_detections(
+        p.detector_tracker.track(_decode(await file.read())),
+    )
+    return {
+        "frames_processed": p.frames_processed,
+        "active_items": [item.as_dict() for item in items],
+        "current_item": p.current_item.as_dict() if p.current_item else None,
+    }
+
+
+@app.get("/items")
+def list_items() -> dict:
+    """Items in the current tracking run."""
+    return pipeline().snapshot()
+
+
+@app.get("/items/current")
+def current_item() -> dict:
+    """The confirmed item most recently seen, or an explicit absence."""
+    item = pipeline().current_item
+    if item is None:
+        return {
+            "current_item": None,
+            "reason": (
+                "No confirmed item. An object seen once is not yet something to weigh or route."
+            ),
+        }
+    return {"current_item": item.as_dict()}
+
+
+@app.post("/track/reset")
+def reset_tracking() -> dict:
+    """Start a fresh run: new identities, tracker numbering restarted."""
+    pipeline().reset()
+    return {"status": "reset", "frames_processed": 0}
+
+
 @app.post("/batch/start")
 def batch_start() -> dict:
     d = detector()
@@ -190,41 +267,105 @@ def batch_close(batch_id: str, weight_mode: str = "off", hx711_port: str | None 
     wsrc = get_weight_source(weight_mode, hx711_port) if weight_mode != "off" else None
     rec = s.record(d.model_version, wsrc.read().as_dict() if wsrc else None, source="api")
     s.save(rec)
-
-    w = rec.get("weight") or {}
-    with closing(sqlite3.connect(DB)) as con:
-        con.execute(
-            "INSERT OR REPLACE INTO batches VALUES (?,?,?,?,?,?,?,?)",
-            (
-                rec["batch_id"],
-                rec["timestamp"],
-                rec["model_version"],
-                rec["total_objects"],
-                rec["average_confidence"],
-                w.get("grams"),
-                int(bool(w.get("simulated"))) if w else None,
-                json.dumps(rec),
-            ),
-        )
-        con.commit()
+    ledger.save(rec)
     return rec
+
+
+@app.get("/stats")
+def stats() -> dict:
+    """Aggregates over the stored ledger. See app.ledger.aggregates for the SQL.
+
+    `bin_breakdown` is empty by fact rather than omission, and stays that way
+    until an actuator exists to fill it.
+    """
+    agg = ledger.aggregates()
+    agg["total_weight"]["note"] = (
+        "Simulated grams come from a labelled stand-in for the HX711 load cell "
+        "and are not physical measurements."
+    )
+    return {
+        **agg,
+        "bin_breakdown": {},
+        "bin_breakdown_note": (
+            "Aurum does not implement physical bin routing or servo actuation. No "
+            "stored record carries a bin assignment, so this is empty by fact, not "
+            "by omission."
+        ),
+    }
 
 
 @app.get("/batches")
 def list_batches(limit: int = 50) -> dict:
-    with closing(sqlite3.connect(DB)) as con:
-        con.row_factory = sqlite3.Row
-        rows = con.execute(
-            "SELECT * FROM batches ORDER BY created_at DESC LIMIT ?", (limit,)
-        ).fetchall()
-    return {"count": len(rows), "batches": [json.loads(r["record_json"]) for r in rows]}
+    records = ledger.recent(limit)
+    return {"count": len(records), "batches": records}
 
 
 @app.get("/batches/{batch_id}")
 def get_batch(batch_id: str) -> dict:
-    with closing(sqlite3.connect(DB)) as con:
-        con.row_factory = sqlite3.Row
-        row = con.execute("SELECT * FROM batches WHERE batch_id=?", (batch_id,)).fetchone()
-    if row is None:
+    record = ledger.get(batch_id)
+    if record is None:
         raise HTTPException(404, f"No batch {batch_id}")
-    return json.loads(row["record_json"])
+    return record
+
+
+@app.get("/prices")
+def metal_prices() -> dict:
+    """What each metal costs, and whether that figure can be trusted.
+
+    Aurum ships no market data source. With `pricing.provider: unavailable`
+    every entry comes back UNAVAILABLE with the setting that would change it,
+    rather than a number nobody can attribute.
+    """
+    service = prices_module.PriceService.from_config()
+    quotes = service.prices(prices_module.materials.METAL_NAMES)
+    return {
+        "provider": getattr(service.provider, "name", "unknown"),
+        "max_age_seconds": service.max_age_seconds,
+        "prices": {metal: quote.as_dict() for metal, quote in sorted(quotes.items())},
+        "note": (
+            "No live market data source is approved for this project. A price "
+            "labelled TEST is fixture data and is not a market quote."
+        ),
+    }
+
+
+@app.get("/batches/{batch_id}/valuation")
+def batch_valuation(batch_id: str) -> dict:
+    """Estimated value of a stored batch, priced at request time.
+
+    Not stored on the record and not part of `/batches`: a price is
+    time-varying external data, so baking one into a batch would make the record
+    silently wrong the next day. The quote's own source and timestamp travel
+    with the result instead.
+
+    Returns `available: false` with a reason whenever recovery estimation or the
+    price source is unconfigured, which is the current shipped state.
+    """
+    record = ledger.get(batch_id)
+    if record is None:
+        raise HTTPException(404, f"No batch {batch_id}")
+    result = valuation_module.value(
+        record.get("detections", {}),
+        mass=record.get("weight"),
+        item_id=batch_id,
+    )
+    return {
+        "batch_id": batch_id,
+        "detected_components": record.get("detections", {}),
+        "recovery_estimate": record.get("recovery_estimate", {}),
+        # The recovery-based path, kept working for existing consumers.
+        # Phase 10 consolidates it into the valuation subsystem below.
+        "valuation": pricing.value_recovery(record.get("recovery_estimate", {})),
+        # The PMDI subsystem: the precious-metal signal, and the valuation that
+        # adds the separate base-metal signal to it.
+        "pmdi": result.pmdi.as_dict(),
+        "item_valuation": result.as_dict(),
+        # The sorting policy's verdict on that evidence. A batch holding more
+        # than one class has no single component class, so it cannot be routed
+        # and the engine says so rather than picking one.
+        "decision": decision_engine.decide(
+            result.component_class,
+            record.get("average_confidence"),
+            result,
+        ).as_dict(),
+    }

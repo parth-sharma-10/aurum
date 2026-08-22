@@ -1,0 +1,216 @@
+# Aurum — canonical bibliography for the material reference database
+#
+# Every numeric value in configs/material_reference.yaml carries a `source:` key
+# whose value is an id in this file. Nothing else is a citation. If a figure
+# cannot name a source here, it does not go in the database.
+#
+# `accessed` is the date the full text (or, where noted, the publisher-hosted
+# abstract) was read while building this database. Every entry marked
+# `full_text_read: true` was opened and its tables inspected directly; the
+# numbers were not taken from search-result snippets, secondary summaries or
+# any model's recollection.
+
+schema_version: "1.0"
+
+sources:
+  - id: BIZZO2014
+    title: >
+      Characterization of Printed Circuit Boards for Metal and Energy Recovery
+      after Milling and Mechanical Separation
+    authors:
+      - Waldir A. Bizzo
+      - Renata A. Figueiredo
+      - Valdelis F. de Andrade
+    year: 2014
+    journal: "Materials"
+    volume: "7(6)"
+    pages: "4555-4566"
+    doi: "10.3390/ma7064555"
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC5455934/"
+    accessed: "2026-08-22"
+    source_type: peer_reviewed_experimental
+    open_access: true
+    full_text_read: true
+    used_for:
+      - PCB gold concentration
+      - PCB silver concentration
+      - PCB copper concentration
+      - PCB nickel concentration
+      - PCB tin concentration
+    evidence_ids: [PCB-AU-001, PCB-AG-001, PCB-CU-001, PCB-NI-001, PCB-SN-001]
+    notes: >
+      Direct experimental characterization. ~12 kg of PCBs from discarded
+      desktop computers (XT, 486 and Pentium generations), ground in a cutting
+      mill and digested in aqua regia, quantified by AAS and ICP. The sample is
+      explicitly an older generation of board, which is why its gold figure
+      (142 mg/kg) sits well below the frequently-quoted 250 mg/kg for mixed
+      WPCB. Aurum records that context rather than averaging it away.
+
+  - id: LIN2023
+    title: >
+      Investigation of the Bimodal Leaching Response of RAM Chip Gold Fingers in
+      Ammonia Thiosulfate Solution
+    authors:
+      - Peijia Lin
+      - Zulqarnain Ahmad Ali
+      - Joshua Werner
+    year: 2023
+    journal: "Materials"
+    volume: "16(14)"
+    article_number: "4940"
+    doi: "10.3390/ma16144940"
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10381887/"
+    accessed: "2026-08-22"
+    source_type: peer_reviewed_experimental
+    open_access: true
+    full_text_read: true
+    used_for:
+      - Connector (gold fingers) gold concentration
+      - Connector (gold fingers) silver concentration
+      - Connector (gold fingers) copper concentration
+      - Connector (gold fingers) nickel concentration
+      - Connector (gold fingers) aluminium concentration
+      - Gold recovery rates for a decopperized gold-finger feed
+    evidence_ids:
+      [CONN-AU-003, CONN-AG-001, CONN-CU-001, CONN-NI-001, CONN-AL-001,
+       CONN-AU-REC-001, CONN-AU-REC-002, CONN-AU-REC-003]
+    notes: >
+      Chemical assay by roasting and acid digestion, 0.5 g per sample. The
+      analysed material is the stamp-sheared gold-finger EDGE of waste RAM
+      modules, not a whole module and not a whole connector. Its concentrations
+      therefore describe a liberated contact strip. The recovery figures are
+      laboratory ammonia-thiosulfate leaching on that same liberated feed.
+
+  - id: FIRSCHING2024
+    title: >
+      X-ray transmission imaging of waste printed circuit boards for value
+      estimation in recycling using machine learning
+    authors:
+      - Markus Firsching
+      - Moritz Ottenweller
+      - Johannes Leisner
+      - Steffen Rueger
+    year: 2024
+    journal: "Waste Management & Research"
+    volume: "42(9)"
+    doi: "10.1177/0734242X241257084"
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11370203/"
+    accessed: "2026-08-22"
+    source_type: peer_reviewed_experimental
+    open_access: true
+    full_text_read: true
+    used_for:
+      - CPU (BGA/PGA package) gold content per piece
+      - Connector gold content per piece
+      - High-grade connector gold content per piece
+    evidence_ids: [CPU-AU-001, CONN-AU-001, CONN-AU-002]
+    notes: >
+      The only source found that reports gold in MASS PER COMPONENT PIECE
+      (mg/piece) rather than as a concentration, which is the unit Aurum's
+      component counts actually need. Components were dismantled from 104
+      waste PCBs from PCs, servers and mobile phones and analysed by ICP-OES.
+      The paper reports these as MEAN values and discloses neither a sample
+      count per class nor a standard deviation, so Aurum caps the confidence of
+      every figure derived from it at `medium`. The authors also state that
+      figures for gold fingers and quartz oscillators were not yet available.
+
+  - id: OLIVEIRA2022
+    title: >
+      Gravity and Electrostatic Separation for Recovering Metals from Obsolete
+      Printed Circuit Board
+    authors:
+      - Camila Mori de Oliveira
+      - Rossana Bellopede
+      - Alice Tori
+      - Giovanna Zanetti
+      - Paola Marini
+    year: 2022
+    journal: "Materials"
+    volume: "15(5)"
+    article_number: "1874"
+    doi: "10.3390/ma15051874"
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC8911849/"
+    accessed: "2026-08-22"
+    source_type: peer_reviewed_review_aggregation
+    open_access: true
+    full_text_read: true
+    used_for:
+      - Generic waste PCB composition ranges (Au, Ag, Pd, Cu, Ni, Sn, Al)
+      - Reference mass of one multi-layer server PCB
+    evidence_ids:
+      [PCB-AU-002, PCB-AG-002, PCB-PD-001, PCB-CU-002, PCB-NI-002, PCB-SN-002,
+       PCB-AL-001, PCB-MASS-001]
+    notes: >
+      Two different kinds of number appear in this paper and Aurum uses only
+      one of them. USED: the whole-board composition table, a weighted average
+      with standard deviation compiled by the authors across prior studies —
+      an aggregation, hence `medium` confidence. NOT USED: the paper's own
+      ICP-OES measurements, which are reported on separated SIZE FRACTIONS
+      after gravity and electrostatic concentration (Cu 56-80%). Those are
+      process concentrates, not board composition, and treating them as board
+      composition would overstate copper by roughly three-fold.
+
+  - id: ZINKOWSKA2024
+    title: >
+      Impregnated Polymeric Sorbent for the Removal of Noble Metal Ions from
+      Model Chloride Solutions and the RAM Module
+    authors:
+      - Karolina Zinkowska
+      - Zbigniew Hubicki
+      - Grzegorz Wojcik
+    year: 2024
+    journal: "Materials"
+    volume: "17(6)"
+    article_number: "1234"
+    doi: "10.3390/ma17061234"
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10972195/"
+    accessed: "2026-08-22"
+    source_type: peer_reviewed_experimental
+    open_access: true
+    full_text_read: true
+    used_for:
+      - Reference mass of one spent RAM module
+    evidence_ids: [RAM-MASS-001]
+    notes: >
+      Aurum uses ONE number from this paper: the reported mass of the single
+      spent RAM module studied, 7.8040 g. The paper's ICP-OES figures are
+      concentrations in an HCl/H2O2 LEACHATE (mg/L), not solid composition.
+      Converting them into module composition would require the leach volume
+      and an assumption that leaching went to completion; neither is
+      established, so no composition value is taken from this source.
+
+  - id: CHARLES2017
+    title: >
+      An investigation of trends in precious metal and copper content of RAM
+      modules in WEEE: Implications for long term recycling potential
+    authors:
+      - Rhys Charles
+      - Peter Douglas
+      - Ingrid Liv Hallin
+      - Ian Matthews
+      - Gareth Liversage
+    year: 2017
+    journal: "Waste Management"
+    volume: "60"
+    pages: "505-520"
+    doi: "10.1016/j.wasman.2016.11.018"
+    url: "https://doi.org/10.1016/j.wasman.2016.11.018"
+    accessed: "2026-08-22"
+    source_type: peer_reviewed_experimental
+    open_access: true
+    full_text_read: false
+    used_for:
+      - Documented limitation only - no numeric value is taken from this source
+    evidence_ids: []
+    notes: >
+      This is the most directly relevant study found for whole RAM modules:
+      Au, Ag, Pd and Cu in DRAM modules placed on the market 1991-2008,
+      measured by AAS after comminution and acid digestion. It is nominally
+      CC-BY, but every route to the full text was blocked during this work
+      (publisher bot-protection and an unavailable institutional mirror), so
+      its composition TABLES WERE NEVER READ. Its abstract was read and
+      verified via Semantic Scholar and supports only qualitative statements:
+      stable gold and silver over time, an 80% fall in palladium across
+      1991-2008, and a 0.23 g/module/year rise in copper. Aurum therefore
+      cites it as evidence that RAM composition VARIES BY GENERATION, and
+      takes no number from it. This is the single largest gap in the database.

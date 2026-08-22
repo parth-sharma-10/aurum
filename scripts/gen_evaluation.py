@@ -84,10 +84,16 @@ def main() -> int:
     add(f"- {g['images_hashed']:,} images hashed (SHA-256 + perceptual hash)")
     add(
         f"- {g['stem_groups']:,} source-stem groups merged into "
-        f"**{g['clusters']:,} duplicate clusters** "
+        f"**{g['clusters']:,} clusters formed** "
         f"({g['merges']} cross-dataset near-duplicate merges at Hamming ≤ {stats['hamming']})"
     )
     add("- Splits assigned over **clusters, never images**")
+    if val:
+        add(
+            f"- **{val['clusters']:,} clusters survive into the built dataset** — the rest "
+            f"held only background-capped or held-out-pruned images (see the two lines below). "
+            f"The two cluster counts measure different things and are not in conflict."
+        )
     add(
         f"- {stats['augmented_copies_dropped_from_heldout']:,} augmented copies removed "
         f"from valid/test so held-out counts reflect unique scenes"

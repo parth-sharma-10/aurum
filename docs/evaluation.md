@@ -28,8 +28,9 @@ files, and the same photo is re-uploaded across projects. Splitting at
 random would put rotations of one RAM module in both train and test.
 
 - 17,193 images hashed (SHA-256 + perceptual hash)
-- 5,146 source-stem groups merged into **4,353 duplicate clusters** (310 cross-dataset near-duplicate merges at Hamming ≤ 5)
+- 5,146 source-stem groups merged into **4,353 clusters formed** (310 cross-dataset near-duplicate merges at Hamming ≤ 5)
 - Splits assigned over **clusters, never images**
+- **2,154 clusters survive into the built dataset** — the rest held only background-capped or held-out-pruned images (see the two lines below). The two cluster counts measure different things and are not in conflict.
 - 3,233 augmented copies removed from valid/test so held-out counts reflect unique scenes
 - 8,464 background-only images dropped (capped so they cannot drown labelled objects)
 
@@ -95,7 +96,7 @@ Every image was perceptually hashed against the training split:
 | Images | 27 |
 | Images with at least one detection | 12 |
 | Images with no detection | 15 |
-| Mean inference time | 31.2 ms |
+| Mean inference time | 16.2 ms |
 
 | Class | Detections | Mean confidence |
 |---|---:|---:|

@@ -1,6 +1,6 @@
 {
   "model_version": "Aurum Vision v0.1",
-  "weights": "/Users/parthsharma/Projects/Active/aurum/models/aurum_vision_v0_1_best.pt",
+  "weights": "models/aurum_vision_v0_1_best.pt",
   "conf_threshold": 0.35,
   "source": "data/realworld",
   "n_images": 27,
@@ -15,21 +15,21 @@
     "CPU": null,
     "Connector": null
   },
-  "mean_inference_ms": 31.2,
+  "mean_inference_ms": 16.2,
   "per_image": [
     {
       "image": "CPU__E5-2450v2_IvyBridge-EP_Package.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 56.7
+      "inference_ms": 21.5
     },
     {
       "image": "CPU__Intel_CPU_Celeron_G3930_Kaby_Lake_top.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 41.1
+      "inference_ms": 20.3
     },
     {
       "image": "CPU__Intel_CPU_Core_2_Duo_E8400_Wolfdale_bottom.jpg",
@@ -38,7 +38,7 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.9011,
-      "inference_ms": 35.9
+      "inference_ms": 22.5
     },
     {
       "image": "CPU__Intel_CPU_Core_2_Duo_E8400_Wolfdale_perspective.jpg",
@@ -47,42 +47,42 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.9152,
-      "inference_ms": 30.5
+      "inference_ms": 13.5
     },
     {
       "image": "Connector__2x13_pin_socket_on_NEC_XR385_MIDI_wavetable_synth_daughter_board.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 30.1
+      "inference_ms": 14.6
     },
     {
       "image": "Connector__3_Pin_Header_-_HEAD-03_4150701608.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 27.6
+      "inference_ms": 19.6
     },
     {
       "image": "Connector__ATX-Netzteil.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 29.2
+      "inference_ms": 13.6
     },
     {
       "image": "Connector__Avrdevboard_315607630.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 22.9
+      "inference_ms": 13.7
     },
     {
       "image": "Connector__Basic_Measuring_Instruments_-_Math_Processor_83002190_-_Panduit_pin_header-3964..jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 28.8
+      "inference_ms": 11.3
     },
     {
       "image": "Connector__Basic_Measuring_Instruments_-_Math_Processor_83002190_-_Panduit_pin_header-3965..jpg",
@@ -91,7 +91,7 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.4025,
-      "inference_ms": 19.6
+      "inference_ms": 12.1
     },
     {
       "image": "Connector__Basic_Measuring_Instruments_-_Math_Processor_83002190_-_Panduit_pin_header-3966..jpg",
@@ -100,21 +100,21 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.9055,
-      "inference_ms": 22.6
+      "inference_ms": 11.1
     },
     {
       "image": "Connector__MinnowBoard_Max_-_Low-Speed_GPIO_Connector_14720326287.png",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 30.3
+      "inference_ms": 14.4
     },
     {
       "image": "PCB__AAEON_ETX-CX700M_-_Top_View.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 42.5
+      "inference_ms": 16.8
     },
     {
       "image": "PCB__Acer_Aspire_One_ZG5_motherboard_DA0ZG5MB8F0_-_top_view.jpg",
@@ -123,28 +123,28 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.5458,
-      "inference_ms": 25.3
+      "inference_ms": 12.3
     },
     {
       "image": "PCB__Amazon_Echo_Dot_RS03QR_-_motherboard-0552.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 29.5
+      "inference_ms": 18.9
     },
     {
       "image": "PCB__Amazon_Echo_Dot_RS03QR_-_motherboard-0557.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 25.9
+      "inference_ms": 14.3
     },
     {
       "image": "PCB__Amiga_3000T_motherboard_without_annotations.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 25.4
+      "inference_ms": 16.7
     },
     {
       "image": "PCB__Apple-IIc-Motherboard-Flat-Top.jpg",
@@ -153,14 +153,14 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.3898,
-      "inference_ms": 35.7
+      "inference_ms": 20.0
     },
     {
       "image": "PCB__Fujitsu_Siemens_Computers_Amilo_L7300_-_motherboard_-_Intel_Celeron_M_360_SL8ML_.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 35.1
+      "inference_ms": 20.2
     },
     {
       "image": "PCB__Fujitsu_Siemens_Computers_Amilo_L7300_-_motherboard_-_Renesas_M38857M8-A03HP-276.jpg",
@@ -169,7 +169,7 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.6986,
-      "inference_ms": 34.4
+      "inference_ms": 19.4
     },
     {
       "image": "RAM__16_GiB-DDR4-RAM-Riegel_RAM019FIX_Small_Crop_90_PCNT.png",
@@ -178,7 +178,7 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.8871,
-      "inference_ms": 14.9
+      "inference_ms": 9.6
     },
     {
       "image": "RAM__28Go_DDR4_Corsair_-_2018-05-08.jpg",
@@ -187,7 +187,7 @@
       },
       "n_objects": 2,
       "mean_confidence": 0.8326,
-      "inference_ms": 30.9
+      "inference_ms": 21.2
     },
     {
       "image": "RAM__Crucial_1gb_SDRAM_PC133_DIMM_Memory_Module.jpg",
@@ -196,14 +196,14 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.3884,
-      "inference_ms": 63.0
+      "inference_ms": 28.8
     },
     {
       "image": "RAM__DDR_4_SO-DIMM_RAM_slot_PNr0837.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 22.7
+      "inference_ms": 13.0
     },
     {
       "image": "RAM__HYR186420G-653.jpg",
@@ -212,7 +212,7 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.898,
-      "inference_ms": 38.8
+      "inference_ms": 14.5
     },
     {
       "image": "RAM__HYR186420G-653_opened.jpg",
@@ -221,14 +221,14 @@
       },
       "n_objects": 1,
       "mean_confidence": 0.8623,
-      "inference_ms": 11.4
+      "inference_ms": 8.8
     },
     {
       "image": "RAM__Infineon_HYB25D256800AT-7_-_on_Infineon_memory_module-7226.jpg",
       "counts": {},
       "n_objects": 0,
       "mean_confidence": 0.0,
-      "inference_ms": 31.8
+      "inference_ms": 13.6
     }
   ],
   "caveat": "Detections only. These images have no ground-truth annotations, so nothing here is an accuracy measurement and no figure from this run may be quoted as model accuracy."

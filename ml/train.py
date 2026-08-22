@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -28,6 +29,37 @@ MODELS = ROOT / "models"
 
 MODEL_VERSION = "Aurum Vision v0.1"
 
+# The configuration the released v0.1 model was actually trained at. Every value
+# is read back from that checkpoint's own `train_args`, not remembered: it is the
+# artifact that decides what the published metrics describe. These are the
+# defaults so `python -m ml.train` reproduces the released model rather than a
+# different one that no report describes; each stays overridable by environment
+# variable. `workers` is deliberately absent — it is a dataloader knob that does
+# not change the resulting weights, and the released run recorded 0 for it after
+# being resumed.
+RELEASE_CONFIG = {
+    "model": "yolo11n.pt",
+    "epochs": 50,
+    "imgsz": 512,
+    "batch": 32,
+    "patience": 15,
+    "seed": 1337,
+}
+
+
+def artifact_info(path: Path) -> dict:
+    """Identify a weights file by its content.
+
+    A filename proves nothing about which weights produced a set of metrics.
+    Recording the digest and size next to the metrics is what lets someone
+    check, later, that the file they downloaded is the file that was measured.
+    """
+    return {
+        "filename": path.name,
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "size_bytes": path.stat().st_size,
+    }
+
 
 def pick_device() -> str:
     if os.environ.get("AURUM_DEVICE"):
@@ -40,13 +72,15 @@ def pick_device() -> str:
 
 
 def config() -> dict:
+    """Training configuration: the release values, unless overridden."""
+    r = RELEASE_CONFIG
     return {
-        "model": os.environ.get("AURUM_MODEL", "yolo11n.pt"),
-        "epochs": int(os.environ.get("AURUM_EPOCHS", 100)),
-        "imgsz": int(os.environ.get("AURUM_IMGSZ", 640)),
-        "batch": int(os.environ.get("AURUM_BATCH", 16)),
-        "patience": int(os.environ.get("AURUM_PATIENCE", 25)),
-        "seed": int(os.environ.get("AURUM_SEED", 1337)),
+        "model": os.environ.get("AURUM_MODEL", r["model"]),
+        "epochs": int(os.environ.get("AURUM_EPOCHS", r["epochs"])),
+        "imgsz": int(os.environ.get("AURUM_IMGSZ", r["imgsz"])),
+        "batch": int(os.environ.get("AURUM_BATCH", r["batch"])),
+        "patience": int(os.environ.get("AURUM_PATIENCE", r["patience"])),
+        "seed": int(os.environ.get("AURUM_SEED", r["seed"])),
         "device": pick_device(),
         "workers": int(os.environ.get("AURUM_WORKERS", 8)),
         "name": os.environ.get("AURUM_RUN", "aurum_vision_v0_1"),
@@ -137,12 +171,15 @@ def _finalize(cfg: dict) -> int:
         "image_size": cfg["imgsz"],
         "epochs_requested": cfg["epochs"],
         "batch": cfg["batch"],
+        "patience": cfg["patience"],
         "seed": cfg["seed"],
         "device": cfg["device"],
         "trained_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
         "dataset": "data/aurum (see reports/dataset_stats.json)",
         "run_dir": str(run_dir.relative_to(ROOT)),
         "weights": "models/aurum_vision_v0_1_best.pt",
+        "artifact": artifact_info(MODELS / "aurum_vision_v0_1_best.pt"),
+        "metrics": "reports/test_metrics.json (regenerate with `python -m ml.evaluate`)",
     }
     (MODELS / "aurum_vision_v0_1_meta.json").write_text(json.dumps(meta, indent=2))
     print("\nWrote models/aurum_vision_v0_1_meta.json")

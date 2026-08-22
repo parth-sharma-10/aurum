@@ -12,18 +12,39 @@ from __future__ import annotations
 import contextlib
 import math
 import os
+import statistics
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
+from pathlib import Path
+
+from app import config as config_module
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 @dataclass
 class WeightReading:
+    """A mass, and everything needed to decide whether to trust it.
+
+    The four fields after `source` were added for the measurement path and all
+    default, so the original three-argument construction still works. `status`
+    is the one downstream should branch on: `simulated` alone cannot express
+    "real hardware, settled, but the calibration was never verified".
+    """
+
     grams: float
     simulated: bool
     source: str
+    status: str | None = None
+    usable: bool | None = None
+    reason: str | None = None
+    raw_counts: float | None = None
+    timestamp: str | None = None
 
     def as_dict(self) -> dict:
-        return {
+        out = {
             "grams": round(self.grams, 1),
             "kg": round(self.grams / 1000.0, 3),
             "simulated": self.simulated,
@@ -34,6 +55,18 @@ class WeightReading:
                 else {}
             ),
         }
+        # Only present for readings that came through the measurement path, so
+        # an existing record's shape is unchanged.
+        for key, value in (
+            ("status", str(self.status) if self.status else None),
+            ("usable", self.usable),
+            ("reason", self.reason),
+            ("raw_counts", self.raw_counts),
+            ("timestamp", self.timestamp),
+        ):
+            if value is not None:
+                out[key] = value
+        return out
 
 
 class WeightSource:
@@ -124,3 +157,415 @@ def get_weight_source(mode: str = "auto", port: str | None = None) -> WeightSour
 
     print("[weight] using SIMULATED load cell — readings are not measurements")
     return SimulatedLoadCell()
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: calibrated, filtered, stability-checked measurement.
+#
+# Everything above this line is the original mass input: a labelled simulation
+# and a thin serial class that reads pre-calibrated grams. Everything below is
+# the measurement path the conveyor uses, and it differs in one deliberate way:
+# the Arduino sends RAW COUNTS and Python owns the calibration.
+#
+# That matters because a calibration factor is measured, auditable data. In
+# Python it lives in a file under version control, next to the workflow that
+# produced it and the second known mass that verified it. Burned into firmware
+# it is a number nobody can check.
+# ---------------------------------------------------------------------------
+
+#: Serial line the Aurum weight sketch emits, one per HX711 sample:
+#:
+#:     W,<protocol_version>,<board_millis>,<raw_counts>,<status>
+#:
+#: Raw counts, never grams. `status` is OK or ERR. Nothing else is accepted:
+#: a bare number could be counts or grams, and guessing which is exactly the
+#: kind of assumption this project refuses to make.
+PROTOCOL_VERSION = 1
+PROTOCOL = "W,<version>,<board_millis>,<raw_counts>,<status>"
+
+CALIBRATION_FILE = ROOT / "configs" / "calibration.yaml"
+
+
+class WeightStatus(StrEnum):
+    """What a reading is, and whether anything may be built on it."""
+
+    #: One unfiltered sample. No stability judgement yet.
+    RAW = "RAW"
+    #: Readings are still moving by more than the configured tolerance.
+    UNSTABLE = "UNSTABLE"
+    #: Settled, but the calibration behind it has not been verified against a
+    #: second known mass. A number you may display, not one to compute with.
+    STABLE = "STABLE"
+    #: From the labelled simulation. Never presented as a measurement.
+    SIMULATED = "SIMULATED"
+    #: Settled, on a verified calibration. The only status a concentration
+    #: calculation is allowed to consume.
+    MEASURED = "MEASURED"
+    #: No usable reading: uncalibrated, timed out, disconnected, or bad data.
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+@dataclass(frozen=True)
+class Calibration:
+    """The measured relationship between HX711 counts and grams.
+
+    `verified` is true only once a *second* known mass has been placed and the
+    predicted grams matched it within tolerance. One reference mass shows the
+    cell responds; two show the scale is linear and the factor is right.
+    """
+
+    counts_per_gram: float | None = None
+    tare_counts: float | None = None
+    reference_mass_g: float | None = None
+    verified: bool = False
+    verification_mass_g: float | None = None
+    verification_error_g: float | None = None
+    recorded_at: str | None = None
+    notes: str | None = None
+
+    @property
+    def present(self) -> bool:
+        """A factor and a tare exist. Says nothing about whether they are right."""
+        return bool(self.counts_per_gram) and self.tare_counts is not None
+
+    def grams(self, raw_counts: float) -> float | None:
+        """Convert raw counts to grams. None when uncalibrated."""
+        if not self.present:
+            return None
+        return (raw_counts - self.tare_counts) / self.counts_per_gram
+
+    def as_dict(self) -> dict:
+        return {
+            "counts_per_gram": self.counts_per_gram,
+            "tare_counts": self.tare_counts,
+            "reference_mass_g": self.reference_mass_g,
+            "verified": self.verified,
+            "verification_mass_g": self.verification_mass_g,
+            "verification_error_g": self.verification_error_g,
+            "recorded_at": self.recorded_at,
+            "notes": self.notes,
+        }
+
+    @classmethod
+    def load(cls, path: Path | None = None) -> Calibration:
+        """Read the recorded calibration, or an empty one.
+
+        An absent, unreadable or UNMEASURED file yields an uncalibrated
+        instance rather than an error: an uncalibrated scale is a state the
+        system must handle, not a reason to stop.
+        """
+        import yaml
+
+        path = CALIBRATION_FILE if path is None else Path(path)
+        if not path.exists():
+            return cls()
+        try:
+            raw = yaml.safe_load(path.read_text()) or {}
+        except yaml.YAMLError:
+            return cls(notes=f"{path.name} is not valid YAML; treating as uncalibrated")
+        data = raw.get("calibration") or {}
+
+        def number(key):
+            value = data.get(key)
+            if value is None or (isinstance(value, str) and value.strip().upper() == "UNMEASURED"):
+                return None
+            try:
+                out = float(value)
+            except (TypeError, ValueError):
+                return None
+            return None if math.isnan(out) or math.isinf(out) else out
+
+        return cls(
+            counts_per_gram=number("counts_per_gram"),
+            tare_counts=number("tare_counts"),
+            reference_mass_g=number("reference_mass_g"),
+            verified=bool(data.get("verified", False)),
+            verification_mass_g=number("verification_mass_g"),
+            verification_error_g=number("verification_error_g"),
+            recorded_at=data.get("recorded_at"),
+            notes=data.get("notes"),
+        )
+
+    def save(self, path: Path | None = None) -> Path:
+        import yaml
+
+        path = CALIBRATION_FILE if path is None else Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "# Aurum - HX711 calibration record.\n"
+            "# Written by the calibration workflow (python -m app.calibrate). This is\n"
+            "# measured data about one physical machine: it is not a setting to\n"
+            "# hand-edit, and it does not transfer to another rig.\n"
+            "#\n"
+            "# verified: true only after a SECOND known mass matched the prediction.\n\n"
+            + yaml.safe_dump({"calibration": self.as_dict()}, sort_keys=False)
+        )
+        return path
+
+
+@dataclass(frozen=True)
+class RawSample:
+    """One HX711 reading as it left the board."""
+
+    raw_counts: float
+    board_millis: int | None = None
+
+
+def parse_weight_line(line: object) -> RawSample | None:
+    """Parse one protocol line, or None if it is not one.
+
+    Deliberately strict. Malformed, partial or ERR lines are dropped rather
+    than coerced: a half-received line that happens to parse into a plausible
+    number is worse than no reading at all.
+    """
+    if not isinstance(line, str):
+        return None
+    parts = line.strip().split(",")
+    if len(parts) != 5 or parts[0].strip() != "W":
+        return None
+    try:
+        version = int(parts[1])
+        millis = int(parts[2])
+        counts = float(parts[3])
+    except (TypeError, ValueError):
+        return None
+    if version != PROTOCOL_VERSION or parts[4].strip().upper() != "OK":
+        return None
+    if math.isnan(counts) or math.isinf(counts):
+        return None
+    return RawSample(raw_counts=counts, board_millis=millis)
+
+
+class RawReader:
+    """Anything that yields HX711 counts. Implementations must not block forever."""
+
+    name = "unknown"
+    connected = False
+
+    def read(self) -> RawSample | None:  # pragma: no cover - interface
+        raise NotImplementedError
+
+    def close(self) -> None:
+        return None
+
+
+class HX711SerialReader:
+    """Raw counts from the Aurum weight sketch over USB serial.
+
+    Owns no calibration and no filtering: it turns bytes into samples and
+    reports honestly when it cannot. A disconnect mid-run is an expected
+    condition on a machine with a USB cable, not an exception to propagate.
+    """
+
+    name = "hx711-serial"
+
+    def __init__(self, port: str, baudrate: int = 9600, timeout_s: float = 1.0) -> None:
+        try:
+            import serial
+        except ImportError as exc:
+            raise RuntimeError(
+                "pyserial is not installed; `pip install pyserial` to read a real HX711"
+            ) from exc
+        self.port = port
+        self._ser = serial.Serial(port, baudrate, timeout=timeout_s)
+        self.connected = True
+        self.last_error: str | None = None
+        time.sleep(2.0)  # the board resets when the port opens
+
+    def read(self) -> RawSample | None:
+        if not self.connected:
+            return None
+        try:
+            line = self._ser.readline().decode("ascii", errors="ignore")
+        except Exception as exc:  # pyserial raises several unrelated types
+            self.connected = False
+            self.last_error = f"serial read failed on {self.port}: {exc}"
+            return None
+        return parse_weight_line(line)
+
+    def close(self) -> None:
+        with contextlib.suppress(Exception):
+            self._ser.close()
+        self.connected = False
+
+
+class SimulatedRawReader:
+    """A labelled stand-in producing counts, so the whole path can run dry.
+
+    Feeds the same filter, the same stability window and the same calibration
+    as the real cell, so a simulated run exercises the production code rather
+    than an imitation of it. Its output can never become MEASURED.
+    """
+
+    name = "simulated"
+
+    def __init__(self, grams: float = 1840.0, calibration: Calibration | None = None) -> None:
+        self.connected = True
+        self.grams = grams
+        self._calibration = calibration
+        self._t0 = time.time()
+
+    def read(self) -> RawSample | None:
+        drift = math.sin((time.time() - self._t0) / 7.0) * 2.5
+        grams = self.grams + drift
+        cal = self._calibration
+        counts = (
+            grams * cal.counts_per_gram + cal.tare_counts if cal and cal.present else grams * 1000.0
+        )
+        return RawSample(raw_counts=counts)
+
+
+class WeightSensor:
+    """Raw counts to a mass you can defend, or an explicit refusal.
+
+        samples -> median filter -> stability window -> calibration -> status
+
+    The first reading is never accepted. A load cell settles, a belt vibrates,
+    and a hand leaving the pan takes a moment; whichever number arrives first
+    is the least trustworthy one in the series.
+    """
+
+    def __init__(
+        self,
+        reader,
+        calibration: Calibration | None = None,
+        cfg: config_module.Config | None = None,
+        simulated: bool | None = None,
+    ) -> None:
+        cfg = config_module.load() if cfg is None else cfg
+        self.reader = reader
+        self.calibration = Calibration.load() if calibration is None else calibration
+        self.window_ms = cfg["conveyor.weight.stability_window_ms"]
+        self.tolerance_g = cfg["conveyor.weight.stability_tolerance_g"]
+        self.timeout_s = cfg["conveyor.weight.timeout_s"]
+        self.filter_samples = cfg["conveyor.weight.filter_samples"]
+        self.simulated = (
+            getattr(reader, "name", "") == SimulatedRawReader.name
+            if simulated is None
+            else simulated
+        )
+
+    # -- helpers ----------------------------------------------------------
+    def _unavailable(self, reason: str, raw: float | None = None) -> WeightReading:
+        return WeightReading(
+            grams=0.0,
+            simulated=self.simulated,
+            source=getattr(self.reader, "name", "unknown"),
+            status=WeightStatus.UNAVAILABLE,
+            usable=False,
+            reason=reason,
+            raw_counts=raw,
+            timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
+        )
+
+    def _reading(self, grams: float, status: WeightStatus, raw, reason=None) -> WeightReading:
+        return WeightReading(
+            grams=grams,
+            simulated=self.simulated,
+            source=getattr(self.reader, "name", "unknown"),
+            status=status,
+            usable=status is WeightStatus.MEASURED,
+            reason=reason,
+            raw_counts=raw,
+            timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
+        )
+
+    # -- reading ----------------------------------------------------------
+    def read(self, now=None) -> WeightReading:
+        """Collect samples until the reading settles, or say why it did not."""
+        clock = time.monotonic if now is None else now
+        if not self.simulated and not self.calibration.present:
+            return self._unavailable(
+                "The load cell is not calibrated. Run `python -m app.calibrate` to "
+                "record a factor, then verify it with a second known mass."
+            )
+
+        deadline = clock() + self.timeout_s
+        window_s = self.window_ms / 1000.0
+        history: list[tuple[float, float]] = []  # (time, grams)
+        raw_buffer: list[float] = []
+        last_grams: float | None = None
+        last_raw: float | None = None
+
+        while clock() < deadline:
+            sample = self.reader.read()
+            if sample is None:
+                if not getattr(self.reader, "connected", True):
+                    return self._unavailable(
+                        getattr(self.reader, "last_error", None)
+                        or "The load-cell reader disconnected."
+                    )
+                continue
+
+            raw_buffer.append(sample.raw_counts)
+            raw_buffer = raw_buffer[-max(1, int(self.filter_samples)) :]
+            # Median, not mean: one electrically noisy sample should not move
+            # the answer, and a spike is exactly what a mean would smear in.
+            filtered = statistics.median(raw_buffer)
+            grams = self._to_grams(filtered)
+            if grams is None or math.isnan(grams) or math.isinf(grams):
+                return self._unavailable("The reading is not a finite number.", filtered)
+
+            last_grams, last_raw = grams, filtered
+            stamp = clock()
+            history.append((stamp, grams))
+            history = [(t, g) for t, g in history if stamp - t <= window_s]
+
+            settled = stamp - history[0][0] >= window_s and len(history) >= 2
+            if settled:
+                spread = max(g for _, g in history) - min(g for _, g in history)
+                if spread <= self.tolerance_g:
+                    return self._settled(grams, last_raw, spread)
+
+        if last_grams is None:
+            return self._unavailable(f"No usable reading arrived within {self.timeout_s:.1f}s.")
+        return self._reading(
+            last_grams,
+            WeightStatus.UNSTABLE,
+            last_raw,
+            f"Did not settle within {self.tolerance_g:.2f} g over "
+            f"{self.window_ms:.0f} ms before the {self.timeout_s:.1f}s timeout.",
+        )
+
+    def _settled(self, grams: float, raw: float | None, spread: float) -> WeightReading:
+        if self.simulated:
+            return self._reading(
+                grams,
+                WeightStatus.SIMULATED,
+                raw,
+                "SIMULATED SENSOR - not a physical measurement.",
+            )
+        if not self.calibration.verified:
+            return self._reading(
+                grams,
+                WeightStatus.STABLE,
+                raw,
+                "The reading settled, but this calibration has not been verified "
+                "against a second known mass, so it is not a measurement.",
+            )
+        return self._reading(
+            grams,
+            WeightStatus.MEASURED,
+            raw,
+            f"Settled within {spread:.3f} g on a verified calibration.",
+        )
+
+    def _to_grams(self, raw: float) -> float | None:
+        if self.simulated and not self.calibration.present:
+            # The simulation encodes grams at a nominal 1000 counts/g so the
+            # whole path runs before any cell is calibrated.
+            return raw / 1000.0
+        return self.calibration.grams(raw)
+
+    def tare(self, samples: int = 20) -> float | None:
+        """Average the empty-pan counts. The zero every later reading subtracts."""
+        collected = []
+        deadline = time.monotonic() + self.timeout_s
+        while len(collected) < samples and time.monotonic() < deadline:
+            sample = self.reader.read()
+            if sample is not None:
+                collected.append(sample.raw_counts)
+        return statistics.fmean(collected) if collected else None
+
+    def close(self) -> None:
+        self.reader.close()

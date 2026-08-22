@@ -6,10 +6,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Secrets — never commit. See .env.example for the required variables.
+# Secrets — never commit. The committed template is env.example (no leading
+# dot), which these patterns do not match, so it stays tracked.
 .env
 .env.*
-!.env.example
 
 # Datasets are rebuilt from configs/datasets.yaml via `python -m ml.ingest`.
 # They are large and carry third-party licenses; not redistributed here.

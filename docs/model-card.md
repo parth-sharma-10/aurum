@@ -15,6 +15,8 @@
 | Input size | 512 px |
 | Trained | 2026-08-16 17:38:03 UTC |
 | Weights | `models/aurum_vision_v0_1_best.pt` |
+| Artifact SHA-256 | `cd1a3c2cd2c99c1ff5315c073f01fd236767b4425ee5d99598e6f8fedee312e9` |
+| Artifact size | 5,454,554 bytes |
 
 **What it does.** Identifies and counts four visible e-waste component categories in RGB imagery at webcam speed.
 
@@ -36,7 +38,7 @@ Six public Roboflow Universe datasets normalized into 4 Aurum classes. Full prov
 | valid | 412 | 138 | 254 | 172 | 107 |
 | test | 206 | 69 | 139 | 79 | 53 |
 
-Splits are assigned over **4,353 duplicate clusters**, not individual images: 17,193 images were grouped by source stem and merged across datasets by SHA-256 and perceptual hash (310 near-duplicate merges). Held-out splits keep one image per cluster.
+Splits are assigned over duplicate clusters, not individual images: 17,193 images were grouped by source stem and merged across datasets by SHA-256 and perceptual hash into **4,353 clusters** (310 near-duplicate merges). Held-out splits keep one image per cluster. Of those, **2,154 carry the images kept in the final dataset**; the remainder held only images removed by the background cap or by held-out pruning.
 
 Independently verified by `python -m ml.validate`:
 
@@ -110,36 +112,28 @@ Read the test figures accordingly: they measure generalization across photograph
 - **Counting is per-frame detection, not tracking.** Stacked or occluding boards can undercount. The batch record uses a median over a frame window to suppress flicker, not to resolve occlusion.
 - **Small test set.** Per-class figures rest on tens of instances, so treat differences of a few points as noise.
 
-## Recovery estimation
+## Material estimation
 
-**Status: DISABLED (intentionally)** — `configs/recovery_reference.yaml` defines 0 component yield entries.
+**Composition: ENABLED** — `configs/material_reference.yaml` holds 22 cited evidence records, each resolving to a paper in `docs/sources/material_sources.yaml`.
+
+**Recovery: UNAVAILABLE** — a recovery factor is applied only where a source measured recovery from a feed matching what Aurum detected.
 
 **What the mechanism does.** Aurum's economic claim is that component
-identity plus published reference yields gives an *estimated* recovery
-value: `estimate = Σ (count(component) × reference_yield) × spot_price`.
-The counts come from this model. The yields and prices do not — and
-cannot — come from an image.
+identity plus published reference composition gives an *estimated*
+quantity of material present. The counts come from this model. The
+composition figures do not — and cannot — come from an image.
 
-**Why it is disabled.** Enabling it requires per-component precious-
-metal yield figures backed by a citable source (a paper, a standard,
-or an assayer's published figure). No such figures were available at
-the time of writing, and none were invented to fill the gap. A
-plausible-looking number with nothing behind it is worse than no
-number, because it would be quoted.
+**How it fails closed.** A detected class with no cited figure blocks
+the whole estimate rather than contributing a silent zero, and
+`app/batch.recovery_estimate()` then returns `{"available": false,
+"reason": ...}` with no numeric field at all. Concentration-based
+figures are additionally refused unless the batch carries a *measured*
+mass, because multiplying a simulated weight by a real concentration
+would produce an invented quantity that reads as measured.
 
-**What is required to enable it.**
+**No composition data at all:** RAM. A batch containing one of these produces no estimate.
 
-1. Add an entry per Aurum class to `configs/recovery_reference.yaml`
-   with `value`, `unit` and a real `source` citation.
-2. Set `enabled: true`.
-
-**How it fails safely today.** `app/batch.recovery_estimate()` returns
-`{"available": false, "reason": ...}` and emits no numeric field at
-all, so no consumer can mistake a partial result for a value. The
-dashboard renders **REFERENCE DATA NOT LOADED**. This behaviour is
-covered by tests in `tests/test_batch.py` and `tests/test_api.py`,
-including an explicit check that no numeric value leaks over the
-wire.
+**Partial metal coverage:** CPU, Connector, PCB, RAM — per-class detail in `docs/material-reference.md`. Missing figures are stated, not estimated.
 
 Whatever its state, every response carries the disclaimer that the
 figure is an estimate and that Aurum Vision does not measure
