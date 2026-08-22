@@ -139,6 +139,9 @@ class DemoSession:
         #: Item ids handled by `measure_and_route`, so one physical object
         #: cannot be weighed and routed twice by an impatient second click.
         self._handled: set[str] = set()
+        #: Finished records, newest last. The run's ledger, kept here because
+        #: the tracker deliberately forgets an item once it has been drained.
+        self._routed: dict[str, dict] = {}
 
     # -- hardware ----------------------------------------------------------
     def connect_board(self) -> dict:
@@ -297,7 +300,15 @@ class DemoSession:
             item.valuation = valuation.as_dict()
             item.decision = decision.as_dict()
             item.actuation = self._actuate(item.item_id, decision)
-            return item.as_dict()
+
+            # Keep the finished record here rather than relying on the tracker.
+            # `drain_finalized()` empties its list by design - that is what stops
+            # one item reaching the ledger twice - so an item that leaves the
+            # frame would otherwise vanish from the run's history a few seconds
+            # after its paddle fired.
+            record = item.as_dict()
+            self._routed[item.item_id] = record
+            return record
 
     def _resolve(self, item_id: str | None):
         """The item to act on, or a refusal explaining why there is none."""
@@ -410,11 +421,17 @@ class DemoSession:
         """Everything the dashboard renders, in one read."""
         with self._lock:
             current = self.pipeline.current_item
-            items = sorted(
-                list(self.pipeline.tracker.active) + list(self.pipeline.tracker.finalized),
-                key=lambda i: i.first_frame,
-                reverse=True,
-            )
+            # Everything routed this run, plus anything currently in view that
+            # has not been routed yet. Routed records win: they carry the mass,
+            # the decision and the actuation.
+            live = [
+                i.as_dict()
+                for i in sorted(
+                    self.pipeline.tracker.active, key=lambda i: i.first_frame, reverse=True
+                )
+                if i.item_id not in self._routed
+            ]
+            items = list(reversed(list(self._routed.values()))) + live
             return {
                 "running": self._thread is not None and self._thread.is_alive(),
                 "started_at": self.started_at,
@@ -424,7 +441,7 @@ class DemoSession:
                     "error": self.camera_error,
                 },
                 "current_item": current.as_dict() if current else None,
-                "items": [i.as_dict() for i in items[:25]],
+                "items": items[:25],
                 "confirmed_count": sum(
                     1 for i in self.pipeline.tracker.active if i.state is ItemState.CONFIRMED
                 ),

@@ -297,7 +297,11 @@ def _component_lines(
             hi = ref.get("maximum")
             low = grams * float(lo) / 1_000_000.0 if lo is not None else None
             high = grams * float(hi) / 1_000_000.0 if hi is not None else None
-            basis = f"measured batch mass {grams:g} g x {ref['value']} {ref['unit']}"
+            # Name the mass for what it is. Calling a stand-in "measured" would
+            # contradict the SIMULATED badge sitting directly above it, and the
+            # contradiction would be on screen during a demonstration.
+            mass_word = "assumed" if mass.get("mock") else "measured"
+            basis = f"{mass_word} batch mass {grams:g} g x {ref['value']} {ref['unit']}"
             evidence_ids = [eid]
         else:
             typical = count * per_piece
