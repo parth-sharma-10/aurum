@@ -281,12 +281,19 @@ class DemoSession:
             item.weight_reading = reading.as_dict()
 
             component_class = item.class_name
+            # A mass is forwarded when it carries a real quantity - a settled
+            # measurement, or a labelled stand-in. An UNAVAILABLE reading is
+            # withheld entirely: its grams field is 0.0, and 0.0 with no
+            # simulated flag would classify as MEASURED downstream.
+            has_quantity = reading.status in (WeightStatus.MEASURED, WeightStatus.SIMULATED)
             valuation = valuation_module.value(
                 {component_class: 1} if component_class else {},
-                mass=reading.as_dict() if reading.usable else None,
+                mass=reading.as_dict() if has_quantity else None,
                 item_id=item.item_id,
             )
-            decision = decision_engine.decide(component_class, item.confidence, valuation)
+            decision = decision_engine.decide(
+                component_class, item.confidence, valuation, cfg=self.cfg
+            )
             item.valuation = valuation.as_dict()
             item.decision = decision.as_dict()
             item.actuation = self._actuate(item.item_id, decision)
@@ -313,19 +320,55 @@ class DemoSession:
             }
         return item
 
+    def _mock_mass(self, why: str) -> WeightReading:
+        """A labelled stand-in mass, for a demonstration with no usable cell.
+
+        `simulated` is true and the status is SIMULATED, which is what carries
+        the fabrication forward: PMDI, the valuation and the decision all end
+        up stamped SIMULATED, and the dashboard shows it as such. Nothing here
+        can reach MEASURED.
+        """
+        grams = float(self.cfg["demo.mock_mass.grams"])
+        return WeightReading(
+            grams=grams,
+            simulated=True,
+            source="demo mock mass",
+            status=WeightStatus.SIMULATED,
+            usable=False,
+            mock=True,
+            reason=(
+                f"MOCK MASS - {grams:g} g was assumed, not measured. {why} "
+                "Every figure derived from it is an illustration of the pipeline, "
+                "not a measurement of this object."
+            ),
+            timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
+        )
+
     def _read_mass(self) -> WeightReading:
+        mock = bool(self.cfg["demo.mock_mass.enabled"])
         sensor = self.weight_sensor
         if sensor is None:
-            return _unavailable_reading(
-                "No load cell is connected, so this item has no mass. Nothing is "
-                "estimated in place of one."
+            why = "No load cell is connected."
+            return (
+                self._mock_mass(why)
+                if mock
+                else _unavailable_reading(f"{why} Nothing is estimated in place of one.")
             )
         if not self.calibration.present:
-            return _unavailable_reading(
-                "The load cell is not calibrated. Run `python -m app.calibrate` and "
-                "verify against a second known mass."
+            why = "The load cell is not calibrated."
+            return (
+                self._mock_mass(why)
+                if mock
+                else _unavailable_reading(
+                    f"{why} Run `python -m app.calibrate` and verify against a second known mass."
+                )
             )
-        return sensor.read()
+        reading = sensor.read()
+        # A cell that is connected and calibrated but could not settle still
+        # falls back, so a flaky reading does not stall a demonstration.
+        if mock and not reading.usable:
+            return self._mock_mass(f"The cell returned {reading.status}.")
+        return reading
 
     def _actuate(self, item_id: str, decision) -> dict:
         """Turn a decision into a paddle movement, or record why it is not one."""
@@ -392,6 +435,15 @@ class DemoSession:
                     if self.controller
                     else {"connected": False, "actuation_enabled": False}
                 ),
+                "mock_mass": {
+                    "enabled": bool(self.cfg["demo.mock_mass.enabled"]),
+                    "grams": float(self.cfg["demo.mock_mass.grams"]),
+                    "note": (
+                        "A stand-in mass is being used because the load cell cannot "
+                        "supply one. Every figure derived from it is SIMULATED and "
+                        "none of it is a measurement of the object on screen."
+                    ),
+                },
                 "conveyor": {
                     "present": False,
                     "note": (

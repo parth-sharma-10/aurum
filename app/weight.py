@@ -42,6 +42,12 @@ class WeightReading:
     reason: str | None = None
     raw_counts: float | None = None
     timestamp: str | None = None
+    #: A deliberate demonstration stand-in, not a reading of anything. Set only
+    #: by the demo fallback, and the one thing that lets the estimator consume a
+    #: SIMULATED mass. It travels with the data rather than being looked up from
+    #: configuration, so the permission and the number it applies to cannot
+    #: drift apart.
+    mock: bool = False
 
     def as_dict(self) -> dict:
         out = {
@@ -63,6 +69,7 @@ class WeightReading:
             ("reason", self.reason),
             ("raw_counts", self.raw_counts),
             ("timestamp", self.timestamp),
+            ("mock", True if self.mock else None),
         ):
             if value is not None:
                 out[key] = value

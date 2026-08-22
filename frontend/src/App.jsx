@@ -324,6 +324,11 @@ export default function App() {
             ok={actuation.actuation_enabled}
             label={actuation.actuation_enabled ? "ACTUATION ON" : "ACTUATION OFF"}
           />
+          {state?.mock_mass?.enabled && (
+            <span className="badge-c" title={state.mock_mass.note}>
+              MOCK MASS {state.mock_mass.grams} g
+            </span>
+          )}
         </div>
       </header>
 
@@ -346,6 +351,13 @@ export default function App() {
         </span>
       </div>
 
+      {state?.mock_mass?.enabled && (
+        <div className="notice">
+          <strong>MOCK MASS — {state.mock_mass.grams} g is assumed, not measured.</strong>{" "}
+          The load cell cannot supply a mass, so every figure derived from it is stamped
+          SIMULATED. The class, the cited composition and the bin are real; the mass is not.
+        </div>
+      )}
       {error && <div className="notice bad">{error}</div>}
       {state?.camera?.error && <div className="notice bad">Camera: {state.camera.error}</div>}
 

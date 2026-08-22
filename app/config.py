@@ -228,6 +228,22 @@ SPEC: dict[str, tuple] = {
         "AURUM_SIM_SERVO_ACTUATION_DELAY_MS",
     ),
     "conveyor.simulation.timing_offset_ms": (_float, 0.0, "AURUM_SIM_TIMING_OFFSET_MS"),
+    # ------------------------------------------------------------------
+    # DEMONSTRATION FALLBACK - a stand-in mass, for when the load cell
+    # cannot supply one.
+    #
+    # Ships OFF. With it on, an item that could not be weighed is given
+    # `demo.mock_mass.grams` so the rest of the pipeline can be shown
+    # running. That mass is FABRICATED: it is stamped SIMULATED, it can
+    # never reach MEASURED, and every estimate computed from it carries
+    # overall_status SIMULATED all the way to the dashboard.
+    #
+    # It exists so a broken load cell does not cost the whole
+    # demonstration. It is not a substitute for calibrating the cell, and
+    # nothing computed from it may be quoted as a measurement.
+    # ------------------------------------------------------------------
+    "demo.mock_mass.enabled": (_bool, False, "AURUM_DEMO_MOCK_MASS"),
+    "demo.mock_mass.grams": (_non_negative, 180.0, "AURUM_DEMO_MOCK_MASS_G"),
     "conveyor.runtime.simulation": (_bool, False, "AURUM_SIMULATION"),
     "conveyor.runtime.host": (_text, "127.0.0.1", "AURUM_HOST"),
     "conveyor.runtime.port": (_int, 8000, "AURUM_PORT"),
