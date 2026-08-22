@@ -14,10 +14,12 @@ from app.hardware.arduino import (
     new_command_id,
     parse_response,
 )
+from app.hardware.link import BoardLink
 from app.hardware.transport import FakeTransport, LinkState, SerialTransport, Transport
 
 __all__ = [
     "PROTOCOL",
+    "BoardLink",
     "ArduinoController",
     "Command",
     "CommandState",

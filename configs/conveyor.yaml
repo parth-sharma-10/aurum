@@ -73,11 +73,14 @@ conveyor:
     # Null until a board is attached. Windows looks like COM3, macOS like
     # /dev/tty.usbmodem1101, Linux like /dev/ttyACM0. Never hardcode it.
     port: null
-    baudrate: 9600
+    # 115200 is what the physical board runs at. Must match the sketch.
+    baudrate: 115200
     timeout_s: 1.0
     # ENGINEERING APPROXIMATION — not research-derived.
     # How long to wait for an ACK before treating a command as unacknowledged.
-    ack_timeout_ms: 500
+    # The board acknowledges AFTER the stroke completes, so this must exceed
+    # servo.actuation_ms plus travel time.
+    ack_timeout_ms: 2000
 
   # ==========================================================================
   # DEMONSTRATION PROFILE - TEST VALUES ONLY
@@ -99,6 +102,19 @@ conveyor:
     camera_to_servo_b_cm: 90.0       # TEST
     servo_actuation_delay_ms: 150    # TEST
     timing_offset_ms: 0              # TEST
+
+  servo:
+    # BENCH/TEST VALUES - not calibrated conveyor geometry.
+    #
+    # These came from bench-testing Servo A and Servo B on their own. No paddle
+    # has ever deflected an item, because there is no belt for an item to
+    # travel on. Treat them as starting points to tune once a conveyor exists.
+    #
+    # The board reads these at boot over the CFG frame, so changing them here
+    # does not require reflashing the sketch.
+    rest_angle_deg: 0        # TEST/BENCH
+    push_angle_deg: 90       # TEST/BENCH
+    actuation_ms: 700        # TEST/BENCH - how long the paddle stays out
 
   runtime:
     # true runs the whole pipeline with no hardware, and switches the routing

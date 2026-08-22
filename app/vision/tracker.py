@@ -127,8 +127,18 @@ class TrackedItem:
     #: Carries the status and the reason a refusal happened.
     weight_reading: dict | None = None
 
-    #: Filled by a later phase from app.decision. No grading logic lives here.
+    #: Filled by the session from app.decision. No grading logic lives here.
     decision: dict | None = None
+
+    #: The PMDI/valuation evidence the decision was taken on, as
+    #: `app.valuation.Valuation.as_dict()`. Kept beside the decision so a
+    #: dashboard can show the reasoning, not just the verdict.
+    valuation: dict | None = None
+
+    #: What the actuation layer did about that decision, as
+    #: `app.hardware.Command.as_dict()` - or an explicit record of why no
+    #: command was sent. Bin C leaves a reason here, never a servo.
+    actuation: dict | None = None
 
     @property
     def class_name(self) -> str | None:
@@ -204,6 +214,8 @@ class TrackedItem:
             "weight_timestamp": self.weight_timestamp,
             "weight_reading": self.weight_reading,
             "decision": self.decision,
+            "valuation": self.valuation,
+            "actuation": self.actuation,
         }
 
 

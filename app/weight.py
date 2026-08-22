@@ -482,10 +482,18 @@ class WeightSensor:
 
         deadline = clock() + self.timeout_s
         window_s = self.window_ms / 1000.0
-        history: list[tuple[float, float]] = []  # (time, grams)
         raw_buffer: list[float] = []
         last_grams: float | None = None
         last_raw: float | None = None
+        # The current run of readings that have stayed within tolerance, as the
+        # moment it started and the extremes seen since. Tracked as a running
+        # min/max rather than a list of timestamped samples, because comparing
+        # `now` against the oldest sample still inside the window silently
+        # requires a sample to land exactly on the boundary: a 450 ms window fed
+        # by a 10 Hz cell never settles at all, however still the mass is. The
+        # shipped 500 ms window only worked because 100 ms divides into it.
+        stable_since: float | None = None
+        run_min = run_max = 0.0
 
         while clock() < deadline:
             sample = self.reader.read()
@@ -508,14 +516,22 @@ class WeightSensor:
 
             last_grams, last_raw = grams, filtered
             stamp = clock()
-            history.append((stamp, grams))
-            history = [(t, g) for t, g in history if stamp - t <= window_s]
 
-            settled = stamp - history[0][0] >= window_s and len(history) >= 2
-            if settled:
-                spread = max(g for _, g in history) - min(g for _, g in history)
-                if spread <= self.tolerance_g:
-                    return self._settled(grams, last_raw, spread)
+            if stable_since is None:
+                # The first reading is never accepted on its own: a cell
+                # settles, a bench vibrates, and a hand leaving the pan takes a
+                # moment. It only opens the window.
+                stable_since, run_min, run_max = stamp, grams, grams
+                continue
+
+            run_min, run_max = min(run_min, grams), max(run_max, grams)
+            if run_max - run_min > self.tolerance_g:
+                # It moved. The window restarts from here rather than from the
+                # start of the run, which is what "stayed within tolerance for
+                # the whole window" has to mean.
+                stable_since, run_min, run_max = stamp, grams, grams
+            elif stamp - stable_since >= window_s:
+                return self._settled(grams, last_raw, run_max - run_min)
 
         if last_grams is None:
             return self._unavailable(f"No usable reading arrived within {self.timeout_s:.1f}s.")

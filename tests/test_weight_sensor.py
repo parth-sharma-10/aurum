@@ -260,6 +260,23 @@ class TestStability:
         sensor_for(reader).read(now=clock_factory())
         assert reader.reads > 1
 
+    @pytest.mark.parametrize("window_ms", [450, 500, 550, 730])
+    def test_a_still_mass_settles_whatever_the_window_is(self, window_ms):
+        """Regression: settling must not depend on the sample spacing.
+
+        The window used to be judged by comparing `now` against the oldest
+        sample still inside it, which quietly required a sample to land exactly
+        on the boundary. A 450 ms window fed by a 10 Hz cell then never settled,
+        however still the mass was, and the shipped 500 ms default only worked
+        because 100 ms divides into it.
+        """
+        reader = ScriptedReader([counts_for(180.0)] * 400)
+        reading = sensor_for(
+            reader, weight_stability_window_ms=window_ms, weight_timeout_s=30
+        ).read(now=clock_factory(step=0.1))
+        assert reading.status is WeightStatus.MEASURED
+        assert reading.grams == pytest.approx(180.0)
+
     def test_a_moving_series_is_unstable(self):
         drifting = [counts_for(180.0 + i * 5.0) for i in range(200)]
         reading = sensor_for(ScriptedReader(drifting)).read(now=clock_factory())
