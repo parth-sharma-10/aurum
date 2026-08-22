@@ -243,7 +243,17 @@ SPEC: dict[str, tuple] = {
     # nothing computed from it may be quoted as a measurement.
     # ------------------------------------------------------------------
     "demo.mock_mass.enabled": (_bool, False, "AURUM_DEMO_MOCK_MASS"),
+    #: Fallback for a class with no entry below.
     "demo.mock_mass.grams": (_non_negative, 180.0, "AURUM_DEMO_MOCK_MASS_G"),
+    # Per class, because one flat mass makes the ppm figures wrong in a way a
+    # judge can spot: a CPU is not 180 g, and pretending it is drags its
+    # precious fraction down by a factor of seven. These are plausible typical
+    # masses for the class, TEST values chosen to keep the arithmetic sensible.
+    # They are not measurements of anything and nothing was weighed to get them.
+    "demo.mock_mass.cpu_g": (_non_negative, 25.0, "AURUM_DEMO_MOCK_MASS_CPU_G"),
+    "demo.mock_mass.pcb_g": (_non_negative, 180.0, "AURUM_DEMO_MOCK_MASS_PCB_G"),
+    "demo.mock_mass.ram_g": (_non_negative, 30.0, "AURUM_DEMO_MOCK_MASS_RAM_G"),
+    "demo.mock_mass.connector_g": (_non_negative, 5.0, "AURUM_DEMO_MOCK_MASS_CONNECTOR_G"),
     "conveyor.runtime.simulation": (_bool, False, "AURUM_SIMULATION"),
     "conveyor.runtime.host": (_text, "127.0.0.1", "AURUM_HOST"),
     "conveyor.runtime.port": (_int, 8000, "AURUM_PORT"),

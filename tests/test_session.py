@@ -422,3 +422,65 @@ class TestMockMassFallback:
         assert snapshot["enabled"] is True
         assert snapshot["grams"] == 180.0
         assert "none of it is a measurement" in snapshot["note"]
+
+
+class TestPerClassMockMass:
+    """A stand-in mass is per class, because ppm is metal over TOTAL mass.
+
+    One flat value made a CPU read 26 ppm instead of 188 - a number a judge can
+    check against the class and find wrong, which is worse than showing nothing.
+    """
+
+    def mock_cfg(self):
+        return config.load(
+            environ={
+                "AURUM_ARDUINO_ENABLED": "true",
+                "AURUM_DEMO_MOCK_MASS": "true",
+                "AURUM_WEIGHT_TIMEOUT_S": "0.2",
+                "AURUM_WEIGHT_STABILITY_WINDOW_MS": "10",
+            }
+        )
+
+    def run_for(self, component_class, transport=None):
+        cfg = self.mock_cfg()
+        transport = FakeTransport(connected=True) if transport is None else transport
+        run = DemoSession(cfg=cfg, controller=ArduinoController(transport=transport, cfg=cfg))
+        run.calibration = Calibration()
+        present(run, component_class)
+        return run.measure_and_route()
+
+    def test_each_class_gets_its_own_stand_in(self):
+        masses = {c: self.run_for(c)["weight_g"] for c in ("CPU", "PCB", "RAM", "Connector")}
+        assert masses["CPU"] == 25.0
+        assert masses["PCB"] == 180.0
+        assert masses["RAM"] == 30.0
+        assert masses["Connector"] == 5.0
+
+    def test_a_cpu_reaches_bin_a_and_fires_servo_a(self):
+        transport = FakeTransport(connected=True)
+        result = self.run_for("CPU", transport)
+        assert result["decision"]["decision"] == "A"
+        assert result["actuation"]["servo"] == "SERVO_A"
+        assert transport.movements[0][0] == "A"
+
+    def test_a_connector_reaches_bin_a_and_fires_servo_a(self):
+        transport = FakeTransport(connected=True)
+        result = self.run_for("Connector", transport)
+        assert result["decision"]["decision"] == "A"
+        assert transport.movements[0][0] == "A"
+
+    def test_the_cpu_fraction_is_computed_against_a_cpu_sized_mass(self):
+        """4.71 mg of gold in 25 g is 188 ppm. In 180 g it would read 26."""
+        pmdi = self.run_for("CPU")["valuation"]["pmdi"]
+        assert pmdi["precious_mass_fraction_ppm"] == pytest.approx(188.4, abs=0.5)
+
+    def test_an_unknown_class_falls_back_to_the_default(self):
+        cfg = self.mock_cfg()
+        run = DemoSession(cfg=cfg)
+        assert run.mock_mass_for("Widget") == cfg["demo.mock_mass.grams"]
+        assert run.mock_mass_for(None) == cfg["demo.mock_mass.grams"]
+
+    def test_the_snapshot_publishes_the_per_class_table(self):
+        cfg = self.mock_cfg()
+        per_class = DemoSession(cfg=cfg).snapshot()["mock_mass"]["per_class"]
+        assert per_class == {"CPU": 25.0, "PCB": 180.0, "RAM": 30.0, "Connector": 5.0}

@@ -394,7 +394,7 @@ export default function App() {
           />
           {state?.mock_mass?.enabled && (
             <span className="badge-c" title={state.mock_mass.note}>
-              MOCK MASS {state.mock_mass.grams} g
+              MOCK MASS
             </span>
           )}
         </div>
@@ -429,12 +429,19 @@ export default function App() {
 
       {state?.mock_mass?.enabled && (
         <div className="notice">
-          <strong>
-            MOCK MASS — {state.mock_mass.grams} g is assumed, not measured.
-          </strong>{" "}
-          The load cell cannot supply a mass, so every figure derived from it is
+          <strong>MOCK MASS — the mass is assumed, not measured.</strong> The
+          load cell cannot supply one, so every figure derived from it is
           stamped SIMULATED. The class, the cited composition and the bin are
           real; the mass is not.
+          {state.mock_mass.per_class && (
+            <span className="mono small">
+              {" "}
+              Assumed per class:{" "}
+              {Object.entries(state.mock_mass.per_class)
+                .map(([cls, g]) => `${cls} ${g} g`)
+                .join(" · ")}
+            </span>
+          )}
         </div>
       )}
       {error && <div className="notice bad">{error}</div>}

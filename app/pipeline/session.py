@@ -279,11 +279,10 @@ class DemoSession:
                 )
             self._handled.add(item.item_id)
 
-            reading = self._read_mass()
+            component_class = item.class_name
+            reading = self._read_mass(component_class)
             item.attach_weight(reading.grams, str(reading.status), reading.timestamp)
             item.weight_reading = reading.as_dict()
-
-            component_class = item.class_name
             # A mass is forwarded when it carries a real quantity - a settled
             # measurement, or a labelled stand-in. An UNAVAILABLE reading is
             # withheld entirely: its grams field is 0.0, and 0.0 with no
@@ -331,7 +330,20 @@ class DemoSession:
             }
         return item
 
-    def _mock_mass(self, why: str) -> WeightReading:
+    def mock_mass_for(self, component_class: str | None) -> float:
+        """The stand-in mass for a class, in grams.
+
+        Per class, because a precious fraction is metal over TOTAL mass: give a
+        CPU a board's mass and its ppm drops sevenfold, which is a number a
+        judge can check against the class and find wrong. Falls back to
+        `demo.mock_mass.grams` for anything unlisted.
+        """
+        key = f"demo.mock_mass.{(component_class or '').lower()}_g"
+        if key in config_module.SPEC:
+            return float(self.cfg[key])
+        return float(self.cfg["demo.mock_mass.grams"])
+
+    def _mock_mass(self, why: str, component_class: str | None = None) -> WeightReading:
         """A labelled stand-in mass, for a demonstration with no usable cell.
 
         `simulated` is true and the status is SIMULATED, which is what carries
@@ -339,7 +351,7 @@ class DemoSession:
         up stamped SIMULATED, and the dashboard shows it as such. Nothing here
         can reach MEASURED.
         """
-        grams = float(self.cfg["demo.mock_mass.grams"])
+        grams = self.mock_mass_for(component_class)
         return WeightReading(
             grams=grams,
             simulated=True,
@@ -355,20 +367,20 @@ class DemoSession:
             timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
         )
 
-    def _read_mass(self) -> WeightReading:
+    def _read_mass(self, component_class: str | None = None) -> WeightReading:
         mock = bool(self.cfg["demo.mock_mass.enabled"])
         sensor = self.weight_sensor
         if sensor is None:
             why = "No load cell is connected."
             return (
-                self._mock_mass(why)
+                self._mock_mass(why, component_class)
                 if mock
                 else _unavailable_reading(f"{why} Nothing is estimated in place of one.")
             )
         if not self.calibration.present:
             why = "The load cell is not calibrated."
             return (
-                self._mock_mass(why)
+                self._mock_mass(why, component_class)
                 if mock
                 else _unavailable_reading(
                     f"{why} Run `python -m app.calibrate` and verify against a second known mass."
@@ -378,7 +390,7 @@ class DemoSession:
         # A cell that is connected and calibrated but could not settle still
         # falls back, so a flaky reading does not stall a demonstration.
         if mock and not reading.usable:
-            return self._mock_mass(f"The cell returned {reading.status}.")
+            return self._mock_mass(f"The cell returned {reading.status}.", component_class)
         return reading
 
     def _actuate(self, item_id: str, decision) -> dict:
@@ -455,6 +467,9 @@ class DemoSession:
                 "mock_mass": {
                     "enabled": bool(self.cfg["demo.mock_mass.enabled"]),
                     "grams": float(self.cfg["demo.mock_mass.grams"]),
+                    "per_class": {
+                        cls: self.mock_mass_for(cls) for cls in ("CPU", "PCB", "RAM", "Connector")
+                    },
                     "note": (
                         "A stand-in mass is being used because the load cell cannot "
                         "supply one. Every figure derived from it is SIMULATED and "
