@@ -832,7 +832,7 @@ It has never sorted anything.** There is no conveyor.
 | 4 Tracking | COMPLETE | `app/vision/`, `app/pipeline/` | camera | software-tested + real model |
 | 5 HX711 | COMPLETE (software) | `app/weight.py`, `app/calibrate.py` | HX711 responds | **calibration NOT verified** |
 | 6 Routing | COMPLETE (software) | `app/routing/` | none | simulation-verified only |
-| 7 Arduino/servo | **PARTIAL** | transport + command layer | servos bench-tested | **Arduino-Python NOT verified** |
+| 7 Arduino/servo | COMPLETE (software) | transport, command layer, actuator, sketch | servos bench-tested | **Arduino-Python NOT verified — bench test pending** |
 | 8 API/frontend | PENDING | — | — | — |
 | 9 End-to-end | PENDING | — | — | — |
 | 10 Validation | PENDING | — | — | — |
@@ -847,7 +847,7 @@ Aurum reaches level 3 for the servos and HX711, level 2 for routing, and
 
 ### Hardware, as built
 
-HX711 `DOUT`→D2, `SCK`→D3 · Servo A→D9 · Servo B→D10 · serial **115200** ·
+HX711 `DOUT`→D2, `SCK`→D3 · Servo A→D9 · Servo B→D10 · serial **115200** (config and sketch now agree) ·
 Servo A and B: REST 0 deg, PUSH 90 deg, 700 ms hold (bench values) ·
 AKSHA 5 V / 3 A external servo supply, common ground, **external +5 V NOT tied
 to Arduino +5 V** · **no physical conveyor**.

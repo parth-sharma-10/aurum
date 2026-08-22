@@ -154,7 +154,16 @@ class TestViews:
         """Tuning the throw must not require reflashing the board."""
         board = link()
         board.configure_servos(0, 90, 700)
-        assert board._serial.written == [b"AURUM/1 CFG 0 90 700\n"]
+        frame = board._serial.written[0].decode().strip().split()
+        assert frame[:5] == ["AURUM/1", "CFG", "0", "90", "700"]
+
+    def test_the_config_frame_carries_a_command_id(self):
+        """The sketch rejects a CFG with no id as BAD_FRAME, and should."""
+        board = link()
+        board.configure_servos(0, 90, 700)
+        frame = board._serial.written[0].decode().strip().split()
+        assert len(frame) == 6
+        assert frame[5].startswith("CMD-")
 
 
 class TestFailure:

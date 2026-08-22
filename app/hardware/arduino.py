@@ -23,6 +23,7 @@ it must be proven safe against the duplicate rules first.
 Protocol, line-delimited and versioned:
 
     host  ->  AURUM/1 MOVE <A|B> <item_id> <command_id>
+    host  ->  AURUM/1 CFG <rest_deg> <push_deg> <hold_ms> <command_id>
     host  ->  AURUM/1 PING <command_id>
     board ->  AURUM/1 ACK <command_id> [DUP]
     board ->  AURUM/1 ERR <command_id> <code>
@@ -192,6 +193,51 @@ class ArduinoController:
 
     def disconnect(self) -> None:
         self.transport.disconnect()
+
+    def configure(self) -> Command:
+        """Send the servo angles to the board.
+
+        Keeps the bench values in `configs/conveyor.yaml` rather than compiled
+        into the sketch, so tuning them on a real machine needs no reflash.
+        """
+        command_id = new_command_id()
+        rest = self.cfg["conveyor.servo.rest_angle_deg"]
+        push = self.cfg["conveyor.servo.push_angle_deg"]
+        hold = self.cfg["conveyor.servo.actuation_ms"]
+        command = Command(
+            command_id=command_id,
+            item_id="-",
+            target="CFG",
+            created_at=self._clock(),
+            raw_frame=f"{PROTOCOL} CFG {rest:.0f} {push:.0f} {hold:.0f} {command_id}",
+        )
+        if not self.connected:
+            command.state = CommandState.FAILED
+            command.error_code = "NOT_CONNECTED"
+            command.reason = f"No link to the board ({self.transport.state})."
+            return command
+        if not self.transport.send(command.raw_frame):
+            command.state = CommandState.FAILED
+            command.error_code = "WRITE_FAILED"
+            command.reason = getattr(self.transport, "last_error", "the write failed")
+            return command
+        command.state = CommandState.SENT
+        command.sent_at = self._clock()
+        response = self._await(command_id)
+        command.settled_at = self._clock()
+        if response is None:
+            command.state = CommandState.TIMED_OUT
+            command.reason = "The board did not acknowledge the servo configuration."
+        elif response.verb == "ERR":
+            command.state = CommandState.FAILED
+            command.error_code = response.code
+            command.reason = f"The board reported {response.code}."
+        else:
+            command.state = CommandState.ACKED
+            command.reason = (
+                f"Board configured: rest {rest:.0f}, push {push:.0f}, hold {hold:.0f} ms."
+            )
+        return command
 
     def ping(self) -> bool:
         """Round-trip the link. False when the board does not answer."""

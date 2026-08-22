@@ -15,10 +15,13 @@ from app.hardware.arduino import (
     parse_response,
 )
 from app.hardware.link import BoardLink
+from app.hardware.servos import ActuationOutcome, ActuationResult, ServoActuator
 from app.hardware.transport import FakeTransport, LinkState, SerialTransport, Transport
 
 __all__ = [
     "PROTOCOL",
+    "ActuationOutcome",
+    "ActuationResult",
     "BoardLink",
     "ArduinoController",
     "Command",
@@ -26,6 +29,7 @@ __all__ = [
     "FakeTransport",
     "LinkState",
     "SerialTransport",
+    "ServoActuator",
     "Transport",
     "build_frame",
     "new_command_id",

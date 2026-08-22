@@ -164,6 +164,7 @@ class FakeTransport(Transport):
         #: command ids the board has already acted on, mirroring the sketch.
         self.executed: set[str] = set()
         self.movements: list[tuple[str, str]] = []
+        self.servo_config: tuple | None = None
         self.connects = 0
 
     @property
@@ -196,6 +197,13 @@ class FakeTransport(Transport):
             self._inbox.append("AURUM/1 ERR - BAD_FRAME")
             return
         verb = parts[1]
+        if verb == "CFG":
+            if len(parts) != 6:
+                self._inbox.append(f"AURUM/1 ERR {parts[-1]} BAD_FRAME")
+                return
+            self.servo_config = (parts[2], parts[3], parts[4])
+            self._inbox.append(f"AURUM/1 ACK {parts[5]}")
+            return
         if verb == "PING":
             self._inbox.append(f"AURUM/1 PONG {parts[2] if len(parts) > 2 else '-'}")
             return

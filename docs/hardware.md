@@ -29,12 +29,15 @@ These came from independent bench testing. They are **configurable engineering
 parameters**, not validated mechanical geometry — no paddle has ever deflected
 an item, because there is no belt for an item to travel on.
 
-### KNOWN DISCREPANCY — reconcile before the bench test
+### Baud rate — reconciled
 
-`configs/conveyor.yaml` and `hardware/arduino/aurum_weight/aurum_weight.ino`
-both use **9600** baud. The hardware runs at **115200**. They must agree or
-the link produces garbage. Deliberately left unchanged at checkpoint rather
-than edited without a board to test against. **First action next session.**
+Everything now runs at **115200**: `configs/conveyor.yaml`, both sketches, and
+`app.calibrate` (which reads `conveyor.arduino.baudrate`). The earlier 9600
+discrepancy is resolved.
+
+If you re-flash the older weight-only sketch from an unmerged checkout, check
+its `Serial.begin()` first — a mismatched rate produces garbage, not silence,
+which is the more confusing failure.
 
 ### Power
 
@@ -50,14 +53,52 @@ out of the sketch that runs during weighing means a bug in the weight path
 cannot move anything physical — **use it for calibration.**
 
 **NO PHYSICAL CONVEYOR CURRENTLY EXISTS.** There is no belt, no motor and no
-frame. Every routing time in this project comes from the simulated profile.
+frame. The SIH demonstration does not use one: the operator carries the
+component from the camera to the load cell to the bins, and routing is
+immediate rather than scheduled. `app/routing/` keeps the scheduled-route model
+for the day a belt exists, and the demonstration session does not call it.
 
 ## Firmware
 
-`hardware/arduino/aurum_weight/aurum_weight.ino` — **weight only**.
+Two sketches, and the difference is a safety property rather than a
+convenience.
 
-No external HX711 library: the part is two pins and a shift register, and the
-bit-banged read is shorter than the dependency would be.
+| Sketch | Purpose | Can it move a servo? |
+|---|---|---|
+| `hardware/arduino/aurum_weight/` | **calibration** | No — it contains no servo code at all |
+| `hardware/arduino/aurum_sorter/` | **the demonstration** | Yes: Servo A on `D9`, Servo B on `D10` |
+
+**Calibrate on the weight-only sketch.** A bug in the weight path then cannot
+swing a paddle while a hand is on the pan. That is the entire reason the older
+sketch is kept rather than deleted.
+
+Both run at **115200**, and neither uses an external HX711 library: the part is
+two pins and a shift register, and the bit-banged read is shorter than the
+dependency would be.
+
+### The sorter sketch
+
+One board, one port, two protocols sharing it. Servos are **not attached at
+boot** — an unattached pin emits no pulses, so nothing can twitch while the
+board resets or while the host is still deciding whether to actuate. A stroke
+attaches, moves, holds, returns and detaches, so no holding current is drawn
+between items.
+
+`AURUM/1 CFG <rest> <push> <hold_ms>` sets the throw at runtime, so tuning the
+paddle angles needs no reflash. The host sends it automatically on connect from
+`conveyor.servo.*`.
+
+The board keeps the last 8 command ids it acted on and answers a repeat with
+`ACK <id> DUP` **without moving again** — an acknowledgement lost on the wire
+must not let a resend swing the paddle into whatever is now in front of it.
+
+`MOVE C` is refused with `BAD_TARGET`. There is no Servo C, and inventing one
+in firmware would be the single most misleading thing this repository could do.
+
+**The ACK follows the stroke, not the frame.** It means the board completed its
+movement routine — which is why `conveyor.arduino.ack_timeout_ms` is 2 s
+against a 700 ms hold. It is still not proof a servo physically moved: a
+stripped horn or a dead supply rail acknowledges identically.
 
 ### Serial protocol
 
@@ -69,9 +110,24 @@ W,<version>,<board_millis>,<raw_counts>,<status>
 
 for example `W,1,10432,-261605,OK`.
 
+The sorter sketch adds the command protocol on the same link:
+
+```
+host  ->  AURUM/1 MOVE <A|B> <item_id> <command_id>
+host  ->  AURUM/1 PING <command_id>
+host  ->  AURUM/1 CFG <rest_deg> <push_deg> <hold_ms>
+board ->  AURUM/1 ACK <command_id> [DUP]
+board ->  AURUM/1 ERR <command_id> <code>
+board ->  AURUM/1 PONG <command_id>
+```
+
+`app/hardware/link.py` owns the one port and files each incoming line by type,
+so a weight frame is never read as an acknowledgement and an acknowledgement is
+never read as a mass.
+
 | Field | Meaning |
 |---|---|
-| `W` | Weight frame. The only frame type in this phase. |
+| `W` | Weight frame. Shares the link with the `AURUM/1` command protocol. |
 | `version` | Protocol version. Currently `1`. A different version is dropped. |
 | `board_millis` | `millis()` on the Arduino, for ordering and drift checks. |
 | `raw_counts` | **Raw 24-bit HX711 counts. Never grams.** |
@@ -136,15 +192,26 @@ run on the machine.
 A PCB weighed on an unverified calibration therefore produces no metal figure —
 it routes to Bin C instead, which is the correct fail-closed behaviour.
 
-The first reading is never accepted: a cell settles, a belt vibrates, and a
+The first reading is never accepted: a cell settles, a bench vibrates, and a
 hand leaving the pan takes a moment, so whichever number arrives first is the
 least trustworthy in the series. Samples pass through a **median** filter
 (mean would smear a spike in), then a stability window.
+
+A reading settles when it has stayed inside `stability_tolerance_g` for a full
+`stability_window_ms`, tracked as "how long since it last moved". An earlier
+version compared the clock against the oldest sample still inside the window,
+which quietly required a sample to land exactly on the boundary: a 450 ms
+window fed by a 10 Hz cell then never settled at all, however still the mass
+was, and the shipped 500 ms default only worked because 100 ms divides into it.
+Tuning the window is now safe.
 
 **Zero grams is a valid measurement.** An empty pan after tare weighs nothing,
 and that is a real reading — never confused with an absent one.
 
 ## What has actually been validated
+
+Software being complete is not the same as hardware being proven, and this
+table tracks the second. **Update it only after watching the thing happen.**
 
 | Item | Status |
 |---|---|
@@ -154,26 +221,55 @@ and that is a real reading — never confused with an absent one.
 | Servo A movement (D9) | **BENCH VERIFIED**, independently, outside this software |
 | Servo B movement (D10) | **BENCH VERIFIED**, independently, outside this software |
 | Corrected power wiring | **WORKING** after the earlier short |
-| Aurum weight sketch on the board | **NOT tested** — never uploaded |
-| **Python ↔ Arduino communication** | **NOT VERIFIED** — never run |
+| Weight sketch on the board | **NOT tested** — never uploaded |
+| Sorter sketch on the board | **NOT tested** — written, never uploaded |
+| **Python ↔ Arduino communication** | **NOT VERIFIED** — never run against a board |
 | Servo moved by Aurum code | **NEVER** |
 | Calibration workflow end to end | **NOT run** on hardware |
 | Physical conveyor | **DOES NOT EXIST** |
-| Conveyor motion, belt speed, distances | **NOT measured** |
+
+Software status, which is a different claim:
+
+| Item | Status |
+|---|---|
+| Camera → detection → tracking → item id | **RUNNING** — exercised over HTTP on the test images |
+| Item id → mass → PMDI → decision → command | **RUNNING** — `app/pipeline/session.py`, covered end to end |
+| Command layer, link layer, session | **TESTED** — `tests/test_arduino.py`, `test_link.py`, `test_session.py` |
+| Serial link against a real board | **UNTESTED** — a fake serial stands in |
 
 ### The five levels, kept apart
 
 `SOFTWARE-TESTED` · `SIMULATION-VERIFIED` · `HARDWARE-BENCH-VERIFIED` ·
 `PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
 
-Aurum currently reaches level 3 for the servos and the HX711, level 2 for
-routing, and **level 4 and 5 for nothing at all.**
+Aurum reaches level 3 for the servos and the HX711 — bench-verified outside
+this software — and **level 4 and 5 for nothing at all.** Level 4 needs the
+calibration workflow run on the machine; level 5 needs a conveyor that does not
+exist and is not in the demonstration's scope.
 
-Everything in the "NOT" rows is software-tested against a scripted reader and
-nothing more.
+Everything in the "NOT" rows is software-tested against a fake serial port and
+nothing more. A passing test suite says the software is right about what it
+would send, never that a paddle moved.
+
+### The first bench session, in order
+
+1. Flash `aurum_weight`. Confirm `W,1,…,OK` lines in the Serial Monitor at 115200.
+2. Run `python -m app.calibrate` to `verified: true`.
+3. Flash `aurum_sorter`. Confirm weight frames still stream.
+4. `POST /session/board/connect`, then check `GET /arduino` reports `CONNECTED`.
+5. Present a CPU, weigh it, and watch **Servo A**.
+6. Present a PCB, weigh it, and watch **Servo B**.
+7. Present a RAM module and confirm **nothing moves**.
+
+Only after 5, 6 and 7 have been watched may the rows above change.
 
 
-## Routing geometry — the measurement checklist
+## Routing geometry — future work, not the demonstration
+
+**Not needed for the SIH demonstration**, which has no conveyor and routes
+immediately. This checklist is what a belt would require, kept because
+`app/routing/` already implements the timing model and none of it needs
+rewriting when a machine exists.
 
 None of these has been measured. Each goes into `configs/conveyor.yaml`, and
 **no Python changes when they do**.
@@ -198,20 +294,9 @@ Measure 1–5 with the belt running and the servos idle. Set them, confirm the
 
 ## Hardware status
 
-Accurate as of Phase 6. **Do not read this as a working machine.**
-
-| Item | Status |
-|---|---|
-| HX711 | Physically connected and responding |
-| Load cell | Physically responding — 180 g moved it ~65 000 counts |
-| HX711 calibration | **Not yet fully physically verified** |
-| Arduino to Python link | **Not yet validated end to end** |
-| Servo A (D9) | Bench-tested independently, outside this software |
-| Servo B (D10) | Bench-tested independently, outside this software |
-| External 5 V supply, common ground | Working after the earlier short |
-| **Physical conveyor** | **Does not exist yet** |
-| Routing geometry | **UNMEASURED** — all six quantities |
-| Routing scheduler | Software-tested only, against TEST geometry |
+See **What has actually been validated** above — deliberately one table rather
+than two, because two copies of a status list drift apart and the optimistic
+one always gets quoted.
 
 The demonstration runs on the simulated conveyor profile. That is a model of a
 machine, not a machine.

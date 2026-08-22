@@ -6,64 +6,77 @@
 
 | | |
 |---|---|
-| Commit | `a6186fb` |
-| Branch | `feat/aurum-completion` (pushed) |
-| Phase 7 | **PARTIAL** |
-| Tests | **705 passing**, ruff check clean, ruff format clean, frontend builds |
-| Docs | Current as of this checkpoint |
+| Branch | `feat/sih-demo-pipeline` |
+| Phase 7 | **COMPLETE in software.** Not physically validated |
+| Phases 8–9 | **COMPLETE for the demonstration's scope** |
+| Tests | **790 passing**, ruff check clean, ruff format clean, frontend builds |
+| Blocking | One bench session: flash, calibrate, watch a paddle move |
+
+### SCOPE CHANGE — the demonstration has no conveyor
+
+The SIH demonstration proves perception, measurement, material intelligence and
+actuation. **The operator carries the component between stages.** Routing is
+immediate: the decision is taken and the paddle moves.
+
+Conveyor simulation, belt speed, camera-to-servo distances and firing times are
+**out of scope**. `app/routing/` keeps that model intact for a future belt and
+`app/pipeline/session.py` does not call it. Do not wire it in.
 
 ### DO NOT REDO PHASES 0-6. They are complete and committed.
 
 Phase 0 checkpoint · 1 config · 2 PMDI/pricing/valuation · 3 A/B/C decision ·
 4 tracking/item lifecycle · 5 HX711 software · 6 routing geometry + scheduler.
 
-### Phase 7 — what EXISTS
+### What now exists end to end
 
-- `app/hardware/transport.py` — `Transport`, `SerialTransport`,
-  `FakeTransport`; link states DISCONNECTED/CONNECTING/CONNECTED/DEGRADED.
-  Nothing above this file imports pyserial.
-- `app/hardware/arduino.py` — `AURUM/1` protocol, `Command` lifecycle
-  (CREATED/SENT/ACKED/FAILED/TIMED_OUT/SUPPRESSED), ACK against
-  `arduino.ack_timeout_ms`, duplicate protection per item **and** per command
-  id, **no automatic retry**.
-- `conveyor.arduino.enabled` — actuation ships **OFF**.
+- `hardware/arduino/aurum_sorter/aurum_sorter.ino` — HX711 at 10 Hz sharing one
+  115200 link with `AURUM/1 MOVE`. Servos unattached until commanded, an 8-slot
+  recent-id list for idempotency, `C` refused as `BAD_TARGET`, `CFG` for
+  runtime servo angles. **ACK follows the stroke**, hence `ack_timeout_ms` 2 s.
+- `app/hardware/link.py` — `BoardLink`: one port, two protocols, neither read
+  as the other. Single-threaded; whoever waits also pumps.
+- `app/pipeline/session.py` — `DemoSession`: the join. Camera thread → identity
+  → mass → PMDI → decision → servo, every failure recorded on the item.
+- API: `POST /session/start`, `/session/board/connect`, `/session/measure`,
+  `/session/stop`; `GET /session`, `/session/stream`, `/session/frame`,
+  `/arduino`.
+- Frontend: the chain stage by stage, live feed with the item id drawn on the
+  box, four hardware pills, and a routed-items table.
+- Tests: `test_arduino.py` (37), `test_link.py` (21), `test_session.py` (23).
+  The hardware layer had **zero** coverage before this.
 
-Hand-verified only: ACK -> ACKED · repeat item -> SUPPRESSED · `C` ->
-BAD_TARGET · disabled -> FAILED.
+### Fixed on the way
 
-### Phase 7 — what REMAINS
+- Baud reconciled to 115200 everywhere.
+- A settling bug: the stability window compared the clock against the oldest
+  sample still inside it, which required a sample to land exactly on the
+  boundary. A 450 ms window on a 10 Hz cell never settled however still the
+  mass was; 500 ms only worked because 100 ms divides into it.
+- `pyserial` uncommented in `requirements.txt`.
 
-1. **`app/hardware/servos.py`** — the bridge from a DUE `ScheduledRoute` to a
-   command, then `scheduler.mark_executed()`. Routing and actuation are still
-   disconnected. Highest-value remaining piece.
-2. **`tests/test_arduino.py`** — the Phase 7 matrix: ACK, timeout, ERR,
-   disconnect, reconnect, duplicate, C, expired route, Servo A, Servo B.
-   The layer currently has **zero automated coverage**.
-3. **`hardware/arduino/aurum_sorter/aurum_sorter.ino`** — combined weight +
-   servo sketch at **115200**. The Phase 5 weight-only sketch is unchanged;
-   keep using it for calibration since it cannot move anything.
-4. API: `GET /arduino`, `GET /actuation`.
-5. Servo angles as configurable parameters (bench values: REST 0, PUSH 90,
-   700 ms hold).
+### FIRST ACTION NEXT SESSION — the bench
 
-### FIRST ACTION NEXT SESSION
+Software cannot advance this any further. In order:
 
-**Reconcile the baud rate.** `configs/conveyor.yaml` and the Phase 5 sketch
-use **9600**; the hardware runs at **115200**. They must agree or the link
-produces garbage. Left unchanged at checkpoint because there was no board to
-test against.
+1. Flash `aurum_weight`, confirm `W,1,…,OK` at 115200.
+2. `python -m app.calibrate --port <PORT> --reference-mass 180 --verify-mass 100`
+   until `verified: true`. **Until then no PCB can reach Bin B.**
+3. Flash `aurum_sorter`, confirm weight frames still stream.
+4. `POST /session/board/connect`, check `GET /arduino`.
+5. CPU → watch **Servo A**. PCB → watch **Servo B**. RAM → watch **nothing**.
 
-### PHYSICAL VALIDATION — none, for anything
+### PHYSICAL VALIDATION — still none, for anything
 
 Verified by the user, independently of this software: HX711 responds (180 g ->
 about 65 000 counts), Servo A moves, Servo B moves, power wiring corrected.
 
 **Never done:** Arduino-Python communication · any servo moved by Aurum code ·
-calibration workflow run · anything involving a conveyor, which does not exist.
+calibration workflow run · either sketch uploaded.
 
-Do not mark Phase 7 complete until the user has physically run
-`Python -> Arduino -> ACK -> Servo A`, the same for B, and confirmed `C` moves
-nothing.
+A passing test suite says the software is right about what it would send. It
+does not say a paddle moved. Do not mark Phase 7 physically complete until
+`Python -> Arduino -> ACK -> Servo A` has been **watched**, the same for B, and
+`C` confirmed to move nothing.
 
 ---
 

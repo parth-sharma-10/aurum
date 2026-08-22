@@ -110,8 +110,16 @@ class BoardLink:
     close = disconnect
 
     def configure_servos(self, rest_deg: float, push_deg: float, hold_ms: float) -> bool:
-        """Push the servo angles to the board, so tuning needs no reflash."""
-        return self.send(f"AURUM/1 CFG {int(rest_deg)} {int(push_deg)} {int(hold_ms)}")
+        """Push the servo angles to the board, so tuning needs no reflash.
+
+        Every frame the sketch accepts carries a command id, including this
+        one: the board answers `ACK <id>`, and a reply that cannot be matched
+        to a request is a reply that cannot be trusted.
+        """
+        from app.hardware.arduino import new_command_id
+
+        command_id = new_command_id()
+        return self.send(f"AURUM/1 CFG {int(rest_deg)} {int(push_deg)} {int(hold_ms)} {command_id}")
 
     # -- frames ------------------------------------------------------------
     def send(self, line: str) -> bool:
