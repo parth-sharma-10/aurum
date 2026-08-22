@@ -189,6 +189,9 @@ SPEC: dict[str, tuple] = {
     ),
     "conveyor.weight.hx711_port": (_optional_text, None, "AURUM_HX711_PORT"),
     "conveyor.arduino.port": (_optional_text, None, "AURUM_ARDUINO_PORT"),
+    # Actuation ships OFF. Nothing moves until someone turns this on with the
+    # board connected and bench-verified.
+    "conveyor.arduino.enabled": (_bool, False, "AURUM_ARDUINO_ENABLED"),
     "conveyor.arduino.baudrate": (_int, 9600, "AURUM_ARDUINO_BAUDRATE"),
     "conveyor.arduino.timeout_s": (_non_negative, 1.0, "AURUM_ARDUINO_TIMEOUT_S"),
     "conveyor.arduino.ack_timeout_ms": (_non_negative, 500.0, "AURUM_ARDUINO_ACK_TIMEOUT_MS"),

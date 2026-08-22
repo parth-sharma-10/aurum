@@ -66,6 +66,10 @@ conveyor:
     hx711_port: null
 
   arduino:
+    # Actuation is OFF by default. Nothing is commanded to move until this is
+    # deliberately switched on with the board connected and bench-verified.
+    enabled: false
+
     # Null until a board is attached. Windows looks like COM3, macOS like
     # /dev/tty.usbmodem1101, Linux like /dev/ttyACM0. Never hardcode it.
     port: null

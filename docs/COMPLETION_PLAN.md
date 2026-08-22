@@ -341,7 +341,56 @@ six physical quantities has been measured.
 
 ---
 
-### Phase 7 — Arduino and servo integration
+### Phase 7 — Arduino and servo integration  IN PROGRESS
+
+**STATUS: PARTIAL. Do not read this phase as complete.**
+
+**Implemented so far** (committed, lint clean, 705 existing tests still pass):
+
+- `app/hardware/transport.py` — `Transport` interface, `SerialTransport`,
+  `FakeTransport`. Link states DISCONNECTED / CONNECTING / CONNECTED /
+  DEGRADED. Nothing above this file imports pyserial.
+- `app/hardware/arduino.py` — versioned line protocol, `Command` lifecycle
+  (CREATED / SENT / ACKED / FAILED / TIMED_OUT / SUPPRESSED), ACK waiting
+  against `arduino.ack_timeout_ms`, two-level duplicate protection (per item
+  and per command id), no automatic retry.
+- `conveyor.arduino.enabled` — **actuation ships OFF.** Nothing can be
+  commanded to move until it is deliberately switched on.
+
+Protocol:
+
+```
+host  ->  AURUM/1 MOVE <A|B> <item_id> <command_id>
+host  ->  AURUM/1 PING <command_id>
+board ->  AURUM/1 ACK <command_id> [DUP]
+board ->  AURUM/1 ERR <command_id> <code>
+board ->  AURUM/1 PONG <command_id>
+```
+
+Weight frames (`W,1,...`) share the link and are ignored by the command layer.
+
+**NOT yet done in this phase:**
+
+1. `app/hardware/servos.py` — the bridge that takes a DUE `ScheduledRoute`
+   from the Phase 6 scheduler, issues the command, and calls
+   `mark_executed()`. **Routing and actuation are not yet joined.**
+2. `hardware/arduino/aurum_sorter/aurum_sorter.ino` — the combined
+   weight + servo sketch. The Phase 5 weight-only sketch is unchanged and
+   remains the one to use for calibration.
+3. `tests/test_arduino.py` — the full Phase 7 matrix. Behaviour was verified
+   by hand only (ACK, per-item duplicate suppression, C rejected as
+   BAD_TARGET, actuation-disabled refusal).
+4. API endpoints (`GET /arduino`, `GET /actuation`).
+5. Servo angles as configurable parameters. Bench values (REST 0 deg,
+   PUSH 90 deg) are **not** final mechanical geometry.
+
+**PHYSICAL VALIDATION: NONE.** Arduino to Python communication has never been
+run. No servo has been moved by any Aurum code. Servo A and Servo B move on
+the bench under independent testing only.
+
+**Correction to earlier notes:** Servo B physically exists, is wired to D10 and
+is bench-tested. Any earlier statement doubting its existence is outdated.
+
 
 **Files:** `app/hardware/arduino.py`, `app/hardware/servos.py`,
 `hardware/arduino/aurum_sorter.ino` (new), `docs/hardware.md` (new),
