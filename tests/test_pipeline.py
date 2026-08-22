@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 from app import api as api_mod
 from app import batch as batch_mod
 from app import ledger as ledger_mod
+from app import materials as materials_mod
 from app import pricing
 from app.batch import BatchSession, recovery_estimate
 from app.pricing import PriceQuote, StaticPriceProvider, value_recovery
@@ -142,12 +143,78 @@ class TestDemoBatchReachesTheLedger:
 # ---------------------------------------------------------------------------
 # recovery
 # ---------------------------------------------------------------------------
-def _yield_config(tmp_path, **entries):
-    path = tmp_path / "recovery.yaml"
-    path.write_text(
-        yaml.safe_dump({"enabled": True, "basis": "test fixture", "per_component": entries})
+def _yield_config(tmp_path, monkeypatch, **entries):
+    """Point the material layer at a throwaway database built from `entries`.
+
+    Each entry is one class with one per-piece metal figure, which is the
+    smallest thing the estimator will act on. Written out as real files rather
+    than stubbed, so these tests exercise the same load-and-resolve path the
+    shipped database goes through.
+    """
+    metals = {"gold": "Au", "copper": "Cu", "silver": "Ag"}
+    evidence, components = [], {}
+    for cls, spec in entries.items():
+        metal = metals[spec["material"]]
+        eid = f"{cls.upper()}-{metal.upper()}-T1"
+        record = {
+            "id": eid,
+            "component": cls,
+            "subtype": "test_fixture",
+            "metal": metal,
+            "quantity": "per_piece",
+            "value": spec["value"],
+            "unit": spec["unit"],
+            "evidence_type": "measured",
+            "confidence": "high",
+        }
+        if "source" in spec:
+            record["source"] = spec["source"]
+        evidence.append(record)
+        components[cls] = {
+            "default_subtype": "test_fixture",
+            "subtypes": {"test_fixture": {"composition": {metal: eid}}},
+        }
+
+    ref = tmp_path / "material_reference.yaml"
+    ref.write_text(
+        yaml.safe_dump(
+            {
+                "enabled": True,
+                "basis": "test fixture",
+                "evidence": evidence,
+                "components": components,
+                "recovery": {"available": False, "reason": "test fixture", "factors": []},
+            }
+        )
     )
-    return path
+    src = tmp_path / "material_sources.yaml"
+    src.write_text(
+        yaml.safe_dump(
+            {
+                "sources": [
+                    {
+                        "id": "TEST FIXTURE",
+                        "title": "Test fixture, not a real study",
+                        "authors": ["Fixture"],
+                        "year": 1970,
+                        "journal": "n/a",
+                        "url": "https://example.invalid/fixture",
+                    },
+                    {
+                        "id": "T",
+                        "title": "Test fixture, not a real study",
+                        "authors": ["Fixture"],
+                        "year": 1970,
+                        "journal": "n/a",
+                        "url": "https://example.invalid/fixture",
+                    },
+                ]
+            }
+        )
+    )
+    monkeypatch.setattr(materials_mod, "REFERENCE", ref)
+    monkeypatch.setattr(materials_mod, "SOURCES", src)
+    return ref
 
 
 class TestRecoveryEstimate:
@@ -165,11 +232,11 @@ class TestRecoveryEstimate:
         assert est["measured_material"]["available"] is False
 
     def test_estimated_recovery_is_never_labelled_measured(self, tmp_path, monkeypatch):
-        cfg = _yield_config(
+        _yield_config(
             tmp_path,
+            monkeypatch,
             PCB={"material": "gold", "value": 0.02, "unit": "g", "source": "TEST FIXTURE"},
         )
-        monkeypatch.setattr(batch_mod, "REFERENCE", cfg)
         est = recovery_estimate({"PCB": 3})
         assert est["available"] is True
         assert est["kind"] == "ESTIMATE"
@@ -177,38 +244,37 @@ class TestRecoveryEstimate:
         assert "ESTIMATE ONLY" in est["disclaimer"]
 
     def test_calculation_is_count_times_per_unit_yield(self, tmp_path, monkeypatch):
-        cfg = _yield_config(
+        _yield_config(
             tmp_path,
+            monkeypatch,
             CPU={"material": "gold", "value": 0.25, "unit": "g", "source": "TEST FIXTURE"},
         )
-        monkeypatch.setattr(batch_mod, "REFERENCE", cfg)
         line = recovery_estimate({"CPU": 4})["components"][0]
         assert line["count"] == 4
         assert line["per_unit"] == 0.25
         assert line["total"] == 1.0
         assert line["material"] == "gold"
-        assert line["source"] == "TEST FIXTURE"
+        assert "CPU-AU-T1" in line["source"]  # the line carries its own citation
 
     def test_a_detected_class_with_no_cited_yield_blocks_the_estimate(self, tmp_path, monkeypatch):
-        cfg = _yield_config(
+        _yield_config(
             tmp_path,
+            monkeypatch,
             PCB={"material": "gold", "value": 0.02, "unit": "g", "source": "TEST FIXTURE"},
         )
-        monkeypatch.setattr(batch_mod, "REFERENCE", cfg)
         est = recovery_estimate({"PCB": 1, "RAM": 2})
         assert est["available"] is False
         assert "RAM" in est["reason"]
 
     def test_a_yield_missing_its_source_is_treated_as_absent(self, tmp_path, monkeypatch):
         """An uncitable figure is not a usable figure."""
-        cfg = _yield_config(tmp_path, PCB={"material": "gold", "value": 0.02, "unit": "g"})
-        monkeypatch.setattr(batch_mod, "REFERENCE", cfg)
+        _yield_config(tmp_path, monkeypatch, PCB={"material": "gold", "value": 0.02, "unit": "g"})
         est = recovery_estimate({"PCB": 1})
         assert est["available"] is False
         assert "source" in est["reason"]
 
     def test_a_missing_reference_file_is_not_a_crash(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(batch_mod, "REFERENCE", tmp_path / "absent.yaml")
+        monkeypatch.setattr(materials_mod, "REFERENCE", tmp_path / "absent.yaml")
         assert recovery_estimate({"PCB": 1})["available"] is False
 
 
@@ -217,11 +283,11 @@ class TestRecoveryEstimate:
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def priced_recovery(tmp_path, monkeypatch):
-    cfg = _yield_config(
+    _yield_config(
         tmp_path,
+        monkeypatch,
         CPU={"material": "gold", "value": 0.25, "unit": "g", "source": "TEST FIXTURE"},
     )
-    monkeypatch.setattr(batch_mod, "REFERENCE", cfg)
     return recovery_estimate({"CPU": 4})
 
 
@@ -292,12 +358,12 @@ class TestValuation:
         assert "quoted none" in out["reason"]
 
     def test_mixed_currencies_are_refused(self, tmp_path, monkeypatch):
-        cfg = _yield_config(
+        _yield_config(
             tmp_path,
+            monkeypatch,
             CPU={"material": "gold", "value": 0.25, "unit": "g", "source": "T"},
             PCB={"material": "copper", "value": 5.0, "unit": "g", "source": "T"},
         )
-        monkeypatch.setattr(batch_mod, "REFERENCE", cfg)
         rec = recovery_estimate({"CPU": 1, "PCB": 1})
         provider = StaticPriceProvider(
             {

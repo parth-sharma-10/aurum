@@ -1,0 +1,2201 @@
+<!DOCTYPE html>
+<!--[if lt IE 7 ]> <html class="ie6"> <![endif]-->
+<!--[if IE 7 ]>    <html class="ie7"> <![endif]-->
+<!--[if IE 8 ]>    <html class="ie8"> <![endif]-->
+<!--[if IE 9 ]>    <html class="ie9"> <![endif]-->
+<!--[if (gt IE 9)|!(IE)]><!--> <html class="modernBrowser"> <!--<![endif]-->
+
+<head>
+		<meta charset="utf-8">
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      	<META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE">
+      	<META HTTP-EQUIV="EXPIRES" CONTENT="Mon, 22 Jul 2002 11:12:01 GMT">
+      	<META HTTP-EQUIV="PRAGMA" CONTENT="NO-CACHE">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+		
+      <meta name="citation_title" content="Determining Metal Content in Waste Printed Circuit Boards and their Electronic Components">
+      <meta name="citation_author" content="Anić Vučinić, Aleksandra">
+      <meta name="citation_author" content="Bedeković, Gordan">
+      <meta name="citation_author" content="Šarc, Renato">
+      <meta name="citation_author" content="Premur, Vitomir">
+      
+      <meta name="citation_publication_date" content="[2020/09/30]">
+      <meta name="citation_journal_title" content="[Journal of Sustainable Development of Energy, Water and Environment Systems]">
+      <meta name="citation_volume" content="[8]">
+      <meta name="citation_issue" content="[3]">
+      <meta name="citation_firstpage" content="[590]">
+      <meta name="citation_lastpage" content="[602]">
+      <meta name="citation_pdf_url" content="[https://www.sdewes.org/jsdewes/dp043d5cc53518ab794187660aa79d1fc849eda75a]">
+	  
+	  <meta name="twitter:card" content="summary">
+	  <meta name="twitter:site" content="@sdewes_centre">
+	  <meta name="twitter:title" content="Determining Metal Content in Waste Printed Circuit Boards and their Electronic Components">
+	  <meta name="twitter:description" content="by Aleksandra Anić Vučinić, Gordan Bedeković, Renato Šarc and Vitomir Premur">
+	  <meta name="twitter:image" content="https://www.sdewes.org/jsdewes/img/square_jsdewes.jpg">
+	  
+	  <meta property="og:url"           content="/jsdewes/paper.php" />
+	  <meta property="og:type"          content="article" />
+	  <meta property="og:title"         content="Determining Metal Content in Waste Printed Circuit Boards and their Electronic Components" />
+	  <meta property="og:description"   content="Article by Aleksandra Anić Vučinić, Gordan Bedeković, Renato Šarc and Vitomir Premur published in JSDEWES" />
+	  <meta property="og:image"         content="https://www.sdewes.org/jsdewes/img/naslovna_small.png" />
+	  
+	  
+	    
+            <link rel="icon" href="/favicon.ico" type="image/x-icon">    
+		<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+        <title>JSDEWES: Determining Metal Content in Waste Printed Circuit Boards and their Electronic Components</title>
+		<link href='https://fonts.googleapis.com/css?family=Open+Sans:700,300&subset=latin,latin-ext' rel='stylesheet' type='text/css'>
+		<script src="js/jquery-1.11.2.min.js"></script>
+		<link rel="stylesheet" href="css/style.css" />
+		<script src="https://www.sdewes.org/js/dropit.js"></script>
+		<link rel="stylesheet" href="https://www.sdewes.org/js/dropit.css" type="text/css" />
+		<!--script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=ra-569e2913940cdca9" async="async"></script-->
+</head>
+
+<body>
+
+	<div style="position: absolute; width: 100%; height: 180px; bottom: 0;" class="expander">
+		 <div style="background: #069; height: 145px;"></div>
+		 <div style="background: #283C56; height: 35px;"></div>
+	</div>
+	
+	<div id="abs_ret" style="position: absolute; width: 100%; top: 0px;" class="expander">
+		<div id="backg_top" style="background: #069; "></div>
+		<!--div id="backg_top2" style="background: url(img/back_header.jpg) no-repeat; background-size: cover; background-position: top center;"></div-->
+	</div>
+	
+	<div id="container">
+		<div id="screen-header">
+			<div id="logo">
+				<img src="img/header_logo.png" />
+			</div>
+			<div id="login_button">
+				<a href="http://journal.sdewes.org/jsdewes">login to submit paper</a>
+			</div>
+			<div id="title_field">
+			</div>
+			<!--div id="language-selector">
+				<ul>
+					<li><a href="#"  onClick="check_scroll();">HRV</a></li><li><a href="#">ENG</a></li><li><a href="#">PRT</a></li>
+				</ul>
+			</div-->
+		</div>
+		
+		<!--div id="mobile-indicator">mobile</div-->
+		
+		<div id="menu-container">
+			<a id="top_page_autoscroll" name="top_page_autoscroll"></a>
+			<!--div id="logo_container" style=""><img src="img/conference_logo.png" /></div>
+		  
+			<div id="conference_dates" style=""><img src="img/conference_dates.png" /></div-->
+
+
+			<div id="horizontal-menu">
+				<!--ul>
+					<li><a class="w20p horizontal-parent" href="http://www.sdewes.org">SDEWES CENTRE</a></li><li><a id="conf_item" class="w40p has-dropdown"  style="background: #778dab; color: white;" href="#">SDEWES CONFERENCES</a></li><li><a  class="w20p" href="#">PUBLISHING</a></li><li><a  class="w20p"  href="http://www.sdewes.org/isc.php">SDEWES ISC</a></li>
+				</ul-->
+				<ul class="dropit-menu">
+						<li><a class="w20p" style="background: #778dab; color: white;" href="http://www.sdewes.org">SDEWES CENTRE</a><ul class="w240">
+						<li><a href="http://www.sdewes.org/membership.php">MEMBERS</a></li>
+						<li class="border-line"><span></span></li>
+						<li><a href="http://www.sdewes.org/corporate.php">CORPORATE</a></li>
+						<li class="border-line"><span></span></li>
+						<li><a href="http://www.sdewes.org/partners.php">PARTNER INSTITUTIONS</a></li>
+						<li class="border-line"><span></span></li>
+						<li><a href="http://www.sdewes.org/macedonian_section.php">SECTIONS</a></li>
+						<li class="border-line"><span></span></li>
+						<li><a href="http://www.sdewes.org/research.php">RESEARCH</a></li>
+						<li class="border-line"><span></span></li>
+						<li><a href="http://www.sdewes.org/staff.php">STAFF / OFFICERS</a></li>
+						<li class="border-line"><span></span></li>
+						<!--li><a href="http://www.sdewes.org/events.php">EVENTS</a></li>
+						<li class="border-line"><span></span></li-->
+						<li><a href="http://www.sdewes.org/news-and-media.php">NEWS & MEDIA</a></li>
+					</ul></li><li><a id="conf_item" class="has-dropdown w40p" href="#">SDEWES CONFERENCES</a></li><li><a  class="w20p has-submenu" sub_id="publish_menu" href="#">PUBLISHING</a><ul class="w240">
+						<li><a href="http://www.sdewes.org/journals.php" >PARTNER JOURNALS</a></li>
+						<li><a href="http://www.sdewes.org/jsdewes">JSDEWES</a></li>
+						<li><a href="http://www.sdewes.org/jsdi">JSDI</a></li>
+						<li><a href="http://www.sdewes.org/jsdnarema">JSDNAREMA</a></li>
+						<li><a href="http://www.sdewes.org/jsdsen">JSDSEN</a></li>
+						<li><a href="http://comet.sdewes.org/info">COMET SYSTEM</a></li>
+						<li><a href="https://www.sdewes.org/talks.php">SDEWES TALKS</a></li>
+						<li><a href="http://www.sdewes.org/books.php" >BOOKS PUBLISHED</a></li>
+						<li><a href="http://www.sdewes.org/books_by_isc.php">BOOKS BY ISC MEMBERS</a></li>
+						
+				</ul></li><li><a  class="w20p" href="http://www.sdewes.org/isc.php">SDEWES ISC</a></li>
+			  </ul>
+			</div>
+
+			
+			<a id="hamby_menu" onClick="$('#horizontal-menu-main').toggle();">Menu</a>	
+			
+			<div id="horizontal-menu-main" style="display: none;">
+				<ul>
+					
+	<li><a href="http://journal.sdewes.org/jsdewes">LOGIN</a></li>
+	<li><a href="index.php">HOME</a></li>
+	<li><a href="scope.php">SCOPE</a></li>
+	<li><a href="editorial.php">EDITORIAL BOARD</a></li>
+	<li><a href="instructions.php">INSTRUCTIONS FOR AUTHORS</a></li>
+	<li><a href="ethics.php">PUBLICATION ETHICS</a></li>
+	<li><a href="copyright.php">COPYRIGHT POLICY</a></li>
+	<li><a href="fee.php">ARTICLE PUBLISHING FEE</a></li>
+	<li><a href="indexing.php">WHERE WE ARE INDEXED</a></li>
+ 				</ul>
+			</div>
+		</div>
+
+	<!--- DROPDOWNS -->
+	<!-- CONFERENCES MENU -->
+	<div id="conferences_menu" class="dropdown-menu align-left for-conf_item">
+	  <style type="text/css">
+    .cl_left {
+      width: 40%;
+    }
+
+    .cl_right {
+      width: 50%;
+    }
+
+    .cl_sublist {
+      width: 46%;
+    }
+
+    @media screen and (max-width: 720px) {
+      .cl_left {
+        width: 100%;
+      }
+
+      .cl_right {
+        width: 100%;
+      }
+
+      #conferences_menu {
+        width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+
+      .cl_sublist {
+        width: 100%;
+      }
+    }
+ </style>
+ <div class="w100p" style="clear: both; width: 90%; margin: 20px;">
+	<div class="title-field"><a href="http://www.sdewes.org/awards.php" style="display: block; color: white; font-style: normal; width: 100%; text-align: center;">AWARDS</a></div>
+  </div>
+ <div class="cl_left" style="display: inline-block; vertical-align: top;">
+    <div class="title-field" style="">UPCOMING CONFERENCES</div>
+    <div class="conf-list">
+      <ul>    
+      
+      <li><a href="https://www.burgas2026.sdewes.org" target="_blank">6th SEE SDEWES Conference 2026 Burgas</a></li>
+      <li><a href="https://www.grancanaria2026.sdewes.org" target="_blank">21st SDEWES Conference 2026 Gran Canaria</a></li>
+      <!--li><a href="https://www.grancanaria2026.sdewes.org" target="_blank">2nd African SDEWES Conference 2027</a></li-->
+      <!--li><a href="https://www.toronto2024.sdewes.org" target="_blank">1st North American SDEWES Conference 2024 Toronto</a></li-->    
+	  </ul> 
+    </div>
+  </div>
+
+  <div class="cl_right" style="display: inline-block; vertical-align: top;">
+    <div class="title-field">PAST CONFERENCES</div>
+    <div class="cl_sublist conf-list" style="display: inline-block; vertical-align: top;">
+      <ul>
+        <li><a href="https://www.shenzhen2026.sdewes.org" target="_blank">3rd Asia Pacific SDEWES Conference 2026 Shenzhen</a></li>
+        <li><a href="https://www.cartagena2026.sdewes.org" target="_blank">5th Latin American SDEWES Conference 2026 Cartagena</a></li>
+        <li><a href="https://www.dubrovnik2025.sdewes.org" target="_blank">20th SDEWES Conference 2025 Dubrovnik</a></li>
+        <li><a href="https://www.morocco2025.sdewes.org" target="_blank">1st African SDEWES Conference 2025 Oujda-Saidia</a></li>
+        <li><a href="https://www.rome2024.sdewes.org" target="_blank">19th SDEWES Conference 2024 Rome</a></li>
+        <li><a href="https://www.goldcoast2024.sdewes.org" target="_blank">2nd Asia Pacific SDEWES Conference 2024 Gold Coast</a></li>
+        <li><a href="https://www.vinadelmar2024.sdewes.org" target="_blank">4th Latin American SDEWES Conference 2024 Vina Del Mar</a></li>
+        <li><a href="https://www.dubrovnik2023.sdewes.org" target="_blank">18th SDEWES Conference 2023 Dubrovnik</a></li>
+        <li><a href="https://www.paphos2022.sdewes.org" target="_blank">17th SDEWES Conference 2022 Paphos</a></li>
+        <li><a href="https://www.saopaulo2022.sdewes.org" target="_blank">3rd LA (Latin American) SDEWES Conference 2022 Sao Paulo</a></li>
+        <li><a href="https://www.vlore2022.sdewes.org" target="_blank">5th SEE SDEWES Conference 2022 Vlorë</a></li>
+        <li><a href="http://www.dubrovnik2021.sdewes.org" target="_blank">16th SDEWES Conference 2021 Dubrovnik</a></li>
+      	<li><a href="http://www.cologne2020.sdewes.org" target="_blank">15th SDEWES Conference 2020 Cologne</a></li>
+        <li><a href="http://www.sarajevo2020.sdewes.org" target="_blank">4th SEE SDEWES Conference 2020 Sarajevo</a></li>
+        <li><a href="http://www.goldcoast2020.sdewes.org" target="_blank">1st Asia Pacific SDEWES Conference 2020 Gold Coast</a> </li>
+    		<li><a href="http://www.buenosaires2020.sdewes.org" target="_blank">2nd LA SDEWES Conference 2020 Buenos Aires</a></li>
+    		
+    		
+    		
+      </ul>
+    </div>
+    <div class="cl_sublist conf-list" style="display: inline-block; vertical-align: top;">
+      <ul>
+        <li><a href="http://www.dubrovnik2019.sdewes.org" target="_blank">14th SDEWES Conference 2019 Dubrovnik</a></li>
+        <li><a href="http://www.palermo2018.sdewes.org" target="_blank">13th SDEWES Conference 2018 Palermo</a></li>
+        <li><a href="http://www.novisad2018.sdewes.org" target="_blank">3rd SEE SDEWES Conference 2018 Novi Sad</a></li>
+        <li><a href="http://www.rio2018.sdewes.org" target="_blank">1st LA SDEWES Conference 2018 Rio de Janeiro</a></li>
+        <li><a href="http://www.dubrovnik2017.sdewes.org" target="_blank">12th SDEWES Conference 2017 Dubrovnik</a></li>
+        <li><a href="http://www.lisbon2016.sdewes.org" target="_blank">11th SDEWES Conference 2016 Lisbon</a></li>
+        <li><a href="http://www.piran2016.sdewes.org" target="_blank">2nd SDEWES SEE Conference 2016 Piran</a></li>
+        <li><a href="http://www.dubrovnik2015.sdewes.org" target="_blank">10th SDEWES Dubrovnik 2015</a></li>
+        <li><a href="http://www.mediterranean2014.sdewes.org" target="_blank">9th SDEWES Mediterranean 2014</a></li>
+        <li><a href="http://www.ohrid2014.sdewes.org" target="_blank">1st SDEWES SEE Ohrid 2014</a></li>
+        <li><a href="http://www.dubrovnik2013.sdewes.org" target="_blank">8th SDEWES Dubrovnik 2013</a></li>
+		    <li><a href="http://www.ohrid2012.sdewes.org" target="_blank">7th SDEWES Ohrid 2012</a></li>
+	      <li><a href="http://www.dubrovnik2011.sdewes.org" target="_blank">6th SDEWES Dubrovnik 2011</a></li>
+		    <li><a href="http://www.sdewes.org/conferences/dubrovnik2009/" target="_blank">5th SDEWES Dubrovnik 2009</a></li>
+        <li><a href="http://www.sdewes.org/conferences/dubrovnik2007/" target="_blank">4th SDEWES Dubrovnik 2007</a></li>
+        <li><a href="http://www.sdewes.org/conferences/dubrovnik2005/" target="_blank">3rd SDEWES Dubrovnik 2005</a></li>
+        <li><a href="http://www.sdewes.org/conferences/dubrovnik2003/" target="_blank">2nd SDEWES Dubrovnik 2003</a></li>
+        <li><a href="http://www.sdewes.org/conferences/dubrovnik2002/" target="_blank">1st SDEWES Dubrovnik 2002</a></li>
+      </ul>   
+    </div>
+  </div>
+  
+  
+	</div>
+	<!-- END CONFERENCES MENU -->
+	<!-- END DROPDOWNS -->
+
+	<div id="page_contents">
+
+		  <div id="vertical-menu">
+				<ul>
+					<li><a href="index.php">HOME</a></li>
+					<li><a href="scope.php">SCOPE</a></li>
+					<li><a href="editorial.php">EDITORIAL BOARD</a></li>
+					<li><a href="instructions.php">INSTRUCTIONS FOR AUTHORS</a></li>
+					<li><a href="reviewers.php">INSTRUCTIONS FOR REVIEWERS</a></li>
+					<li><a href="ethics.php">PUBLICATION ETHICS</a></li>
+					<li><a href="copyright.php">COPYRIGHT POLICY</a></li>
+					<li><a href="fee.php">ARTICLE PUBLISHING FEE</a></li>
+					<li><a href="indexing.php">WHERE WE ARE INDEXED</a></li>
+					<li><a href="https://www.sdewes.org/aw-citjsdew.php">AWARDS</a></li>
+				</ul>
+			
+			<div style="margin: 40px 0px 40px 0px;">
+				<p style="text-align: center; margin-bottom: 25px;">Under the patronage of:</p>
+				<img src="img/mzos_en.png" style="display: block; margin: 0 auto; max-width: 100%; width: auto; height: auto; border-radius: 2px;">
+			</div>
+			
+			<div style="padding: 10px; margin: 20px 0px 0px 0px; border: 1px solid #069; background-color: #f5f5f5; border-radius: 2px;">
+				<p style="text-align: center;"><b>Journal Metrics</b>
+				</p>
+				
+				<br />
+				
+				<b>Impact factor (2025): <a href="https://jcr.clarivate.com/jcr-jp/journal-profile?journal=J%20SUSTAIN%20DEV%20ENERGY&year=2025">2.1</a></b>
+				<br /><br />
+
+				<p>
+					<img src="img/CiteScore2025_Journal_of_Sustainab_edited.png">
+				</p>
+				<p class="cite">
+
+<!-- a href="https://www.scopus.com/sourceid/21100774305#tabs=0?dgcid=sc_widget_citescore" style="text-decoration:none;color:#505050">
+<div style="height:100px;width:180px;font-family:Arial, Verdana, helvetica, sans-serif;background-color:#ffffff;display:inline-block">
+<div style="padding: 0px 16px;">
+<div style="padding-top:3px;line-height:1;">
+<div style="float:left;font-size:28px"><span id="citescoreVal" style="letter-spacing: -2px;display: inline-block;padding-top: 7px;line-height: .75;">5.8</span></div>
+<div style="float:right;font-size:14px;padding-top:3px;text-align: right;"><span id="citescoreYearVal" style="display:block;">2025</span>CiteScore</div>
+</div>
+<div style="clear:both;"></div>
+<div style="padding-top:3px;">
+<div style="height:4px;background-color:#DCDCDC;">
+<div style="height:4px;background-color:#0056D6;" id="percentActBar">&nbsp;</div>
+</div>
+<div style="font-size:11px;"><span id="citescorePerVal">74th percentile</span></div>
+</div>
+<div style="font-size:12px;text-align:right;">Powered by &nbsp;<span><img alt="Scopus" style="width:50px;height:15px;" src="https://www.scopus.com/static/images/scopusLogoOrange.svg"></span></div>
+</div>
+</div>
+</a>-->
+
+				<!--	CiteScore (2020): <b>3.7</b>
+					<div class="tooltip"><sup>&#9432;</sup>
+						<span class="tooltiptext"></span>
+					</div>-->
+				</p>
+				
+				<br />
+				<p>CiteScore best quartile: <b>Q1</b>
+				</p>
+				
+				<p><a href="https://service.elsevier.com/app/answers/detail/a_id/14880/c/10547/supporthub/scopus/" target="_blank">More about CiteScore</a>
+				</p>
+				
+				<br />
+				
+				<p>Source Normalized Impact per Paper (SNIP): <b>0.701</b>
+				</p>
+				
+				<br />
+				
+				<p><!--SCImago Journal Rank (SJR): <b>0.377</b>-->
+				<a href="https://www.scimagojr.com/journalsearch.php?q=21100774305&amp;tip=sid&amp;exact=no" title="SCImago Journal &amp; Country Rank"><img border="0" src="https://www.scimagojr.com/journal_img.php?id=21100774305" alt="SCImago Journal &amp; Country Rank"  /></a>
+				</p>
+			</div>
+			
+			<div style="clear: both;">
+				&nbsp;
+
+
+
+			</div>
+			<!--
+			<div style="text-align: center;">
+				<a href="http://www.scimagojr.com/journalsearch.php?q=21100774305&amp;tip=sid&amp;exact=no" title="SCImago Journal &amp; Country Rank"><img border="0" src="http://www.scimagojr.com/journal_img.php?id=21100774305" alt="SCImago Journal &amp; Country Rank"  /></a>
+			</div>-->
+			
+			<div style="clear: both;">
+				&nbsp;
+			</div>
+			
+	
+
+			<div id="xmlPaperContents"></div>
+
+		 </div>
+	 
+
+
+ 
+
+ <div id="contents">
+ <p><span class="paperTitle">Determining Metal Content in Waste Printed Circuit Boards and their Electronic Components</span></p>
+	<style type="text/css">
+     
+    .paperDLINK {
+         font-weight: bold;
+		font-size: 14px;
+    }
+  
+    .paperData{
+      text-align: center;
+      margin-top: 5px;
+	  font-size: 14px;
+    }
+    
+    .paperTitle{
+      text-align: center; 
+     /* text-transform:uppercase;  */
+      margin-top: 10px; 
+      font-weight: bold; 
+      font-size: 20px;
+      }
+    
+    .paperAuthors{
+      font-style: italic;
+      padding-left: 25px;
+      margin-top: 10px;
+	  font-size: 12px;
+    }
+    
+     .paperAffil{
+      
+      padding-left: 25px;
+      font-size: 10px;
+      margin-top: 5px;
+	  font-size: 11px;
+    }
+    
+    .paperAbstr{
+		margin-top: 14px;
+    font-family: Georgia, sans-serif;
+	}
+    
+    .paperKwrds{
+		margin-top: 14px;		
+	}
+    
+    .paperStats{
+      font-size: 14px;
+      text-align: right;
+      margin-top: 5px;
+	  margin-right: 30px;
+    }
+
+    .fpDate {
+      font-size: 11px;
+      float: right;
+    }
+
+    .rotateTD {
+       writing-mode:vertical-rl;
+       transform: rotate(180deg);
+       padding: 10px 0px 10px 0px;
+
+    }
+
+  </style>			
+
+ 
+ 
+	  
+       <div class="paperDLINK"><a href="https://www.sdewes.org/jsdewes/dp043d5cc53518ab794187660aa79d1fc849eda75a">DOWNLOAD FULL TEXT PDF</a></div>
+       <div class="paperData"><div style="margin: 3px; padding: 3px; font-weight: bold; text-align: center;">Original scientific paper</div><br /><b>Journal of Sustainable Development of Energy, Water and Environment Systems</b><br />Volume 8, Issue 3, September 2020, pp 590-602
+        <br />
+        <span style="font-weight: bold; font-size: 10px;">DOI: <a href="http://dx.doi.org/10.13044/j.sdewes.d7.0312">https://doi.org/10.13044/j.sdewes.d7.0312</a></span></div>
+       <!--div class="paperTitle">Determining Metal Content in Waste Printed Circuit Boards and their Electronic Components</div-->
+       <div class="paperAuthors">Aleksandra Anić Vučinić<sup>1</sup>, Gordan Bedeković<sup>2</sup>, Renato Šarc<sup>3</sup>, Vitomir Premur<sup>1</sup> <sup><a href="#" onClick="open_eml('121115117104112120117067106105121049107117');"><img style="vertical-align: middle;" src="art/mail.png" /></a></sup></div>
+       <div class="paperAffil"><sup>1</sup> Faculty of Geotechnical Engineering, University of Zagreb, Hallerova 7, 42000 Varaždin, Croatia<br /><sup>2</sup> Faculty of Mining, Geology and Petroleum Engineering, University of Zagreb, Pierottieva 6, 10 000 Zagreb, Croatia<br /><sup>3</sup> Chair of Waste Processing Technology and Waste Management, Montanuniversitaet Leoben, Franz-Josef-Strasse 18/I, 8700 Leoben, Austria<br /></div>
+       <div class="fpDate"></div>
+       <div class="paperAbstr"><p><b>Abstract</b></p><p><p>A wide range of published scientific articles on metal content in printed circuit boards show that it is necessary to determine the content of individual metals. The aim of this paper is to show how metal content varies according to the type and age of waste electrical and electronic equipment collected in the Republic of Croatia. Samples of cell phones, TV sets, and computers are collected. The metal content is determined for electronic components and printed circuit board base plates separately for different grain sizes (1-4 mm, 0.5-1 mm, 0.1-0.5 mm and &lt; 0.1 mm). The results show that electronic components form a larger part of printed circuit board mass fraction depending on the equipment age and type. Generally, electronic components do have a higher mass fraction for most metals (like: aluminium, copper, nickel, zinc, gold, and silver in most cases) in comparison to printed circuit board base plates, but for certain metals (like: lead, tin) the opposite applies. The electronic components of larger grain sizes (1-4 mm and 0.5-1 mm) contain more aluminium, copper, and zinc, and less lead, while the smaller grain size fractions are richer in gold. The bare boards base plates of larger grain sizes contain more copper, lead and tin, while the smallest grain size class (&lt; 0.1 mm) contains more aluminium and gold. No clear trends are noticed in the case of silver and lead.</p></p></div>
+       <div class="paperKwrds">Keywords: <i>Electrical and electronic equipment, Printed circuit boards, Metal content, Waste, Recycling.</i></div>
+       
+	   <br />
+	   <a rel="license" href="https://creativecommons.org/licenses/by/3.0/deed.en_US"><img alt="Creative Commons License" style="border-width:0" src="http://i.creativecommons.org/l/by/3.0/88x31.png" /></a>
+	   
+       <div class="paperStats">Views (in 2026): <b>15053</b> | Downloads (in 2026): <b>771</b>
+                              <br /> Total views: <b>27425</b> | Total downloads: <b>5655</b>
+        </div>
+		
+		
+		<!-- Go to www.addthis.com/dashboard to customize your tools -->
+<!--div class="addthis_sharing_toolbox"></div-->
+
+		<div style="margin-top:10px;">
+		
+		
+		
+		
+     <div style="display: inline-block; float: left; padding-right: 5px;"><a href="https://www.facebook.com/sharer/sharer.php?u=http%3A%2F%2Fwww.sdewes.org%2Fjsdewes%2Fpid7.0312" class="soc-share"><img src="img/facebook-icon.png"></a></div>
+		<!--div style="display: inline-block; float: left; padding-right: 5px;"><a href="https://twitter.com/home?status=http%3Awww.sdewes.org/jsdewes/pid7.0312" class="popup"><img src="img/twitter-icon.png"></a></div-->
+		<div style="display: inline-block; float: left; padding-right: 5px;"><a href="https://www.linkedin.com/shareArticle?mini=true&url=http%3A%2F%2Fwww.sdewes.org%2Fjsdewes%2Fpid7.0312&title=Determining Metal Content in Waste Printed Circuit Boards and their Electronic Components&summary=&source=" class="soc-share"><img src="img/linkedin-icon.png"></a></div>
+		</div>
+		<a href="https://twitter.com/intent/tweet?original_referer=http%3A%2F%2Fwww.sdewes.org%2Fjsdewes%2Fpid7.0312&ref_src=twsrc%5Etfw&text=JSDEWES journal article&tw_p=tweetbutton&url=http%3A%2F%2Fwww.sdewes.org%2Fjsdewes%2Fpid7.0312" class="soc-share"><img src="img/twitter-icon.png" /></a><div class="fullText">
+        <!--script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script-->
+        <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+         <style type="text/css">
+ 	.fullText {
+ 		margin-top: 1em;
+ 		font-size: 16px;
+ 		font-family: Georgia, Times, "Times New Roman", serif; 
+ 		line-height: 1.4em;
+ 	}
+
+ 	.sectionTitle {
+ 		font-weight: bold;
+ 		font-size: 20px;
+ 		margin-top: 1.5em;
+ 	}
+
+ 	fig, table-wrap {
+ 		margin: 0.5em;
+ 		border: 1px solid gray;
+ 		padding: 0.5em;
+ 		/* display: block; */
+ 		position: relative;
+ 		display: flex;
+ 		flex-flow: column;
+ 	}
+
+ 	fig > label {
+ 		order: 2;
+ 		font-weight: bold;
+ 		border-top: 1px solid gray;
+ 		margin-top: 12px;
+ 		font-size: 12px;
+ 	}
+
+ 	fig > p {
+ 		order: 3;
+ 		font-size: 12px;
+ 	}
+
+ 	fig > img {
+ 		order: 1;
+ 		max-width: 80%;
+ 		margin: auto;
+ 		display: block;
+    	margin-top: 1em;
+ 	}
+
+ 	table-wrap > label {
+ 		font-weight: bold;
+ 		margin-top: 12px;
+ 		font-size: 12px;
+ 	}
+
+ 	table-wrap > p {
+ 		font-size: 12px;
+ 		border-bottom: 1px solid gray;
+ 		margin-bottom: 12px;
+ 	}
+
+ 	table-wrap > table {
+ 		display: block;
+ 		margin: auto;
+ 		border-collapse: collapse;
+ 		font-size: 13px;
+ 	}
+
+ 	table-wrap > table > tbody,  table-wrap > table > thead{
+		/* display: block; */
+ 		margin: auto;
+ 	}
+
+ 	table-wrap > table > tbody > tr > td {
+		padding: 0.2em;
+		border-bottom: 1px solid black;
+		text-align: center;
+ 	}
+
+
+ 	table-wrap > table > tbody > tr:first-child > td {
+ 		border-top: 3px solid black;
+ 		font-weight: bold;
+ 	}
+
+ 	
+
+ 	sec > p {
+ 		margin-top: 1em;
+
+ 	}
+
+ 	sec > ul {
+ 		margin-left: 2em;
+ 		list-style-type: disc;
+ 		margin-top: 1em;
+ 	}
+
+ 	ref-list > ol {
+ 		margin-left: 0;
+ 		padding-left: 2em;
+ 	}
+
+ 	.floaterInfoDiv {
+ 		position: absolute;
+ 		display: none;
+ 		width: 400px;
+ 		min-height: 50px;
+ 		background: #f3f3f3;
+ 		border: 1px solid #646464;
+ 		padding: 3px;
+ 		font-family: Georgia, Times, "Times New Roman", serif; 
+ 		-webkit-box-shadow: 0px 0px 4px 2px rgba(0,0,0,0.2); 
+		box-shadow: 0px 0px 4px 2px rgba(0,0,0,0.2);
+ 	}
+
+ 	#xmlPaperContents {
+ 		width: 85%;
+ 		float: right;
+ 	}
+
+ 	#xmlPaperContents > span {
+ 		display: block;
+ 		font-size: 12px;
+ 		margin-top: 2px;
+ 		cursor: pointer;
+ 	}
+
+ 	.floaterDiv {
+ 		position: fixed;
+ 		top: 0;
+ 	}
+
+ 	disp-formula {
+ 		position: relative;
+ 		display: block;
+ 	}
+
+ 	disp-formula > label {
+     	position: absolute;
+     	right: 0;
+     	top: 0;
+ 	}
+
+
+ </style>
+
+<sec id="sec-1"><div class="sectionTitle sectionTitleLevel1" sectionLevel="1" sectionId="sec-1">INTRODUCTION</div>
+<p>Waste Electrical and Electronic Equipment (WEEE) is one of the fastest growing waste types [<a href="#" ref-type="bibr" rid="bib1">1</a>]: with three times higher growth than municipal solid waste [<a href="#" ref-type="bibr" rid="bib2">2</a>]. Electrical and Electronic Equipment (EEE) industry consumes 30% of annual silver (Ag) production (6,000 t), 12% of gold (Au) (300 t), 15% of bismuth (Bi) (900 t), 19% of cobalt (Co) (11,000 t), 30% of copper (Cu) (4,500,000 t), 14% of palladium (Pd) (33 t), 50% of antimony (Sb) (65,000 t) and 33% of tin (Sn) (90,000 t) manufacture [<a href="#" ref-type="bibr" rid="bib3">3</a>]. A large quantity of WEEE is traded illegally, and in 2011 only the legal trade of WEEE was estimated at 52 billion USD [<a href="#" ref-type="bibr" rid="bib4">4</a>]. Common discarding of waste in landfills or open spaces, is highly damaging to the environment [<a href="#" ref-type="bibr" rid="bib5">5</a>]. Despite the efforts to limit illegal waste streams by a legal framework, approximately 70% of WEEE in the world is discarded in China [<a href="#" ref-type="bibr" rid="bib6">6</a>], together with Waste Printed Circuit Boards (WPCBs). WPCBs form an integral part of Electrical and Electronic (EE) equipment and account for 3-7% [<a href="#" ref-type="bibr" rid="bib7">7</a>], [<a href="#" ref-type="bibr" rid="bib8">8</a>] of its mass. The average annual increase in Printed Circuit Boards (PCB) production is 8.7% [<a href="#" ref-type="bibr" rid="bib9">9</a>]. More than 1,000 substances [<a href="#" ref-type="bibr" rid="bib10">10</a>] and up to 54 different metals [<a href="#" ref-type="bibr" rid="bib11">11</a>], are present in PCBs but the separation of valuable metals, particularly Au and Cu, is generally the main goal of their end-of-life treatment. Treating WPCBs is a particularly complex process due to the dynamics of their development, use of new materials with the aim of reducing components and a more rational use of raw materials. PCB waste treatment requires a huge amount of human work, together with methods and chemicals that are potentially hazardous for the environment [<a href="#" ref-type="bibr" rid="bib12">12</a>]. When an electronic product is disposed of and its recovery is carried out by manual separation, it is mostly PCBs that are separated as they represent the only fraction of WEEE whose recovery is economically justified [<a href="#" ref-type="bibr" rid="bib13">13</a>]. There is a range of methods used for a PCB recovery. However, despite that, up to 30% of metals are not recovered with the treatment methods used in China [<a href="#" ref-type="bibr" rid="bib14">14</a>].</p>
+<p>WEEE management system should be based on a material flow management [<a href="#" ref-type="bibr" rid="bib15">15</a>], wherein WEEE is not a type of waste but an anthropogenic stock of materials [<a href="#" ref-type="bibr" rid="bib16">16</a>]. Currently, there is a general trend towards recycling [<a href="#" ref-type="bibr" rid="bib17">17</a>], that is, a recovery of valuable materials from PCBs, and disposal of the remaining part [<a href="#" ref-type="bibr" rid="bib18">18</a>]. PCBs are treated using pyrometallurgical, hydrometallurgical or mechanical processes [<a href="#" ref-type="bibr" rid="bib19">19</a>]. The most frequent reason for a WPCBs treatment is the separation of Au and Cu. The indirect benefit of a WPCB recovery is achieved by saving energy necessary to produce metals from primary raw materials, with simultaneous reduction of emissions into the air and toxicity of residues. In the available literature, there is little information on the proportion of metals in certain classes of crushed samples of WPCBs [<a href="#" ref-type="bibr" rid="bib20">20</a>]. A list for prioritizing metal recovery for end-of-life PCBs was composed by Wang and Gaustad [<a href="#" ref-type="bibr" rid="bib21">21</a>] considering the market value of metals, ecotoxicity and the possibility of energy saving through recovery treatments.</p>
+<p>The published results on the metal content in WPCBs presented in <a href="#" ref-type="table" rid="tab1">Table 1</a> show very diverse data [<a href="#" ref-type="bibr" rid="bib22">22</a>].</p>
+<table-wrap id="tab1">
+<label>Table 1.</label>
+<caption><p>Contents of nine metals in WPCBs according to the results published so far in literature given above</p></caption>
+<table>
+<thead>
+<tr>
+<th>Metal</th>
+<th>Number of data</th>
+<th>Mean<sup>*</sup> (X̄) [%]</th>
+<td>Min. share[%]</td>
+<td>Max. share [%]</td>
+<td>Standard Deviation<sup>*</sup>(SD) [%]</td>
+<td>Coefficient of Variation<sup>*</sup> (CV) [%]</td>
+<td>Share inores<sup>*</sup> [%]</td>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Al</td>
+<td>40</td>
+<td>4.06</td>
+<td>0.26</td>
+<td>13.50</td>
+<td>3.00</td>
+<td>73.87</td>
+<td>30.00</td>
+</tr>
+<tr>
+<td>Cu</td>
+<td>52</td>
+<td>19.10</td>
+<td>3.00</td>
+<td>37.81</td>
+<td>9.17</td>
+<td>48.01</td>
+<td>0.50-3.00</td>
+</tr>
+<tr>
+<td>Ni</td>
+<td>41</td>
+<td>0.95</td>
+<td>0.00</td>
+<td>5.35</td>
+<td>1.02</td>
+<td>107.05</td>
+<td>0.70-2.00</td>
+</tr>
+<tr>
+<td>Pb</td>
+<td>43</td>
+<td>2.84</td>
+<td>0.80</td>
+<td>15.48</td>
+<td>3.48</td>
+<td>122.62</td>
+<td>0.30-7.50</td>
+</tr>
+<tr>
+<td>Sn</td>
+<td>35</td>
+<td>3.25</td>
+<td>0.62</td>
+<td>8.83</td>
+<td>1.90</td>
+<td>58.38</td>
+<td>0.20-0.85</td>
+</tr>
+<tr>
+<td>Zn</td>
+<td>37</td>
+<td>1.50</td>
+<td>0.04</td>
+<td>5.92</td>
+<td>1.30</td>
+<td>86.88</td>
+<td>1.70-6.40</td>
+</tr>
+<tr>
+<td>Ag</td>
+<td>47</td>
+<td>0.1027</td>
+<td>0.0000</td>
+<td>0.3800</td>
+<td>0.1098</td>
+<td>106.9579</td>
+<td>0.0005</td>
+</tr>
+<tr>
+<td>Au</td>
+<td>47</td>
+<td>0.0290</td>
+<td>0.0000</td>
+<td>0.1500</td>
+<td>0.0357</td>
+<td>123.2660</td>
+<td>0.0005</td>
+</tr>
+<tr>
+<td>Pd</td>
+<td>28</td>
+<td>0.0186</td>
+<td>0.0010</td>
+<td>0.0680</td>
+<td>0.0178</td>
+<td>96.0849</td>
+<td>no data</td>
+</tr>
+</tbody>
+</table>
+<table-wrap-foot>
+<fn id="tab1fn1"><label>*</label><p>Supplemented data from [<a href="#" ref-type="bibr" rid="bib23">23</a>]</p></fn>
+</table-wrap-foot>
+</table-wrap>
+<p>The starting point for defining any waste treatment method is knowing specific waste composition and waste quantities, because selected treatment technology depends on it. This paper presents data on the content of essential metals in WPCBs collected in a typical developing country that are necessary for the exploitation of valuable metals and for the reduction of the toxicity of the residue. The differences in the determined metal content, among other reasons, can be attributed to the age of the equipment, as well as to the time when testing was carried out and to the sampling area. The age of the equipment (i.e. the age of WPCBs for the observed period) was determined by the time when testing was carried out and by the life span of EEE as a particular feature of economic and social circumstances in an observed area/country. That means that the age and life span of EEE in developed and developing countries differ substantially. Therefore, a high dispersion among the published data in <a href="#" ref-type="table" rid="tab1">Table 1</a> was not surprising. Several authors analysed only certain types of WPCBs (non-uniform sampling), while the others used PCB samples directly from the production process, or from similar situations.</p>
+<p>The research presented in this paper determines the metal content of WPCBs in everyday devices we most frequently use such as cell phones, TV sets, and computers both for electronic components and bare WPCB base plates. The research also considers the metal content in relation to different grain sizes, i.e.: 1-4 mm, 0.5-1 mm, 0.1-0.5 mm and &lt; 0.1 mm. WPCB samples were collected in the Republic of Croatia, a new EU member, as an example of a typical transition country.</p>
+<p><a href="#" ref-type="fig" rid="fig1">Figure 1</a> shows that the global economic crisis, which started in 2008, had its effect on the Republic of Croatia, since a decreased quantity of EEE was traded on the market during that period. On the other hand, during the first several years of the crisis, a significant progress was made in the collection of WEEE, followed by several years of stagnation and a slight decline. The collection of WEEE increased in 2015 again. The annual amount of WEEE collected increased four times during the observed period (2008-2015), from approximately 1.3 to 5.5 kg/per capita. It can also be noticed that almost all the waste collected was treated (recycled). Approximately 50,490 t of EEE was traded on the Croatian market in 2016, compared to 38,815 t (76.87%) of WEEE which was collected. WPCBs were separated and sorted manually to recover metals like Cu and Al, and the remaining part was sent for further treatment.</p>
+<fig id="fig1">
+<label>Figure 1.</label>
+<caption><p>WEEE management in the Republic of Croatia [<a href="#" ref-type="bibr" rid="bib24">24</a>]</p></caption>
+<img style="max-width: 100%" src="getXMLobject.php?objData=OGJKSG5zSnpVdG9yWHBBZzRCZDV2UT09,image1.png"/>
+</fig>
+<p>The selection of samples was adapted to the European WPCBs market, and the grinding methods and obtained classes, into which samples are divided for a more detailed testing, were adapted to the improvement of the existing WPCBs processing technology in the Republic of Croatia.</p>
+</sec>
+<sec id="sec-2"><div class="sectionTitle sectionTitleLevel1" sectionLevel="1" sectionId="sec-2">MATERIALS AND METHODS</div>
+<p>The subject of the research presented in the paper are WPCBs from WEEE collected in the Republic of Croatia. Sampling was carried out in cooperation with Spectra Media Ltd, the only company authorised for the treatment of the 2<sup>nd</sup> to 10<sup>th</sup> category of WEEE in the Republic of Croatia. Seven samples of WPCBs separated from WEEE of different age were selected from bags containing manually separated and sorted WPCBs. The average mass of an individual sample was 28 kg.</p>
+<p>A so-called CP<sub>OLD</sub> label was used for PCBs from Cell Phones (CP) of an older generation and a defined CP<sub>NEW</sub> label for a newer generation (smartphones manufactured after 2008). Another C<sub>OLD</sub> label was used for PCBs separated from computers with a Pentium 4 processor or older (i.e. single-core) processors, while in addition a C<sub>NEW</sub> label was used for the PCBs from computers with newer processors. The PCBs from TV sets were divided into three categories. The first category had a CRT label that was used for PCBs from older models of TV sets with a Cathode Ray Tube (CRT). The other two categories of PCBs were from newer models of TV sets with Liquid Crystal Display (LCD) technology. The category marked with LCD<sub>CSP</sub> was used for PCBs used for computer signal processing, and a category labelled with LCD<sub>SR</sub> referred to PCBs used for signal reception.</p>
+<sec id="sec-2_1"><div class="sectionTitle sectionTitleLevel2" sectionLevel="2" sectionId="sec-2_1">Testing procedure</div>
+<p>The testing procedure is presented in a schematic diagram displayed in <a href="#" ref-type="fig" rid="fig2">Figure 2</a>, and further described in detail in the following text. The electronic components of WPCBs were dismantled manually from base plates using hot air in all the samples except WPCBs from cell phones (CP samples). It was not possible to dismantle the electronic components from CP<sub>OLD</sub> and CP<sub>NEW</sub> samples because these compact and exceedingly small parts were intensively integrated into the base plate. In that way, for each group of samples (except for CP samples), one sample of electronic components and one sample of (bare) base plate of the WPCBs were obtained. A suffix “E” was added in brackets to all the sample labels that consisted of separated electronic components: C<sub>OLD</sub>(E), C<sub>NEW</sub>(E), CRT(E), LCD<sub>CSP</sub>(E) and LCD<sub>SR</sub>(E), and to the remaining bare base plates, a suffix “B” was added in brackets: CP<sub>OLD</sub>(B), CP<sub>NEW</sub>(B), CRT(B), LCD<sub>CSP</sub>(B) and LCD<sub>SR</sub>(B).</p>
+<p>The obtained samples were cut into plates of approximately 5 × 5 cm by using tin snips. The samples were homogenized and a mass of approximately 7 kg was separated from each sample by quartering. The reduced samples were shredded in a hammer crusher to a grain size smaller than 12 mm. Then they were quartered again to a mass of approximately 2 kg and shredded in a second step in a hammer crusher to a grain size smaller than 4 mm, as shown in <a href="#" ref-type="fig" rid="fig2">Figure 2</a>.</p>
+<fig id="fig2">
+<label>Figure 2.</label>
+<caption><p>Schematic diagram of the carried research</p></caption>
+<img style="max-width: 100%" src="getXMLobject.php?objData=OGJKSG5zSnpVdG9yWHBBZzRCZDV2UT09,image2.png"/>
+</fig>
+<p>Since WPCBs were derived from different equipment with different construction, as well as different physical and mechanical properties, granulometric composition was expected to vary too. Therefore, after the second shredding step, the samples were quartered to a mass of approximately 200 g, and their granulometric composition was determined by dry sieving. The remaining part was sorted, using a laboratory sieve shaker that separated it into four grain sizes (i.e. 1-4 mm, 0.5-1 mm, 0.1-0.5 mm and &lt; 0.1 mm) and then quartered it to a mass of approximately 50 g. The samples prepared in this way were dissolved in <i>aqua regia</i>(HNO<sub>3</sub>:HCl = 1:3) and their metal content was determined using an Atomic Absorption Spectrometer (AAS) Perkin Elmer AAnalyst 800, that is in the way many authors reported [<a href="#" ref-type="bibr" rid="bib25">25</a>].</p>
+</sec>
+</sec>
+<sec id="sec-3"><div class="sectionTitle sectionTitleLevel1" sectionLevel="1" sectionId="sec-3">RESULTS AND DISCUSSION</div>
+<p>Mass fractions of electronic components in WPCB samples were 55.71% (C<sub>OLD</sub>), 59.95% (C<sub>NEW</sub>), 85.77% (CRT), 64.97% (LCD<sub>SR</sub>) and 50.85% for (LCD<sub>CSP</sub>). These mass fractions of the electronic components were significantly higher than the data on metal content in the WPBCs published in research articles [<a href="#" ref-type="bibr" rid="bib26">26</a>]. This was because the electronic components contained a large share of non-metals such as plastic, glass and ceramics. Within the aforementioned values, larger content of electronic components in the WPCBs in older models of TV sets (CRT samples) could be singled out as a result of an older technology with larger electronic components.</p>
+<sec id="sec-3_1"><div class="sectionTitle sectionTitleLevel2" sectionLevel="2" sectionId="sec-3_1">Granulometric composition of the shredded electronic components and bare waste printed circuit board base plates</div>
+<p>The efficiency of the shredding process with hammer crushers is presented by the granulometric grain size distribution curves shown in <a href="#" ref-type="fig" rid="fig3">Figure 3</a> and <a href="#" ref-type="fig" rid="fig4">Figure 4</a>. Based on the results, it was noticed that base plate shredding was more efficient than electronic component shredding. The diagram in <a href="#" ref-type="fig" rid="fig3">Figure 3</a> indicates that the shredding of cell phone electronic components, CP<sub>OLD</sub>(E) and CP<sub>NEW</sub>(E), was the most efficient, while the shredding of the electronic components in the case of older models of TV sets [CRT(E)] and computers of older generations [C<sub>OLD</sub>(E)] was more difficult. Therefore, it can be generally concluded that the shredding efficiency of electronic components of older equipment with larger components was lower than in the case of other (new) equipment. Unlike electronic components, bare WPCBs base plates had a very similar granulometric size distribution after shredding (<a href="#" ref-type="fig" rid="fig4">Figure 4</a>), except for the samples of older models of TV sets, like CRT(B). The result can be associated with the fact that composite materials consisting of paper cloth and phenolic resin (FR2) were in the WPCBs base plates of older TV sets, while composite materials consisting of woven glass fibre and epoxy resin (FR2) were used in the new equipment.</p>
+<fig id="fig3">
+<label>Figure 3.</label>
+<caption><p>Grain size distribution curve of shredded electronic components separated from the PCBs</p></caption>
+<img style="max-width: 100%" src="getXMLobject.php?objData=OGJKSG5zSnpVdG9yWHBBZzRCZDV2UT09,image3.png"/>
+</fig>
+<fig id="fig4">
+<label>Figure 4.</label>
+<caption><p>Grain size distribution of shredded bare PCB base plates</p></caption>
+<img style="max-width: 100%" src="getXMLobject.php?objData=OGJKSG5zSnpVdG9yWHBBZzRCZDV2UT09,image4.png"/>
+</fig>
+</sec>
+<sec id="sec-3_2"><div class="sectionTitle sectionTitleLevel2" sectionLevel="2" sectionId="sec-3_2">Mass fractions of metals in waste printed circuit boards, electronic components and bare waste printed circuit boards base plates</div>
+<p>Metal content in the equipment integrated in WPCBs, depending on the type of WEEE, is shown in <a href="#" ref-type="table" rid="tab2">Table 2</a>. The listed values were obtained by multiplying the metal content in the electronic components and bare WPCBs base plates with their mass fractions. As a result, in <a href="#" ref-type="table" rid="tab2">Table 2</a> the highest content of precious metals can be found in the WPCBs from equipment of higher technological level (i.e. cell phones, particularly those of newer generations). The lowest content of precious metals was present in the WPCBs of TV sets (CRT). Regarding the content of individual precious metals, it was observed that, depending on the type of equipment, the content of Au varied significantly, from 62.90 g/t (LCD<sub>SR</sub>) to as much as 1,071.96 g/t (CP<sub>NEW</sub>). On the other hand, the content of Ag was almost uniform and it did not depend significantly on the type of equipment (approximately 220 to 330 g/t, except for C<sub>OLD</sub> that contained 171.05 g/t). Palladium content was the lowest and was mostly present in the WPCBs of newer cell phones (CP<sub>NEW</sub> with 61.70 g/t) and was not present at all in some WPCBs (i.e. CP<sub>OLD</sub>, CRT). Therefore, in regard to precious metal content, most of the value was present in the WPCBs of newer cell phones (CP<sub>NEW</sub>: Au content of 1,071.35 g/t, Ag of 320.10 g/t and Pd of 61.70 g/t). The lowest value was in the WPCBs from TV sets of older generations (CRT): Au content of 63.86 g/t, Ag content of 223.81 g/t and no Pd (0 g/t). In addition to precious metals, the content of a selected group of several non-ferrous metals [Al, Cu, nickel (Ni), Pb, Sn, zinc (Zn)] was determined too. For example, aluminium (Al) content ranged from 22.81 kg/t (CP<sub>OLD</sub>) to 76.47 kg/t (LCD<sub>SR</sub>). Compared to other non-ferrous metals, Cu had the highest content, ranging from 84.08 kg/t (CRT) to 428.46 kg/t (CP<sub>NEW</sub>). The content of Ni, Pb, and Sn mostly ranged from 9 kg/t to approximately 30 kg/t. Regardless of whether the results were taken from already published papers or measured during this research, all WPBCs contained Au, Ag, and Cu with mass fractions several times higher than in ores [<a href="#" ref-type="bibr" rid="bib6">6</a>], [<a href="#" ref-type="bibr" rid="bib27">27</a>]. The metal content of WPCBs collected in the Republic of Croatia in most cases corresponded to a wide range of published results from <a href="#" ref-type="table" rid="tab1">Table 1</a>, and fitted recently published comparable results [<a href="#" ref-type="bibr" rid="bib28">28</a>].</p>
+<p><a href="#" ref-type="table" rid="tab3">Table 3</a> presents the content of different metals in the electronic components and bare WPCB base plates of WEEE in parallel. It is evident that the metal content of Al, Cu, Ni, and Zn was higher in the electronic components, while the bare base plates had a higher content of Pb and Sn. In the case of precious metals, the investigated electronic components, in relation to the WPCBs, contained several times higher content of Au, in general a slightly higher content of Ag and a lower content of Pd, except for the C<sub>OLD</sub> (E) sample. Based on the above findings, it could be observed that when separated electronic components were compared with bare WPCB base plates, the metals were mainly concentrated in the electronic components, but also bare WPCB base plates had a sufficiently high metal content to justify its further treatment. In addition to this, further treatment was also justified because WPCBs contained metals that are classified as hazardous substances.</p>
+<table-wrap id="tab2">
+<label>Table 2.</label>
+<caption><p>Metal content found in WPCBs depending on the type of WEEE</p></caption>
+<table>
+<thead>
+<tr>
+<th rowspan="2">Sample type</th>
+<th colspan="7">Non-ferrous metal content [kg/t]</th>
+<th colspan="3">Precious metal content [g/t]</th>
+</tr>
+<tr>
+<th>Al</th>
+<th>Cu</th>
+<th>Ni</th>
+<th>Pb</th>
+<th>Sn</th>
+<th>Zn</th>
+<th>Ʃ<sup>*</sup></th>
+<th>Ag</th>
+<th>Au</th>
+<th>Pd</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CP<sub>OLD</sub></td>
+<td>22.81</td>
+<td>293.72</td>
+<td>27.61</td>
+<td>17.78</td>
+<td>17.92</td>
+<td>13.80</td>
+<td>393.65</td>
+<td>331.47</td>
+<td>723.96</td>
+<td>0.00</td>
+</tr>
+<tr>
+<td>CP<sub>NEW</sub></td>
+<td>29.48</td>
+<td>428.46</td>
+<td>31.34</td>
+<td>7.32</td>
+<td>26.39</td>
+<td>9.38</td>
+<td>532.39</td>
+<td>320.10</td>
+<td>1,071.35</td>
+<td>61.70</td>
+</tr>
+<tr>
+<td>C<sub>OLD</sub></td>
+<td>40.17</td>
+<td>179.53</td>
+<td>4.94</td>
+<td>16.02</td>
+<td>24.24</td>
+<td>14.62</td>
+<td>279.52</td>
+<td>171.05</td>
+<td>125.30</td>
+<td>31.49</td>
+</tr>
+<tr>
+<td>C<sub>NEW</sub></td>
+<td>43.38</td>
+<td>261.46</td>
+<td>8.99</td>
+<td>17.45</td>
+<td>23.04</td>
+<td>38.00</td>
+<td>392.32</td>
+<td>330.22</td>
+<td>147.30</td>
+<td>5.98</td>
+</tr>
+<tr>
+<td>CRT</td>
+<td>48.41</td>
+<td>84.08</td>
+<td>14.22</td>
+<td>13.23</td>
+<td>8.33</td>
+<td>14.64</td>
+<td>182.91</td>
+<td>223.81</td>
+<td>63.86</td>
+<td>0.00</td>
+</tr>
+<tr>
+<td>LCD<sub>CSP</sub></td>
+<td>42.98</td>
+<td>264.90</td>
+<td>8.69</td>
+<td>12.97</td>
+<td>8.48</td>
+<td>11.63</td>
+<td>349.66</td>
+<td>321.43</td>
+<td>143.76</td>
+<td>7.53</td>
+</tr>
+<tr>
+<td>LCD<sub>SR</sub></td>
+<td>76.47</td>
+<td>190.20</td>
+<td>8.99</td>
+<td>14.24</td>
+<td>10.87</td>
+<td>18.39</td>
+<td>319.17</td>
+<td>225.34</td>
+<td>62.90</td>
+<td>25.99</td>
+</tr>
+</tbody>
+</table>
+<table-wrap-foot>
+<fn id="tab2fn1"><label>*</label><p>Total content of non-ferrous metals in the investigated WPCBs</p></fn>
+</table-wrap-foot>
+</table-wrap>
+<table-wrap id="tab3">
+<label>Table 3.</label>
+<caption><p>Metal content in separated electronic components and bare WPCB base plates of different WEEE</p></caption>
+<table>
+<thead>
+<tr>
+<th rowspan="2">Sample type</th>
+<th rowspan="2">Mass fraction [%]</th>
+<th colspan="6">Non-ferrous metal content [kg/t]</th>
+<th colspan="3">Precious metal content [g/t]</th>
+</tr>
+<tr>
+<th>Al</th>
+<th>Cu</th>
+<th>Ni</th>
+<th>Pb</th>
+<th>Sn</th>
+<th>Zn</th>
+<th>Ag</th>
+<th>Au</th>
+<th>Pd</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C<sub>OLD</sub>(E)</td>
+<td>55.71</td>
+<td>46.43</td>
+<td>201.44</td>
+<td>5.79</td>
+<td>12.52</td>
+<td>18.44</td>
+<td>25.58</td>
+<td>184.99</td>
+<td>197.21</td>
+<td>49.17</td>
+</tr>
+<tr>
+<td>C<sub>OLD</sub>(B)</td>
+<td>44.29</td>
+<td>32.29</td>
+<td>151.97</td>
+<td>3.88</td>
+<td>20.43</td>
+<td>31.53</td>
+<td>0.83</td>
+<td>153.53</td>
+<td>34.86</td>
+<td>9.25</td>
+</tr>
+<tr>
+<td>C<sub>NEW</sub>(E)</td>
+<td>59.95</td>
+<td>47.99</td>
+<td>304.87</td>
+<td>11.44</td>
+<td>12.83</td>
+<td>11.45</td>
+<td>60.88</td>
+<td>340.11</td>
+<td>229.17</td>
+<td>2.72</td>
+</tr>
+<tr>
+<td>C<sub>NEW</sub>(B)</td>
+<td>40.05</td>
+<td>36.48</td>
+<td>196.48</td>
+<td>5.33</td>
+<td>24.36</td>
+<td>40.38</td>
+<td>3.74</td>
+<td>315.40</td>
+<td>24.75</td>
+<td>10.87</td>
+</tr>
+<tr>
+<td>CRT(E)</td>
+<td>85.77</td>
+<td>54.02</td>
+<td>89.16</td>
+<td>14.28</td>
+<td>12.16</td>
+<td>6.89</td>
+<td>16.67</td>
+<td>238.52</td>
+<td>70.76</td>
+<td>0.00</td>
+</tr>
+<tr>
+<td>CRT(B)</td>
+<td>14.23</td>
+<td>14.64</td>
+<td>53.52</td>
+<td>13.84</td>
+<td>19.67</td>
+<td>17.01</td>
+<td>2.45</td>
+<td>135.20</td>
+<td>22.25</td>
+<td>0.00</td>
+</tr>
+<tr>
+<td>LCD<sub>CSP</sub>(E)</td>
+<td>50.85</td>
+<td>63.15</td>
+<td>331.33</td>
+<td>10.30</td>
+<td>11.03</td>
+<td>7.56</td>
+<td>20.17</td>
+<td>350.04</td>
+<td>262.19</td>
+<td>5.88</td>
+</tr>
+<tr>
+<td>LCD<sub>CSP</sub>(B)</td>
+<td>49.15</td>
+<td>22.12</td>
+<td>196.16</td>
+<td>7.03</td>
+<td>14.99</td>
+<td>9.43</td>
+<td>2.80</td>
+<td>291.83</td>
+<td>21.23</td>
+<td>9.22</td>
+</tr>
+<tr>
+<td>LCD<sub>SR</sub>(E)</td>
+<td>64.97</td>
+<td>101.53</td>
+<td>196.57</td>
+<td>9.08</td>
+<td>12.30</td>
+<td>8.29</td>
+<td>27.63</td>
+<td>215.06</td>
+<td>87.79</td>
+<td>18.37</td>
+</tr>
+<tr>
+<td>LCD<sub>SR</sub>(B)</td>
+<td>35.03</td>
+<td>30.00</td>
+<td>178.40</td>
+<td>8.82</td>
+<td>17.85</td>
+<td>15.66</td>
+<td>1.26</td>
+<td>244.41</td>
+<td>16.75</td>
+<td>40.14</td>
+</tr>
+</tbody>
+</table>
+</table-wrap>
+</sec>
+<sec id="sec-3_3"><div class="sectionTitle sectionTitleLevel2" sectionLevel="2" sectionId="sec-3_3">Mass fraction of metals in relation to their grain size</div>
+<p>To observe the relationship between grain size and metal content, the shredded samples were sieved into four grain size fractions (1-4 mm, 0.5-1 mm, 0.1-0.5 mm and &lt; 0.1 mm), and metal content was determined for each size separately, both for separated electronic components (<a href="#" ref-type="table" rid="tab4">Table 4</a>), and bare PCB base plates (<a href="#" ref-type="table" rid="tab5">Table 5</a>). Although the obtained results varied significantly for different metals, type of equipment and grain size, certain relationships could be detected.</p>
+<p>For instance, the Al content in electronic components increased with the increase in grain size and it was the highest in the largest grain size (1-4 mm). The metal content in bare WPCB base plates and integral WPCBs of cell phones (CP<sub>OLD</sub> and CP<sub>NEW</sub>) was generally the highest in the smallest size fraction (&lt; 0.1 mm). Copper was mostly present in larger particles, with the highest content in grain class of 0.5-1 mm in most cases. The lowest Cu content occurred in the smallest grains (&lt; 0.1 mm), except for CRTs. This was confirmed for both electronic components as well as WPCB base plates. Therefore, it may be noticed that Cu content decreased with the decrease in the grain size of the investigated samples. Ni content was generally uniform, with no observed enrichment in a grain size, although it should be mentioned that the highest content was present in the largest grains (1-4 mm) in the case of integral cell phone WPCBs. Regarding Pb content, it was found to be the lowest in the largest grains (1-4 mm) of the shredded electronic components. However, in the case of shredded bare WPCB base plates, its concentration was significantly higher in larger grain sizes (1-4 and 0.5-1 mm) than in smaller ones (0.1-0.5 and &lt; 0.1 mm). The Sn content in electronic components was the lowest for the largest grain size (1-4 mm) in most cases, and the highest for the grain size of 0.5-1 mm. For WPCB base plates, the metal content was generally higher for the grains of a larger size (1-4 and 0.5-1 mm), and lower for the smaller ones. For instance, Zn content in electronic components in most cases was higher for larger grain sizes and lower in smaller ones, but it was impossible to define any significant trends for WPCB base plates.</p>
+<p>Regarding precious metals, Au was mostly present in the smallest grains, both for electronic components as well as WPCB base plates. Integral WPCBs of cell phones (CP<sub>OLD</sub> and CP<sub>NEW</sub>) were the only exception, in which the highest Au content occurred in the largest grain size fraction. Trends were not observed for the two other metals tested (i.e., Ag and Pd). It could only be stated, that in the case of Ag in the electronic components from older equipment [C<sub>OLD</sub>(E) and CRT(E)], the lowest content seemed to be present in the largest grains (1-4 mm).</p>
+<p>Pd content was below the Detection Limit (DL) in many grain sizes, both for electronic components and PCB base plates, while its content was detectable in grains of 0.5-1 mm found in CP<sub>NEW</sub> and C<sub>OLD</sub>(E) samples.</p>
+<table-wrap id="tab4">
+<label>Table 4.</label>
+<caption><p>Determined metal content in individual test samples of electronic components</p></caption>
+<table>
+<thead>
+<tr>
+<th rowspan="2">Sampletype</th>
+<th rowspan="2">Grain size [mm]</th>
+<th rowspan="2">Fraction content [%]</th>
+<th colspan="6">Non-ferrous metal content per sample [kg/t]</th>
+<th colspan="3">Precious metal content per sample [g/t]</th>
+</tr>
+<tr>
+<th>Al</th>
+<th>Cu</th>
+<th>Ni</th>
+<th>Pb</th>
+<th>Sn</th>
+<th>Zn</th>
+<th>Ag</th>
+<th>Au</th>
+<th>Pd</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td rowspan="4">CP<sub>OLD</sub></td>
+<td>4-1</td>
+<td>38.27</td>
+<td>21.36</td>
+<td>265.50</td>
+<td>35.84</td>
+<td>14.96</td>
+<td>14.19</td>
+<td>21.94</td>
+<td>320.00</td>
+<td>1,087.50</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>19.20</td>
+<td>15.51</td>
+<td>504.00</td>
+<td>28.18</td>
+<td>16.64</td>
+<td>14.08</td>
+<td>10.86</td>
+<td>317.50</td>
+<td>648.50</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>31.47</td>
+<td>22.13</td>
+<td>278.20</td>
+<td>18.00</td>
+<td>19.12</td>
+<td>19.71</td>
+<td>7.64</td>
+<td>300.00</td>
+<td>399.00</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>11.06</td>
+<td>42.46</td>
+<td>70.50</td>
+<td>25.48</td>
+<td>25.72</td>
+<td>32.39</td>
+<td>8.28</td>
+<td>485.00</td>
+<td>521.50</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td rowspan="4">CP<sub>NEW</sub></td>
+<td>4-1</td>
+<td>41.03</td>
+<td>29.46</td>
+<td>333.00</td>
+<td>43.26</td>
+<td>2.84</td>
+<td>14.14</td>
+<td>17.64</td>
+<td>330.00</td>
+<td>1,726.00</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>20.28</td>
+<td>27.84</td>
+<td>686.70</td>
+<td>29.86</td>
+<td>10.62</td>
+<td>31.19</td>
+<td>4.14</td>
+<td>320.00</td>
+<td>727.00</td>
+<td>304.3</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>30.27</td>
+<td>27.61</td>
+<td>487.50</td>
+<td>20.98</td>
+<td>11.36</td>
+<td>44.23</td>
+<td>3.02</td>
+<td>320.00</td>
+<td>501.00</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>8.42</td>
+<td>40.25</td>
+<td>59.60</td>
+<td>14.12</td>
+<td>6.72</td>
+<td>10.46</td>
+<td>4.66</td>
+<td>272.50</td>
+<td>761.00</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td rowspan="4">C<sub>OLD</sub>(E)</td>
+<td>4-1</td>
+<td>73.47</td>
+<td>50.92</td>
+<td>178.95</td>
+<td>4.40</td>
+<td>8.64</td>
+<td>8.56</td>
+<td>23.12</td>
+<td>152.50</td>
+<td>154.40</td>
+<td>20.11</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>13.02</td>
+<td>29.02</td>
+<td>399.30</td>
+<td>10.94</td>
+<td>27.82</td>
+<td>70.50</td>
+<td>37.80</td>
+<td>285.00</td>
+<td>254.15</td>
+<td>264.25</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>9.60</td>
+<td>44.58</td>
+<td>169.15</td>
+<td>8.38</td>
+<td>21.20</td>
+<td>25.52</td>
+<td>30.08</td>
+<td>267.50</td>
+<td>235.95</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>3.91</td>
+<td>24.55</td>
+<td>44.50</td>
+<td>8.28</td>
+<td>13.14</td>
+<td>13.27</td>
+<td>20.18</td>
+<td>260.00</td>
+<td>717.50</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td rowspan="4">C<sub>NEW</sub>(E)</td>
+<td>4-1</td>
+<td>57.69</td>
+<td>51.25</td>
+<td>387.20</td>
+<td>11.42</td>
+<td>7.72</td>
+<td>3.09</td>
+<td>65.00</td>
+<td>330.00</td>
+<td>221.15</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>17.53</td>
+<td>40.43</td>
+<td>326.20</td>
+<td>12.32</td>
+<td>26.74</td>
+<td>39.59</td>
+<td>88.05</td>
+<td>387.50</td>
+<td>143.85</td>
+<td>0.45</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>15.21</td>
+<td>47.31</td>
+<td>117.00</td>
+<td>8.56</td>
+<td>15.70</td>
+<td>10.39</td>
+<td>36.94</td>
+<td>347.50</td>
+<td>185.60</td>
+<td>17.35</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>9.57</td>
+<td>43.30</td>
+<td>68.00</td>
+<td>14.48</td>
+<td>13.64</td>
+<td>12.00</td>
+<td>24.36</td>
+<td>302.50</td>
+<td>503.00</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td rowspan="4">CRT(E)</td>
+<td>4-1</td>
+<td>75.55</td>
+<td>60.38</td>
+<td>49.75</td>
+<td>14.16</td>
+<td>11.30</td>
+<td>5.63</td>
+<td>13.38</td>
+<td>185.00</td>
+<td>54.85</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>10.38</td>
+<td>44.27</td>
+<td>256.00</td>
+<td>13.90</td>
+<td>15.72</td>
+<td>14.11</td>
+<td>25.60</td>
+<td>350.00</td>
+<td>91.70</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>10.55</td>
+<td>28.38</td>
+<td>194.75</td>
+<td>14.20</td>
+<td>14.00</td>
+<td>6.65</td>
+<td>28.40</td>
+<td>325.00</td>
+<td>101.40</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>3.52</td>
+<td>23.04</td>
+<td>126.55</td>
+<td>18.28</td>
+<td>14.58</td>
+<td>13.36</td>
+<td>25.68</td>
+<td>312.50</td>
+<td>258.80</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td rowspan="4">LCD<sub>CSP</sub>(E)</td>
+<td>4-1</td>
+<td>66.32</td>
+<td>67.48</td>
+<td>291.00</td>
+<td>10.44</td>
+<td>9.40</td>
+<td>4.56</td>
+<td>19.88</td>
+<td>355.00</td>
+<td>306.05</td>
+<td>5.71</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>12.05</td>
+<td>64.53</td>
+<td>491.90</td>
+<td>11.06</td>
+<td>19.40</td>
+<td>25.85</td>
+<td>26.96</td>
+<td>367.50</td>
+<td>150.30</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>11.27</td>
+<td>51.76</td>
+<td>508.20</td>
+<td>9.76</td>
+<td>12.12</td>
+<td>7.63</td>
+<td>14.88</td>
+<td>327.50</td>
+<td>99.30</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>10.36</td>
+<td>46.23</td>
+<td>210.45</td>
+<td>9.06</td>
+<td>10.50</td>
+<td>5.39</td>
+<td>19.86</td>
+<td>322.50</td>
+<td>288.70</td>
+<td>20.24</td>
+</tr>
+<tr>
+<td rowspan="4">LCD<sub>SR</sub>(E)</td>
+<td>4-1</td>
+<td>61.08</td>
+<td>106.80</td>
+<td>202.45</td>
+<td>8.66</td>
+<td>11.06</td>
+<td>8.47</td>
+<td>28.78</td>
+<td>207.50</td>
+<td>72.65</td>
+<td>29.13</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>13.89</td>
+<td>102.50</td>
+<td>300.70</td>
+<td>10.78</td>
+<td>13.72</td>
+<td>15.01</td>
+<td>26.34</td>
+<td>220.00</td>
+<td>92.80</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>16.33</td>
+<td>98.45</td>
+<td>164.25</td>
+<td>9.38</td>
+<td>14.22</td>
+<td>3.59</td>
+<td>30.68</td>
+<td>232.50</td>
+<td>96.55</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>8.70</td>
+<td>68.75</td>
+<td>49.60</td>
+<td>8.70</td>
+<td>15.14</td>
+<td>5.10</td>
+<td>15.86</td>
+<td>227.50</td>
+<td>169.70</td>
+<td>6.62</td>
+</tr>
+</tbody>
+</table>
+<table-wrap-foot>
+<fn id="tab4fn1"><label>&lt;</label><p>DL = below detection limit</p></fn>
+</table-wrap-foot>
+</table-wrap>
+<p>Considering the fact that the largest grain size (1-4 mm after shredding) had the highest mass fraction (from 38.30% to 75.55%) in relation to other grain sizes, it could be observed that the largest quantity of metals from electronic components could be recovered by treating large size (1-4 mm) grains. When bare base plates were taken into consideration, it was obvious that the smallest grain size (of &lt; 0.1 mm) had the lowest mass fraction, and that the mass fraction of a larger grain size (of 0.5-1 mm) was approximately 20%. The highest mass fraction in the shredded PCB base plates was present both in the largest grain size: 1-4 mm (from 25.66% to 49.50%), and in the smallest grain size of 0.1-0.5 mm (from 25.52% to 43.04%), respectively.</p>
+<table-wrap id="tab5">
+<label>Table 5.</label>
+<caption><p>Metal content in the individual tested samples of bare WPCB base plates</p></caption>
+<table>
+<thead>
+<tr>
+<th rowspan="2">Sample type</th>
+<th rowspan="2">Grain size [mm]</th>
+<th rowspan="2">Fraction content [%]</th>
+<th colspan="6">Non-ferrous metal content per sample [kg/t]</th>
+<th colspan="3">Precious metal content per sample [g/t]</th>
+</tr>
+<tr>
+<th>Al</th>
+<th>Cu</th>
+<th>Ni</th>
+<th>Pb</th>
+<th>Sn</th>
+<th>Zn</th>
+<th>Ag</th>
+<th>Au</th>
+<th>Pd</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td rowspan="4">C<sub>OLD</sub>(B)</td>
+<td>4-1</td>
+<td>25.66</td>
+<td>23.00</td>
+<td>232.00</td>
+<td>4.14</td>
+<td>33.66</td>
+<td>65.35</td>
+<td>0.74</td>
+<td>140.00</td>
+<td>47.25</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>19.11</td>
+<td>30.62</td>
+<td>290.00</td>
+<td>4.44</td>
+<td>41.12</td>
+<td>68.50</td>
+<td>0.92</td>
+<td>235.00</td>
+<td>42.05</td>
+<td>40.35</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>43.04</td>
+<td>35.73</td>
+<td>82.67</td>
+<td>3.62</td>
+<td>6.96</td>
+<td>3.12</td>
+<td>0.70</td>
+<td>125.00</td>
+<td>22.35</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>12.19</td>
+<td>42.28</td>
+<td>11.90</td>
+<td>3.34</td>
+<td>7.68</td>
+<td>2.71</td>
+<td>1.32</td>
+<td>155.00</td>
+<td>41.65</td>
+<td>12.63</td>
+</tr>
+<tr>
+<td rowspan="4">C<sub>NEW</sub>(B)</td>
+<td>4-1</td>
+<td>30.44</td>
+<td>34.76</td>
+<td>257.60</td>
+<td>5.48</td>
+<td>39.48</td>
+<td>78.37</td>
+<td>6.44</td>
+<td>262.50</td>
+<td>19.95</td>
+<td>12.48</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>22.34</td>
+<td>33.23</td>
+<td>300.47</td>
+<td>5.60</td>
+<td>36.72</td>
+<td>62.61</td>
+<td>4.56</td>
+<td>365.00</td>
+<td>22.70</td>
+<td>3.20</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>33.43</td>
+<td>35.87</td>
+<td>148.67</td>
+<td>5.32</td>
+<td>9.20</td>
+<td>6.16</td>
+<td>1.62</td>
+<td>327.50</td>
+<td>21.55</td>
+<td>19.02</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>13.79</td>
+<td>47.02</td>
+<td>9.13</td>
+<td>4.56</td>
+<td>7.70</td>
+<td>3.47</td>
+<td>1.60</td>
+<td>322.50</td>
+<td>46.40</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td rowspan="4">CRT(B)</td>
+<td>4-1</td>
+<td>49.50</td>
+<td>4.90</td>
+<td>67.47</td>
+<td>14.04</td>
+<td>32.40</td>
+<td>28.85</td>
+<td>1.90</td>
+<td>157.50</td>
+<td>17.53</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>18.82</td>
+<td>7.97</td>
+<td>55.33</td>
+<td>13.66</td>
+<td>9.78</td>
+<td>7.64</td>
+<td>1.20</td>
+<td>95.00</td>
+<td>19.60</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>25.52</td>
+<td>30.24</td>
+<td>33.63</td>
+<td>13.70</td>
+<td>5.72</td>
+<td>3.08</td>
+<td>3.88</td>
+<td>115.00</td>
+<td>24.20</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>6.16</td>
+<td>48.67</td>
+<td>18.25</td>
+<td>13.34</td>
+<td>5.34</td>
+<td>8.28</td>
+<td>4.80</td>
+<td>162.50</td>
+<td>60.15</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td rowspan="4">LCD<sub>CSP</sub>(B)</td>
+<td>4-1</td>
+<td>35.34</td>
+<td>18.74</td>
+<td>268.20</td>
+<td>7.14</td>
+<td>14.96</td>
+<td>17.63</td>
+<td>2.44</td>
+<td>327.50</td>
+<td>12.60</td>
+<td>3.89</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>21.29</td>
+<td>22.27</td>
+<td>269.67</td>
+<td>6.74</td>
+<td>24.30</td>
+<td>10.75</td>
+<td>4.70</td>
+<td>385.00</td>
+<td>28.90</td>
+<td>36.87</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>30.32</td>
+<td>17.96</td>
+<td>136.00</td>
+<td>7.16</td>
+<td>10.36</td>
+<td>2.43</td>
+<td>1.82</td>
+<td>205.00</td>
+<td>9.05</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>13.05</td>
+<td>40.66</td>
+<td>21.00</td>
+<td>6.88</td>
+<td>10.64</td>
+<td>1.37</td>
+<td>2.98</td>
+<td>245.00</td>
+<td>60.35</td>
+<td>&lt; DL</td>
+</tr>
+<tr>
+<td rowspan="4">LCD<sub>SR</sub>(B)</td>
+<td>4-1</td>
+<td>29.67</td>
+<td>18.31</td>
+<td>282.00</td>
+<td>9.44</td>
+<td>23.54</td>
+<td>29.04</td>
+<td>0.48</td>
+<td>270.00</td>
+<td>14.60</td>
+<td>66.27</td>
+</tr>
+<tr>
+<td>1-0.5</td>
+<td>19.56</td>
+<td>17.17</td>
+<td>310.00</td>
+<td>9.16</td>
+<td>22.00</td>
+<td>20.56</td>
+<td>1.54</td>
+<td>240.00</td>
+<td>13.53</td>
+<td>15.97</td>
+</tr>
+<tr>
+<td>0.5-0.1</td>
+<td>37.85</td>
+<td>43.30</td>
+<td>85.50</td>
+<td>8.58</td>
+<td>13.34</td>
+<td>6.84</td>
+<td>1.82</td>
+<td>272.50</td>
+<td>17.50</td>
+<td>45.85</td>
+</tr>
+<tr>
+<td>&lt; 0.1</td>
+<td>12.92</td>
+<td>37.28</td>
+<td>13.30</td>
+<td>7.62</td>
+<td>11.68</td>
+<td>3.36</td>
+<td>0.98</td>
+<td>110.00</td>
+<td>24.38</td>
+<td>&lt; DL</td>
+</tr>
+</tbody>
+</table>
+<table-wrap-foot>
+<fn id="tab5fn1"><label>&lt;</label><p>DL = below detection limit</p></fn>
+</table-wrap-foot>
+</table-wrap>
+</sec>
+<sec id="sec-3_4"><div class="sectionTitle sectionTitleLevel2" sectionLevel="2" sectionId="sec-3_4">Influence of product age on metal content</div>
+<p>When mass fractions of metals in WPCBs from newer and older WEEE were compared, the relationship between mass fraction and age (the development of technology) became evident. <a href="#" ref-type="fig" rid="fig5">Figure 5</a> presents the mass fraction ratio of individual metals determined in newer and older waste PCBs from three different types of equipment.</p>
+<p>The figure shows that Au, Sn, Cu, Al and Ni were more frequently used in the WPCBs of newer cell phones (CP<sub>NEW</sub>), while Zn and Pb content was less frequently used.</p>
+<p>When the ratios of mass fractions of metals in the WPCBs from computers were compared, an increase in the use of Zn, Ag, Ni, Cu and Au could be observed, while the use of Al, Pb, and Sn remained at almost the same level. The use of Pd in newer computers significantly decreased when compared to older models.</p>
+<p>Data on the metal content in LCD TV sets represented an arithmetic mean of a metal content in LCD<sub>CSP</sub> and LCD<sub>SR</sub>. If the data obtained for TV sets are considered, one can observe a significant increase in the use of Cu, Au, Ag, Al and Sn, but Ni was used less frequently, while Pb and Zn mostly remained at the same level. The reason for a negligible decrease of Zn and Pb content in newer equipment was due to the fact that the share of WEEE treated in the Republic of Croatia according to the RoHS Directive was small, and changes may be expected in the future when products begin to reach their end-of-life.</p>
+<fig id="fig5">
+<label>Figure 5.</label>
+<caption><p>Metal mass fraction ratio in waste PCBs in relation to equipment age and type</p></caption>
+<img style="max-width: 100%" src="getXMLobject.php?objData=OGJKSG5zSnpVdG9yWHBBZzRCZDV2UT09,image5.png"/>
+</fig>
+</sec>
+</sec>
+<sec id="sec-4"><div class="sectionTitle sectionTitleLevel1" sectionLevel="1" sectionId="sec-4">CONCLUSIONS</div>
+<p>The research presented in this paper shows that the mass of electronic components in WEEE represented a larger part than the mass of integral WPCBs, and that the mass fraction of electronic components depended significantly on the age and type of WEEE. Depending on the type of equipment, the mass fraction of electronic components ranged from 50.85% (LCD<sub>CSP</sub>) to 85.77% in the case of older TV sets (CRT).</p>
+<p>Based on the granulometric particle size distribution of samples determined after a two-step shredding, it was observed that the efficiency of WPCB base plates shredding was higher than for electronic component shredding. The shredded WPCB base plates from different WEEE had similar particle size distributions. In the case of electronic components, it was easier to shred the components from cell phones and more difficult to shred those from older TV sets.</p>
+<p>The comparison of the determined metal content in separated electronic components and WPCB base plates showed that a higher metal content (Al, Cu, Ni, Zn, Au, and Ag in most cases) could be found in electronic components rather than in bare WPCB base plates. The opposite was true for certain metals, i.e. Pb, which had a higher content in WPCB base plates than in electronic components. Moreover, in the case of some metals (e.g. Pd and partly true for Ag), the metal content depended on the type of equipment.</p>
+<p>The research on the relationship between metal content and grains of various size showed uneven results. The shredded electronic components of larger grain sizes (1-4 mm and 0.5-1 mm) contained more Al, Cu and Zn but the least amount of Pb. The smaller grain sizes of electronic components, on the other hand, contained more Au. The larger grain sizes of shredded PCB base plates contained more Cu, Pb and Sn, but grains of the smallest size (&lt; 0.1 mm) contained more Al and Au. The content of Ni was rather uniform, and it could be concluded that its concentration generally did not relate to any grain size. No trends were noticed for Ag and Pd also.</p>
+<p>Considering that, after shredding of the electronic components, the largest grain size (1-4 mm) also had the largest mass fraction when compared to the other three grain sizes fractions. Thus, its treatment will result in the highest metal recovery. After the shredding of WPCB base plates, grains of 1-4 mm and of 0.1-0.5 mm had the largest mass fractions, respectively.</p>
+<p>The conducted research also indicates certain trends in the use of metals in PCBs depending on the product’s age. It can be concluded that an increase in the use of Al, Cu, and Ag occurred in most of the new equipment. Metals such as Sn and Pb were used almost equally in all the equipment, regardless of the product’s age. A significant increase of Pd in newer TV sets was observed, as well as a significant decrease of Pd in newer computers.</p>
+<p>Our research showed that WPCBs contained several strategic metals in concentrations several times higher than in ores. The separation of electronic components from WPCB base plates by segregation resulted in a higher concentration of metals in those components. Nevertheless, in bare WPCB base plates there were enough metals left for further treatment from an economic point of view, as well as from an environmental point of view, which means less waste toxicity.</p>
+</sec>
+<sec id="sec-5"><div class="sectionTitle sectionTitleLevel1" sectionLevel="1" sectionId="sec-5">NOMENCLATURE</div>
+<table-wrap id="tab6">
+<table>
+<thead>
+<tr>
+<th colspan="2"><b><i>Abbreviations</i></b></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AAS</td>
+<td>Atomic Absorption Spectrometer</td>
+</tr>
+<tr>
+<td>C<sub>NEW</sub></td>
+<td>Computers Newer Generation Processors (computers with processor Pentium 5 or newer)</td>
+</tr>
+<tr>
+<td>C<sub>OLD</sub></td>
+<td>Computers Older Generation (computers with Pentium 4 processor or older)</td>
+</tr>
+<tr>
+<td>CP</td>
+<td>Cell Phones</td>
+</tr>
+<tr>
+<td>CP<sub>NEW</sub></td>
+<td>Cell Phones New Generation (smartphones manufactured after 2008)</td>
+</tr>
+<tr>
+<td>CP<sub>OLD</sub></td>
+<td>Cell Phones Older Generation</td>
+</tr>
+<tr>
+<td>CRT</td>
+<td>Cathode Ray Tube</td>
+</tr>
+<tr>
+<td>CV</td>
+<td>Coefficient of Variation</td>
+</tr>
+<tr>
+<td>EE</td>
+<td>Electrical and Electronic</td>
+</tr>
+<tr>
+<td>EEE</td>
+<td>Electrical and Electronic Equipment</td>
+</tr>
+<tr>
+<td>FR2</td>
+<td>Flame Resistant 2 (PCB base plate made of phenolic resin bonded paper)</td>
+</tr>
+<tr>
+<td>FR4</td>
+<td>Flame Resistant 4 (PCB base plate made of woven fiberglass cloth with an epoxy resin binder)</td>
+</tr>
+<tr>
+<td>LCD</td>
+<td>Liquid Crystal Display </td>
+</tr>
+<tr>
+<td>LCD<sub>CSP</sub></td>
+<td>Liquid Crystal Display Computer Signal Processing Unit</td>
+</tr>
+<tr>
+<td>LCD<sub>SR</sub></td>
+<td>Liquid Crystal Display Computer Signal Reception Unit</td>
+</tr>
+<tr>
+<td>PCB</td>
+<td>Printed Circuit Board</td>
+</tr>
+<tr>
+<td>SD</td>
+<td>Standard Deviation</td>
+</tr>
+<tr>
+<td>TV</td>
+<td>Television</td>
+</tr>
+<tr>
+<td>USD</td>
+<td>United States Dollar</td>
+</tr>
+<tr>
+<td>WEEE</td>
+<td>Waste Electrical and Electronic Equipment</td>
+</tr>
+<tr>
+<td>X̄</td>
+<td>Mean</td>
+</tr>
+</tbody>
+</table>
+</table-wrap>
+</sec>
+<ref-list><div class="sectionTitle sectionTitleLevel1" sectionId="refSection">REFERENCES</div><ol>
+<li bibId="bib1"><span class="citation-authors-year">Huang K., Guo J., Xu Z.</span>, <citTitle>Recycling of Waste Printed Circuit Boards: A Review of Current Technologies and Treatment Status in China</citTitle>, <citSource>Journal of Hazardous Materials</citSource>,  Vol. 164 (2-3), <citPp class="page-range">pp 399-408</citPp>, 2009, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.jhazmat.2008.08.051">https://doi.org/https://doi.org/10.1016/j.jhazmat.2008.08.051</a></li>
+<li bibId="bib2"><span class="citation-authors-year">Pomberger R., Sarc R., Lorber K.</span>, <citTitle>Dynamic Visualisation of Municipal Waste Management Performance in the EU Using Ternary Diagram Method</citTitle>, <citSource>Waste Management</citSource>,  Vol. 61 , <citPp class="page-range">pp 558-571</citPp>, 2017, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.wasman.2017.01.018">https://doi.org/https://doi.org/10.1016/j.wasman.2017.01.018</a></li>
+<li bibId="bib3"><span class="citation-authors-year">Ongondo F., Williams I., Cherrett T.</span>, <citTitle>How Are WEEE Doing? A Global Review of the Management of Electrical and Electronic Wastes</citTitle>, <citSource>Waste Management</citSource>,  Vol. 31 (4), <citPp class="page-range">pp 714-730</citPp>, 2011, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.wasman.2010.10.023">https://doi.org/https://doi.org/10.1016/j.wasman.2010.10.023</a></li>
+<li bibId="bib4"><span class="citation-authors-year">Xu Y., Li. J., Liu. L.</span>, <citTitle>Current Status and Future Perspective of Recycling Copper by Hydrometallurgy from Waste Printed Circuit Boards</citTitle>, <citSource>Procedia Environmental Sciences</citSource>,  Vol. 31 , <citPp class="page-range">pp 162-170</citPp>, 2016, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.proenv.2016.02.022">https://doi.org/https://doi.org/10.1016/j.proenv.2016.02.022</a></li>
+<li bibId="bib5"><span class="citation-authors-year">Soto Carrión C., Jiménez Mendoza W.</span>, <citTitle>Potential Phytoremediator of Native Species in Soils Contaminated by Heavy Metals in the Garbage Dump Quitasol-Imponeda Abancay</citTitle>, <citSource>Journal of Sustainable Development of Energy, Water and Environment Systems</citSource>,  Vol. 7 (4), <citPp class="page-range">pp 584-600</citPp>, 2019, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.13044/j.sdewes.d7.0261">https://doi.org/https://doi.org/10.13044/j.sdewes.d7.0261</a></li>
+<li bibId="bib6"><span class="citation-authors-year">Rucevska I., Nellemann C., Isarin N., Yang W., Liu N., Yu K., Sandnæs S., Olley K., McCann H., Devia L., Bisschop L., Soesilo D., Schoolmeester T., Henriksen R., Nilsen R.</span>, <cite class="article-title">Countering Illegal Traffic: A Snapshot of Monitoring and Enforcement in Waste Crime – Waste Risks: Gaps in Meeting the Global Waste Challenge, A UNEP Rapid Response Assessment, United Nations Environment Programme and GRID-Arendal, Nairobi and Arendal</cite>, 2015</li>
+<li bibId="bib7"><span class="citation-authors-year">Hadi P., Gao P., Barford J., McKay G.</span>, <citTitle>Novel Application of the Nonmetallic Fraction of the Recycled Printed Circuit Boards as a Toxic Heavy Metal Adsorbent</citTitle>, <citSource>Journal of Hazardous Materials</citSource>,  Vol. 252-253 , <citPp class="page-range">pp 166-170</citPp>, 2013, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.jhazmat.2013.02.037">https://doi.org/https://doi.org/10.1016/j.jhazmat.2013.02.037</a></li>
+<li bibId="bib8"><span class="citation-authors-year">Wang H., Zhang S., Li B., Pan D., Wu Y., Zuo T.</span>, <citTitle>Recovery of Waste Printed Circuit Boards Through Pyrometallurgical Processing: A Review</citTitle>, <citSource>Resources, Conservation and Recycling</citSource>,  Vol. 126 , <citPp class="page-range">pp 209-218</citPp>, 2017, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.resconrec.2017.08.001">https://doi.org/https://doi.org/10.1016/j.resconrec.2017.08.001</a></li>
+<li bibId="bib9"><span class="citation-authors-year">Lu Y., Xu Z.</span>, <citTitle>Precious Metals Recovery from Waste Printed Circuit Boards: A Review for Current Status and Perspective</citTitle>, <citSource>Resources, Conservation and Recycling</citSource>,  Vol. 113 , <citPp class="page-range">pp 28-39</citPp>, 2016, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.resconrec.2016.05.007">https://doi.org/https://doi.org/10.1016/j.resconrec.2016.05.007</a></li>
+<li bibId="bib10"><span class="citation-authors-year">Ikhlayel M.</span>, <citTitle>Environmental Impacts and Benefits of State-Of-The-Art Technologies for E-Waste Management</citTitle>, <citSource>Waste Management</citSource>,  Vol. 68 , <citPp class="page-range">pp 458-474</citPp>, 2017, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.wasman.2017.06.038">https://doi.org/https://doi.org/10.1016/j.wasman.2017.06.038</a></li>
+<li bibId="bib11"><span class="citation-authors-year">Oguchi M., Sakanakura H., Terazono A.</span>, <citTitle>Toxic Metals in WEEE: Characterization and Substance Flow Analysis in Waste Treatment Processes</citTitle>, <citSource>Science of the Total Environment</citSource>,  Vol. 463-464 , <citPp class="page-range">pp 1124-1132</citPp>, 2013, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.scitotenv.2012.07.078">https://doi.org/https://doi.org/10.1016/j.scitotenv.2012.07.078</a></li>
+<li bibId="bib12"><span class="citation-authors-year">Bi X., Bernd R., Simoneit B., Wang Z., Wang X., Sheng G., Fu J.</span>, <citTitle>The Major Components of Particles Emitted During Recycling of Waste Printed Circuit Boards in a Typical E-Waste Workshop of South China</citTitle>, <citSource>Atmospheric Environment</citSource>,  Vol. 44 (35), <citPp class="page-range">pp 4440-4445</citPp>, 2010, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.atmosenv.2010.07.040">https://doi.org/https://doi.org/10.1016/j.atmosenv.2010.07.040</a></li>
+<li bibId="bib13"><span class="citation-authors-year">Yazici E., Deveci H., Alp I., Akçil A., Yazici R.</span>, <cite class="article-title">Characterisation of Computer Printed Circuit Boards for Hazardous Properties and Beneficiation Studies</cite>, Proceedings of the XXV International Mineral Processing Congress, 2010</li>
+<li bibId="bib14"><span class="citation-authors-year">He Y., Xu Z.</span>, <citTitle>The Status and Development of Treatment Techniques of Typical Waste Electrical and Electronic Equipment in China: A Review</citTitle>, <citSource>Waste Management and Reseach</citSource>,  Vol. 32 , <citPp class="page-range">pp 254-269</citPp>, 2014, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1177/0734242X14525824">https://doi.org/https://doi.org/10.1177/0734242X14525824</a></li>
+<li bibId="bib15"><span class="citation-authors-year">Gurauskiene I., Stasiskiene Z.</span>, <citTitle>Model for Regional Management of Electrical and Electronical Waste (WEEE) Flows</citTitle>, <citSource>Environmental Engineering and Management Journal</citSource>,  Vol. 17 (1), <citPp class="page-range">pp 135-145</citPp>, 2018, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.30638/eemj.2018.015">https://doi.org/https://doi.org/10.30638/eemj.2018.015</a></li>
+<li bibId="bib16"><span class="citation-authors-year">Premur V., Anić Vučinić A., Melnjak I., Radetić L.</span>, <citTitle>The Possibility of Using Non-Metal Fraction from Printed Circuit Boards in Pavement Manufacturing</citTitle>, <citSource>Environmental Engineering and Management Journal</citSource>,  Vol. 17 (11), <citPp class="page-range">pp 2719-2729</citPp>, 2018</li>
+<li bibId="bib17"><span class="citation-authors-year">Zeng X., Zheng L., Xie H., Lu B., Xia K., Chao K., Li W., Yang J., Lin S., Li J.</span>, <citTitle>Current Status and Future Perspective of Waste Printed Circuit Boards Recycling</citTitle>, <citSource>Procedia Environmental Sciences</citSource>,  Vol. 16 , <citPp class="page-range">pp 590-597</citPp>, 2012, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.proenv.2012.10.081">https://doi.org/https://doi.org/10.1016/j.proenv.2012.10.081</a></li>
+<li bibId="bib18"><span class="citation-authors-year">Estrada-Ruiz R., Flores-Campos R., Gamez-Altamirano H., Velarde-Sanchez E.</span>, <citTitle>Separation of the Metallic and Non-Metallic Fraction from Printed Circuit Boards Employing Green Technology</citTitle>, <citSource>Journal of Hazardous Materials</citSource>,  Vol. 311 , <citPp class="page-range">pp 91-99</citPp>, 2016, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.jhazmat.2016.02.061">https://doi.org/https://doi.org/10.1016/j.jhazmat.2016.02.061</a></li>
+<li bibId="bib19"><span class="citation-authors-year">Premur V., Anić Vučinić A., Vujević D., Bedeković D.</span>, <citTitle>The Possibility for Environmental Friendly Recycling of Printed Circuit Boards</citTitle>, <citSource>Journal of Sustainable Development of Energy, Water and Environment Systems</citSource>,  Vol. 4 (1), <citPp class="page-range">pp 14-22</citPp>, 2016, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.13044/j.sdewes.2016.04.0002">https://doi.org/https://doi.org/10.13044/j.sdewes.2016.04.0002</a></li>
+<li bibId="bib20"><span class="citation-authors-year">Kumar A., Holuszko M., Janke T.</span>, <citTitle>Characterization of the Non-Metal Fraction of the Processed Waste Printed Circuit Boards</citTitle>, <citSource>Waste Management</citSource>,  Vol. 95 , <citPp class="page-range">pp 94-102</citPp>, 2018, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.wasman.2018.02.010">https://doi.org/https://doi.org/10.1016/j.wasman.2018.02.010</a></li>
+<li bibId="bib21"><span class="citation-authors-year">Wang X., Gaustad G.</span>, <citTitle>Prioritizing Material Recovery for End-Of-Life Printed Circuit Boards</citTitle>, <citSource>Waste Management</citSource>,  Vol. 32 (10), <citPp class="page-range">pp 1903-1913</citPp>, 2012, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.wasman.2012.05.005">https://doi.org/https://doi.org/10.1016/j.wasman.2012.05.005</a></li>
+<li bibId="bib22"><span class="citation-authors-year">Premur V.</span>, <cite class="article-title">Recovery of Waste Printed Circuit Boards Using Mineral Processing Methods</cite>, Ph. D. Thesis, 2016</li>
+<li bibId="bib23"><span class="citation-authors-year">Brunori C., Cafiero L., De Carolis R., Fontana D., Guzzinati R., Pietrantonio M., Pucciarmati S., Torelli G., Emiliano Trinca E., Tuffi T.</span>, <citTitle>Innovative Technologies for Metals Recovery and Plastic Valorization from Electric and Electronic Waste: An Integrated Approach</citTitle>, <citSource>Environmental Engineering and Management Journal</citSource>,  Vol. 14 (7), <citPp class="page-range">pp 1553-1562</citPp>, 2015, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.30638/eemj.2015.167">https://doi.org/https://doi.org/10.30638/eemj.2015.167</a></li>
+<li bibId="bib24">, <cite class="article-title"/>, A Report on Special Categories of Waste for 2016 (in Croatian), 2018</li>
+<li bibId="bib25"><span class="citation-authors-year">Kasper A., Bernardes A., Veit H.</span>, <citTitle>Characterization and Recovery of Polymers from Mobile Phone Scrap</citTitle>, <citSource>Waste Management and Research</citSource>,  Vol. 29 (7), <citPp class="page-range">pp 714-726</citPp>, 2011, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1177/0734242X10391528">https://doi.org/https://doi.org/10.1177/0734242X10391528</a></li>
+<li bibId="bib26"><span class="citation-authors-year">Awasthi A., Zlamparet G., Zeng X., Li J.</span>, <citTitle>Evaluating Waste Printed Circuit Boards Recycling: Opportunities and Challenges, A Mini Review</citTitle>, <citSource>Waste Management and Research</citSource>,  Vol. 35 (4), <citPp class="page-range">pp 346-356</citPp>, 2017, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1177/0734242X16682607">https://doi.org/https://doi.org/10.1177/0734242X16682607</a></li>
+<li bibId="bib27"><span class="citation-authors-year">Tuncuk A., Stazi V., Akcil A., Yazici E., Deveci H.</span>, <citTitle>Aqueous Metal Recovery Techniques from E-Scrap: Hydrometallurgy in Recycling</citTitle>, <citSource>Minerals Engineering</citSource>,  Vol. 25 (1), <citPp class="page-range">pp 28-37</citPp>, 2012, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.mineng.2011.09.019">https://doi.org/https://doi.org/10.1016/j.mineng.2011.09.019</a></li>
+<li bibId="bib28"><span class="citation-authors-year">Holgerssona S., Steenaria B., Björkmann M., Klas C.</span>, <citTitle>Analysis of the Metal Content of Small-Size Waste Electric and Electronic Equipment (WEEE) Printed Circuit Boards—Part 1: Internet Routers, Mobile Phones and Smartphones</citTitle>, <citSource>Resources, Conservation and Recycling</citSource>,  Vol. 133 , <citPp class="page-range">pp 300-308</citPp>, 2017, <a class="doiLink" target="_blank" href="https://doi.org/https://doi.org/10.1016/j.resconrec.2017.02.011">https://doi.org/https://doi.org/10.1016/j.resconrec.2017.02.011</a></li>
+</ol></ref-list><script type="text/javascript">
+	$(function(){
+
+		$('body').on('mouseenter', '.floaterInfoDiv', function(e){
+			//console.log('entered div');
+			e.stopPropagation();
+		});
+
+		let is_marking = false;
+
+		$('body').on('click', '.xmlPCItem', function(e){
+			console.log($(this));
+			var targetElement = $(this).attr('goTo');
+			$([document.documentElement, document.body]).animate({
+        		scrollTop: $('.sectionTitle[sectionId="'+targetElement+'"]').offset().top - 50
+    		}, 500);
+			//e.stopPropagation();
+		})
+
+
+		$('.sectionTitle').each(function(){
+			//console.log($(this));
+			var sectionLevel = parseInt($(this).attr('sectionLevel'));
+			$('#xmlPaperContents').append('<span class="xmlPCItem" style="padding-left: '+(20*(sectionLevel-1))+'px;" goTo="'+$(this).attr('sectionId')+'">'+$(this).text()+'</span>');
+		});
+
+
+		$('a[ref-type="bibr"]').on('mouseenter', function(){
+			var targetLocation = $(this).offset();
+			$('body').append('<div class="floaterInfoDiv">'+$('li[bibId="'+$(this).attr('rid')+'"]').html()+'</div>');
+			var divHeight = $('.floaterInfoDiv').height();
+			$('.floaterInfoDiv').css({top: (targetLocation.top - divHeight )+'px', left: (targetLocation.left-250)+'px'}).show();
+		}).on('mouseleave', function() {
+			//console.log('left link');
+			$('.floaterInfoDiv').remove();
+		}).on('click', function(){
+			var targetElement = $(this).attr('rid');
+			$([document.documentElement, document.body]).animate({
+        		scrollTop: $('li[bibId="'+targetElement+'"]').offset().top - 200
+    		}, 500);
+    		return false;
+		});
+
+
+		$('a[ref-type="table"]').on('click', function(){
+			var targetElement = $(this).attr('rid');
+			$([document.documentElement, document.body]).animate({
+        		scrollTop: $('table-wrap[id="'+targetElement+'"]').offset().top - 200
+    		}, 500);
+    		return false;
+		});
+
+		$('a[ref-type="fig"]').on('click', function(){
+			var targetElement = $(this).attr('rid');
+			$([document.documentElement, document.body]).animate({
+        		scrollTop: $('fig[id="'+targetElement+'"]').offset().top - 200
+    		}, 500);
+    		return false;
+		});
+
+		$(window).scroll(function (e) {
+        	positionFloater();
+
+
+        	
+    	});
+
+    	$(window).resize(function (e) {
+        	//positionFloater($(this));
+        	//console.log(floaterOriginalLeft);
+
+        	if (isFloating) {
+        		//console.log('moving');
+        		
+        		var menu_left = $('#vertical-menu').offset().left;
+        		//console.log(floaterOriginalLeftOffset);
+        		$('#xmlPaperContents').css({left: menu_left+floaterOriginalLeftOffset});
+        	}
+    	});
+	});
+
+	var isFloating = false;
+	var floaterOriginalTop = 0;
+	var floaterOriginalLeftOffset = 0;
+	function positionFloater(){
+		
+		var elemPos = $('#xmlPaperContents').offset();
+		//var leftPos = 
+		//console.log(floaterOriginalTop+' , '+)
+		if (!isFloating) {
+			if ($(window).scrollTop() > elemPos.top) {
+				var leftPos = elemPos.left;
+				floaterOriginalLeftOffset = leftPos-$('#vertical-menu').offset().left;
+				floaterOriginalTop = elemPos.top;
+				var width = $('#xmlPaperContents').width();
+				$('#xmlPaperContents').addClass('floaterDiv').css({left: leftPos, width: width});
+				isFloating = true;
+			}
+			//console.log(topPos);
+			//console.log();
+		} else if ($(window).scrollTop() < floaterOriginalTop) {
+			console.log('remove floater');
+			$('#xmlPaperContents').removeClass('floaterDiv');
+			isFloating = false;
+		}
+		//if ($())
+	}
+</script></div> <script type="text/javascript">
+  function open_eml(e){var t="";while(e.length>0){t+=String.fromCharCode(parseInt(e.substr(0,3).replace(/^0+/,""))-3);e=e.substr(3);}
+    	window.location.href="mailto:"+t;
+   }
+ </script>
+ 
+ <script>
+ 
+ $(document).ready(function() {
+    $('.soc-share').on('click',function(e) {
+        e.preventDefault();
+        window.open($(this).attr('href'), 'ShareWindow', 'height=450, width=550, top=' + ($(window).height() / 2 - 275) + ', left=' + ($(window).width() / 2 - 225) + ', toolbar=0, location=0, menubar=0, directories=0, scrollbars=0');
+        return false;
+    });
+});
+ 
+	/*jQuery(document).ready(function($) {
+	   $('.popup').click(function() {
+		 var NWin = window.open($(this).prop('href'), '', 'scrollbars=1,height=400,width=400');
+		 if (window.focus)
+		 {
+		   NWin.focus();
+		 }
+		 return false;
+		});
+	});*/
+ </script>
+ 
+ 
+ 
+ 
+ </div>
+
+
+
+	<div style="clear: both;"></div><br />
+  </div> 
+  <!-- END PAGE CONTENTS -->
+  <!-- SPONSORS -->
+  <div style="clear: both;"></div>
+  
+    <div class="inline-i w10p txt-center">
+      <!--br /><br /><img class="sp-slider" direction="-" src="img/wht_arrow_right.png" /-->
+    </div>
+  
+  <!-- END SPONSORS -->
+  <!-- ADDITIONAL INFO -->
+  <!--div id="additional-info">
+  </div-->
+  <!-- END ADDITIONAL INFO -->
+
+  
+  <footer>
+
+  	<div class="foot-col">
+  		<b>Contacts:</b>
+  		<br /><br />
+  		<div class="px12 foot-contents">
+  	  		<!--b>OIB/VAT</b>: HR 32475284418<br />
+    			MB (registration number): 2494787 <br /-->
+    			EML: jsdewes@sdewes.org<br />
+    			PHN: +385 1 6220 888<br />
+		  </div>
+  	</div>
+
+    <div class="foot-col" style="border-right: 0;">
+      <div>Icons made by <a href="http://www.freepik.com/" title="Freepik">Freepik</a> from <a href="https://www.flaticon.com/" title="Flaticon">www.flaticon.com</a></div>
+    </div>
+      
+    </div>
+
+  	
+  	<div id="copyright" class="px12">
+  		<span style="margin-right: 40px; padding-top: 5px; display: block;"><b>&copy; SDEWES.ORG All rights reserved | 2026</b></span>
+  	</div>
+  </footer>
+ </div>
+
+ <div style="position: absolute; top: 0; left: 0; width: 30px; font-size: 10px;" id="debugger">DBG</div>
+ <script src="js/common_functions.js?v=1427455885"></script>
+ <!--script src="js/sdewes_slider.js?v=1427455885"></script-->
+ <script type="text/javascript">
+ var sp_slide_active = false;
+ 	$(function(){
+  	$('.dropit-menu').dropit({action: 'mouseenter'});
+    
+    if (!window.location.hash && window.location.pathname!='/' && window.location.pathname!='/index.php') {
+     // $('html,body').scrollTop($('#horizontal-menu-main').offset().top);
+    }
+
+ 		$('.has-dropdown').click(function(){
+ 			
+ 			var ddmenu		 	= $('.for-'+$(this).attr('id'));
+			var parent_position = $(this).offset();
+ 			$('.dropdown-menu').not('.for-'+$(this).attr('id')).hide();
+ 			var dd_left = 0;
+ 			var dd_top  = 0;
+ 			dd_left = (ddmenu.hasClass('align-right'))?parent_position.left+$(this).width()-ddmenu.width():parent_position.left;
+ 			dd_top  = (ddmenu.hasClass('align-top'))?parent_position.top:parent_position.top+$(this).outerHeight();
+ 			
+ 			//console.log($(this).height());
+ 			ddmenu.css({'left':dd_left, 'top': dd_top});
+
+ 			ddmenu.toggle();
+ 			return false;
+ 		});
+
+ 		$('html').click(function() {
+  			$('.dropdown-menu').hide();
+		});
+		$('.dropdown-menu').click(function(event){
+    		event.stopPropagation();
+		});
+		
+    var sp_cont_width = 317;
+    var sp_counter = 0; var sp_count = $('#sponsor-list-mover').children('img').length; var parent_width = $('.sponsor-list-slider').width();
+	var sp_visible_count = (sp_cont_width*3 < parent_width)?3:2;
+    var sp_width   = (sp_cont_width*3 < parent_width)?parent_width/3:parent_width/2;
+	var auto_slide_direction = '-';
+	
+	$('#sponsor-list-mover').css({width: sp_count*sp_cont_width}).show();
+	
+    $('.sponsor-list-slider').children('img').each(function(){
+     $(this).css({'position': 'absolute', 'top':10, 'left': sp_counter*sp_width});
+     sp_counter++;
+    });
+	
+	function slide_sponsors() {
+		$('#sponsor-list-mover').animate({"left": auto_slide_direction+'='+sp_cont_width}, function(){
+			var lpos = $(this).position().left;
+			if (lpos==0 || lpos*-1==$(this).width()-(sp_visible_count+1)*sp_cont_width) {
+				auto_slide_direction = (auto_slide_direction == '-')?'+':'-';
+			}
+		});
+	}
+	
+	var slider_interval = setInterval(slide_sponsors, 2000);
+	
+    $('.sp-slider').click(function(){
+      if (!sp_slide_active) {
+        var fchild = $('.sponsor-list-slider').children('img').first().position();
+        var lchild = $('.sponsor-list-slider').children('img').last().position();
+        var dir    = ($(this).attr('direction')=='+')?1:-1;
+        if (fchild.left+sp_width*dir<=0 && fchild.left+sp_width*dir>-1*sp_width*(sp_count-sp_visible_count)) {
+            $('.sponsor-list-slider').children('img').animate({"left": $(this).attr('direction')+'='+sp_width}, function(){sp_slide_active=false;});
+             sp_slide_active = true;
+          }
+      }
+    });
+
+    $('#debugger').html($(window).innerWidth());
+    //console.log(' -- ' + $(window).innerWidth());
+    $( window ).resize(function() { $('#debugger').html($(window).innerWidth());});
+	
+	//check_scroll();
+	 $('#hamby_menu').on('click', function() {
+		  //$('#horizontal-menu-main').toggle();
+	  });
+
+ 	});
+
+ function check_scroll() {
+  console.log('checking scroll....');
+  var docWidth = document.documentElement.offsetWidth;
+
+    [].forEach.call(
+      document.querySelectorAll('*'),
+      function(el) {
+        if (el.offsetWidth > docWidth) {
+          console.log(el);
+        }
+      }
+    );
+ }
+ 
+ 
+ </script>
+ <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-H9VM280KK5"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-H9VM280KK5');
+</script>
+    <div id="fb-root"></div>
+	<script>
+		(function(d, s, id) {
+		  var js, fjs = d.getElementsByTagName(s)[0];
+		  if (d.getElementById(id)) return;
+		  js = d.createElement(s); js.id = id;
+		  js.src = "//connect.facebook.net/en_US/sdk.js#xfbml=1&version=v2.3";
+		  fjs.parentNode.insertBefore(js, fjs);
+		}(document, 'script', 'facebook-jssdk'));
+	</script>
+ </body>
+</html>

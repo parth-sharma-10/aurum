@@ -301,45 +301,55 @@ def main() -> int:
         "treat differences of a few points as noise.\n"
     )
 
-    # ------------------------------------------------- recovery estimation
-    add("## Recovery estimation\n")
-    ref_path = ROOT / "configs" / "recovery_reference.yaml"
+    # ------------------------------------------------- material estimation
+    add("## Material estimation\n")
+    ref_path = ROOT / "configs" / "material_reference.yaml"
     ref = yaml.safe_load(ref_path.read_text()) if ref_path.exists() else {}
     enabled = bool((ref or {}).get("enabled"))
-    n_ref = len((ref or {}).get("per_component") or {})
+    n_ev = len((ref or {}).get("evidence") or [])
+    gaps = sorted((ref or {}).get("gaps", {}).keys() - {"all_components"})
+    recovery_on = bool(((ref or {}).get("recovery") or {}).get("available"))
 
     add(
-        f"**Status: {'ENABLED' if enabled else 'DISABLED (intentionally)'}** — "
-        f"`configs/recovery_reference.yaml` defines "
-        f"{n_ref} component yield {'entry' if n_ref == 1 else 'entries'}.\n"
+        f"**Composition: {'ENABLED' if enabled else 'DISABLED'}** — "
+        f"`configs/material_reference.yaml` holds {n_ev} cited evidence "
+        f"{'record' if n_ev == 1 else 'records'}, each resolving to a paper in "
+        "`docs/sources/material_sources.yaml`.\n"
+    )
+    add(
+        f"**Recovery: {'ENABLED' if recovery_on else 'UNAVAILABLE'}** — a recovery "
+        "factor is applied only where a source measured recovery from a feed "
+        "matching what Aurum detected.\n"
     )
     add("**What the mechanism does.** Aurum's economic claim is that component")
-    add("identity plus published reference yields gives an *estimated* recovery")
-    add("value: `estimate = Σ (count(component) × reference_yield) × spot_price`.")
-    add("The counts come from this model. The yields and prices do not — and")
-    add("cannot — come from an image.\n")
-    if not enabled:
-        add("**Why it is disabled.** Enabling it requires per-component precious-")
-        add("metal yield figures backed by a citable source (a paper, a standard,")
-        add("or an assayer's published figure). No such figures were available at")
-        add("the time of writing, and none were invented to fill the gap. A")
-        add("plausible-looking number with nothing behind it is worse than no")
-        add("number, because it would be quoted.\n")
-        add("**What is required to enable it.**\n")
-        add("1. Add an entry per Aurum class to `configs/recovery_reference.yaml`")
-        add("   with `value`, `unit` and a real `source` citation.")
-        add("2. Set `enabled: true`.\n")
-        add("**How it fails safely today.** `app/batch.recovery_estimate()` returns")
-        add('`{"available": false, "reason": ...}` and emits no numeric field at')
-        add("all, so no consumer can mistake a partial result for a value. The")
-        add("dashboard renders **REFERENCE DATA NOT LOADED**. This behaviour is")
-        add("covered by tests in `tests/test_batch.py` and `tests/test_api.py`,")
-        add("including an explicit check that no numeric value leaks over the")
-        add("wire.\n")
+    add("identity plus published reference composition gives an *estimated*")
+    add("quantity of material present. The counts come from this model. The")
+    add("composition figures do not — and cannot — come from an image.\n")
+    add("**How it fails closed.** A detected class with no cited figure blocks")
+    add("the whole estimate rather than contributing a silent zero, and")
+    add('`app/batch.recovery_estimate()` then returns `{"available": false,')
+    add('"reason": ...}` with no numeric field at all. Concentration-based')
+    add("figures are additionally refused unless the batch carries a *measured*")
+    add("mass, because multiplying a simulated weight by a real concentration")
+    add("would produce an invented quantity that reads as measured.\n")
+    no_data = sorted(
+        cls
+        for cls, spec in ((ref or {}).get("components") or {}).items()
+        if not (spec["subtypes"].get(spec["default_subtype"], {}).get("composition") or {})
+    )
+    if no_data:
+        add(
+            f"**No composition data at all:** {', '.join(no_data)}. A batch containing "
+            "one of these produces no estimate.\n"
+        )
+    if gaps:
+        add(
+            f"**Partial metal coverage:** {', '.join(gaps)} — per-class detail in "
+            "`docs/material-reference.md`. Missing figures are stated, not estimated.\n"
+        )
     add("Whatever its state, every response carries the disclaimer that the")
     add("figure is an estimate and that Aurum Vision does not measure")
     add("precious-metal content.\n")
-
     # ------------------------------------------------------------------ ethics
     add("## Claims discipline\n")
     add("The following must **not** be claimed on the basis of this model:\n")

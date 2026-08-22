@@ -62,7 +62,7 @@ def capture(monkeypatch):
     made: list[FakeCapture] = []
 
     def factory(frames=5, opened=True):
-        def _make(_source):
+        def _make(_source, _backend=None):
             cap = FakeCapture(frames, opened)
             made.append(cap)
             return cap
@@ -112,6 +112,26 @@ class TestWebcamSource:
         with pytest.raises(RuntimeError):
             FrameSource("webcam", None, 0, 1280, 720, 0.0, first_frame_timeout=0.15)
         assert time.perf_counter() - t0 < 2.0, "a short timeout must not wait the default 3s"
+
+    def test_backend_is_chosen_per_platform(self, monkeypatch):
+        """AVFoundation is macOS-only; asking for it on Windows opens nothing."""
+        monkeypatch.delenv("AURUM_CAMERA_BACKEND", raising=False)
+        monkeypatch.setattr(demo_mod.sys, "platform", "win32")
+        assert demo_mod.camera_backend() == cv2.CAP_DSHOW
+        monkeypatch.setattr(demo_mod.sys, "platform", "darwin")
+        assert demo_mod.camera_backend() == cv2.CAP_AVFOUNDATION
+        monkeypatch.setattr(demo_mod.sys, "platform", "linux")
+        assert demo_mod.camera_backend() == cv2.CAP_ANY
+
+    def test_backend_can_be_overridden_by_env(self, monkeypatch):
+        monkeypatch.setenv("AURUM_CAMERA_BACKEND", "CAP_MSMF")
+        assert demo_mod.camera_backend() == cv2.CAP_MSMF
+
+    def test_an_unknown_backend_name_falls_back_rather_than_failing(self, monkeypatch, capsys):
+        """A typo in .env must cost a warning, not the demo."""
+        monkeypatch.setenv("AURUM_CAMERA_BACKEND", "CAP_NONSENSE")
+        assert demo_mod.camera_backend() == cv2.CAP_ANY
+        assert "unknown backend" in capsys.readouterr().out
 
 
 class TestImageSource:
@@ -250,6 +270,17 @@ class TestDashboardRendering:
 
     def test_an_unavailable_recovery_estimate_renders(self):
         assert self._compose(recovery={"available": False}).any()
+
+    def test_an_available_material_estimate_renders(self):
+        """The panel draws a real estimate, not just the refusal path."""
+        from app.batch import recovery_estimate
+
+        est = recovery_estimate({"CPU": 1, "Connector": 2})
+        assert est["available"] is True, "fixture must exercise the available branch"
+        assert self._compose(recovery=est).any()
+
+    def test_an_available_estimate_with_no_metals_does_not_crash(self):
+        assert self._compose(recovery={"available": True, "material_estimate": {}}).any()
 
     def test_drawing_detections_does_not_mutate_the_source_frame(self):
         before = self.frame.copy()

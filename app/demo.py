@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -37,6 +38,29 @@ WINDOW = "Aurum Vision"
 # it. Three seconds covers an AVFoundation capture session warming up; a slower
 # camera can be given longer through FrameSource(first_frame_timeout=...).
 FIRST_FRAME_TIMEOUT_S = 3.0
+
+# cv2's automatic backend choice is wrong often enough to be worth naming.
+# On Windows the default (MSMF) can take seconds to open a webcam and sometimes
+# never does; DirectShow opens immediately. On macOS AVFoundation is the only
+# one that works at all. Neither is hardcoded: a given laptop's camera may need
+# the other, so AURUM_CAMERA_BACKEND overrides by cv2 constant name.
+PLATFORM_CAMERA_BACKENDS = {"darwin": "CAP_AVFOUNDATION", "win32": "CAP_DSHOW"}
+
+
+def camera_backend() -> int:
+    """The cv2 capture backend to open a webcam with, for this platform.
+
+    Falls back to cv2's own choice rather than failing: an unknown name is a
+    misconfiguration that should cost a warning, not the demo.
+    """
+    name = os.environ.get("AURUM_CAMERA_BACKEND") or PLATFORM_CAMERA_BACKENDS.get(
+        sys.platform, "CAP_ANY"
+    )
+    backend = getattr(cv2, name, None)
+    if not isinstance(backend, int):
+        print(f"[camera] unknown backend {name!r}; falling back to cv2's default")
+        return cv2.CAP_ANY
+    return backend
 
 
 class FrameSource:
@@ -61,15 +85,21 @@ class FrameSource:
         self._last_advance = 0.0
 
         if mode == "webcam":
-            self._cap = cv2.VideoCapture(camera)
+            self._cap = cv2.VideoCapture(camera, camera_backend())
             self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
             if not (self._cap.isOpened() and self._first_frame_arrives()):
                 self._cap.release()
+                hint = (
+                    "On macOS, grant camera permission to your terminal in System "
+                    "Settings > Privacy & Security > Camera."
+                    if sys.platform == "darwin"
+                    else "Check that no other application holds the camera, and try "
+                    "another --camera index or AURUM_CAMERA_BACKEND=CAP_MSMF."
+                )
                 raise RuntimeError(
-                    f"Could not open camera {camera}. On macOS, grant camera "
-                    f"permission to your terminal in System Settings > Privacy & "
-                    f"Security > Camera. Or run with --mode images --path <folder>."
+                    f"Could not open camera {camera}. {hint} "
+                    f"Or run with --mode images --path <folder>."
                 )
         elif mode == "video":
             if not path:

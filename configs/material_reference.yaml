@@ -1,0 +1,739 @@
+# Aurum — evidence-backed material reference database
+#
+# ===========================================================================
+# WHAT THIS FILE IS
+#
+# Aurum Vision identifies four component classes from an image. It cannot see
+# composition. This file is the separate, citable layer that maps a detected
+# class to published material data, so that an estimate can be produced without
+# pretending the camera measured anything.
+#
+#   detected components   <- the only thing the model measured
+#         x reference composition   (this file, `evidence` + `components`)
+#   estimated material present      <- an ESTIMATE
+#         x recovery factor, only where cited  (this file, `recovery`)
+#   estimated recoverable material  <- an ESTIMATE of an ESTIMATE
+#         x price per unit          (configs/price_reference.yaml)
+#   estimated value
+#
+# RULES THIS FILE FOLLOWS
+#
+#   1. Every numeric value names a `source` id defined in
+#      docs/sources/material_sources.yaml, and an `evidence` id that is unique
+#      across this file. A figure that cannot be traced to a read paper is not
+#      in this file.
+#   2. Composition and recovery are separate sections and are never derived
+#      from one another. "Metal present" is not "metal recoverable".
+#   3. Where a class has no defensible figure it is ABSENT, not estimated.
+#      RAM has no composition entry for exactly this reason - see `gaps`.
+#   4. Original units are preserved in `original_value`/`original_unit`.
+#      Conversions are recorded, exact, and re-checked by tests
+#      (1 mg/kg = 1 ppm = 1 g/tonne; 1 % = 10 000 mg/kg).
+#   5. Nothing here is an assay of any individual object.
+# ===========================================================================
+
+enabled: true
+schema_version: "1.0"
+
+basis: >
+  Component counts from Aurum Vision multiplied by published reference material
+  data. Per-piece figures multiply the count directly; concentration figures
+  additionally require a mass, and are only applied against a MEASURED batch
+  mass. Not a measurement of this batch's actual metal content.
+
+units:
+  concentration: "mg/kg"   # identical to ppm and to g/tonne
+  per_piece: "mg"          # milligrams of metal in one component
+  mass: "g"
+
+# ---------------------------------------------------------------------------
+# EVIDENCE
+#
+# One record per measurement. `quantity` decides how the estimator may use it:
+#
+#   per_piece      mg of metal in one detected component -> count x value
+#   concentration  mg of metal per kg of material -> needs a mass
+#   mass           g of one component, for concentration -> mass conversion
+#
+# `evidence_type`: measured | aggregated
+# `confidence`:    high | medium | low
+# ---------------------------------------------------------------------------
+evidence:
+
+  # --- PCB, older desktop boards, directly measured -----------------------
+  - id: PCB-AU-001
+    component: PCB
+    subtype: desktop_motherboard_early_generation
+    metal: Au
+    quantity: concentration
+    value: 142
+    unit: "mg/kg"
+    original_value: 142
+    original_unit: "ppm"
+    conversion: "1 ppm = 1 mg/kg; no numeric change"
+    sample_description: >
+      ~12 kg of printed circuit boards from discarded desktop computers of the
+      XT, 486 and Pentium generations, milled to 9 mm.
+    sample_mass: "~12 kg"
+    measurement_method: "aqua regia digestion; AAS and ICP"
+    device_generation: "desktop PCs, XT / 486 / Pentium era"
+    publication_year: 2014
+    source: BIZZO2014
+    evidence_type: measured
+    confidence: high
+    notes: >
+      Boards of this era carry more gold than current ones. The paper itself
+      notes that reported PCB gold above 1000 ppm belongs to 1993-1995 studies
+      and that most later values fall below 100 ppm. Do not read 142 mg/kg as a
+      figure for a modern board.
+
+  - id: PCB-AG-001
+    component: PCB
+    subtype: desktop_motherboard_early_generation
+    metal: Ag
+    quantity: concentration
+    value: 317
+    unit: "mg/kg"
+    original_value: 317
+    original_unit: "ppm"
+    conversion: "1 ppm = 1 mg/kg; no numeric change"
+    sample_description: "as PCB-AU-001"
+    sample_mass: "~12 kg"
+    measurement_method: "aqua regia digestion; AAS and ICP"
+    publication_year: 2014
+    source: BIZZO2014
+    evidence_type: measured
+    confidence: high
+
+  - id: PCB-CU-001
+    component: PCB
+    subtype: desktop_motherboard_early_generation
+    metal: Cu
+    quantity: concentration
+    value: 142000
+    unit: "mg/kg"
+    original_value: 14.2
+    original_unit: "%"
+    conversion: "14.2 % x 10 000 = 142 000 mg/kg"
+    sample_description: "as PCB-AU-001"
+    sample_mass: "~12 kg"
+    measurement_method: "aqua regia digestion; AAS and ICP"
+    publication_year: 2014
+    source: BIZZO2014
+    evidence_type: measured
+    confidence: high
+
+  - id: PCB-NI-001
+    component: PCB
+    subtype: desktop_motherboard_early_generation
+    metal: Ni
+    quantity: concentration
+    value: 4100
+    unit: "mg/kg"
+    original_value: 0.41
+    original_unit: "%"
+    conversion: "0.41 % x 10 000 = 4 100 mg/kg"
+    sample_description: "as PCB-AU-001"
+    measurement_method: "aqua regia digestion; AAS and ICP"
+    publication_year: 2014
+    source: BIZZO2014
+    evidence_type: measured
+    confidence: high
+
+  - id: PCB-SN-001
+    component: PCB
+    subtype: desktop_motherboard_early_generation
+    metal: Sn
+    quantity: concentration
+    value: 47900
+    unit: "mg/kg"
+    original_value: 4.79
+    original_unit: "%"
+    conversion: "4.79 % x 10 000 = 47 900 mg/kg"
+    sample_description: "as PCB-AU-001"
+    measurement_method: "aqua regia digestion; AAS and ICP"
+    publication_year: 2014
+    source: BIZZO2014
+    evidence_type: measured
+    confidence: high
+
+  # --- PCB, generic waste board, aggregated across studies ----------------
+  - id: PCB-AU-002
+    component: PCB
+    subtype: generic_wpcb
+    metal: Au
+    quantity: concentration
+    value: 400
+    unit: "mg/kg"
+    minimum: 0
+    maximum: 800
+    typical: 400
+    original_value: 0.04
+    original_unit: "%"
+    original_spread: "+/- 0.04 % (standard deviation)"
+    conversion: >
+      0.04 % x 10 000 = 400 mg/kg; the range is mean -/+ one standard
+      deviation (0.00-0.08 %), with the lower bound clamped at zero because a
+      negative concentration is not physical. The range is DERIVED, not a
+      measured min/max.
+    sample_description: >
+      Weighted average across multiple published waste-PCB characterizations,
+      compiled by the authors; not a single measured board.
+    measurement_method: "aggregation of prior studies (various methods)"
+    publication_year: 2022
+    source: OLIVEIRA2022
+    evidence_type: aggregated
+    confidence: medium
+    notes: >
+      The standard deviation is as large as the mean. This is the correct
+      picture of waste PCB gold: it varies by an order of magnitude with board
+      type and age, and a single-point figure would be false precision.
+
+  - id: PCB-AG-002
+    component: PCB
+    subtype: generic_wpcb
+    metal: Ag
+    quantity: concentration
+    value: 1300
+    unit: "mg/kg"
+    minimum: 0
+    maximum: 2800
+    typical: 1300
+    original_value: 0.13
+    original_unit: "%"
+    original_spread: "+/- 0.15 % (standard deviation)"
+    conversion: "0.13 % x 10 000 = 1 300 mg/kg; range = mean -/+ 1 SD, clamped at 0"
+    sample_description: "as PCB-AU-002"
+    measurement_method: "aggregation of prior studies (various methods)"
+    publication_year: 2022
+    source: OLIVEIRA2022
+    evidence_type: aggregated
+    confidence: medium
+
+  - id: PCB-PD-001
+    component: PCB
+    subtype: generic_wpcb
+    metal: Pd
+    quantity: concentration
+    value: 500
+    unit: "mg/kg"
+    minimum: 0
+    maximum: 1600
+    typical: 500
+    original_value: 0.05
+    original_unit: "%"
+    original_spread: "+/- 0.11 % (standard deviation)"
+    conversion: "0.05 % x 10 000 = 500 mg/kg; range = mean -/+ 1 SD, clamped at 0"
+    sample_description: "as PCB-AU-002"
+    measurement_method: "aggregation of prior studies (various methods)"
+    publication_year: 2022
+    source: OLIVEIRA2022
+    evidence_type: aggregated
+    confidence: medium
+    notes: >
+      The standard deviation is more than double the mean, so this is the
+      weakest figure in the database. It is included because palladium is
+      otherwise entirely absent, and it is deliberately not used for any
+      headline number.
+
+  - id: PCB-CU-002
+    component: PCB
+    subtype: generic_wpcb
+    metal: Cu
+    quantity: concentration
+    value: 214400
+    unit: "mg/kg"
+    minimum: 123000
+    maximum: 305800
+    typical: 214400
+    original_value: 21.44
+    original_unit: "%"
+    original_spread: "+/- 9.14 % (standard deviation)"
+    conversion: "21.44 % x 10 000 = 214 400 mg/kg; range = mean -/+ 1 SD"
+    sample_description: "as PCB-AU-002"
+    measurement_method: "aggregation of prior studies (various methods)"
+    publication_year: 2022
+    source: OLIVEIRA2022
+    evidence_type: aggregated
+    confidence: medium
+
+  - id: PCB-NI-002
+    component: PCB
+    subtype: generic_wpcb
+    metal: Ni
+    quantity: concentration
+    value: 10300
+    unit: "mg/kg"
+    minimum: 0
+    maximum: 23200
+    typical: 10300
+    original_value: 1.03
+    original_unit: "%"
+    original_spread: "+/- 1.29 % (standard deviation)"
+    conversion: "1.03 % x 10 000 = 10 300 mg/kg; range = mean -/+ 1 SD, clamped at 0"
+    sample_description: "as PCB-AU-002"
+    measurement_method: "aggregation of prior studies (various methods)"
+    publication_year: 2022
+    source: OLIVEIRA2022
+    evidence_type: aggregated
+    confidence: medium
+
+  - id: PCB-SN-002
+    component: PCB
+    subtype: generic_wpcb
+    metal: Sn
+    quantity: concentration
+    value: 31400
+    unit: "mg/kg"
+    minimum: 14900
+    maximum: 47900
+    typical: 31400
+    original_value: 3.14
+    original_unit: "%"
+    original_spread: "+/- 1.65 % (standard deviation)"
+    conversion: "3.14 % x 10 000 = 31 400 mg/kg; range = mean -/+ 1 SD"
+    sample_description: "as PCB-AU-002"
+    measurement_method: "aggregation of prior studies (various methods)"
+    publication_year: 2022
+    source: OLIVEIRA2022
+    evidence_type: aggregated
+    confidence: medium
+
+  - id: PCB-AL-001
+    component: PCB
+    subtype: generic_wpcb
+    metal: Al
+    quantity: concentration
+    value: 30200
+    unit: "mg/kg"
+    minimum: 13200
+    maximum: 47200
+    typical: 30200
+    original_value: 3.02
+    original_unit: "%"
+    original_spread: "+/- 1.70 % (standard deviation)"
+    conversion: "3.02 % x 10 000 = 30 200 mg/kg; range = mean -/+ 1 SD"
+    sample_description: "as PCB-AU-002"
+    measurement_method: "aggregation of prior studies (various methods)"
+    publication_year: 2022
+    source: OLIVEIRA2022
+    evidence_type: aggregated
+    confidence: medium
+
+  # --- CPU ----------------------------------------------------------------
+  - id: CPU-AU-001
+    component: CPU
+    subtype: bga_pga_package
+    metal: Au
+    quantity: per_piece
+    value: 4.71
+    unit: "mg"
+    typical: 4.71
+    original_value: 4.71
+    original_unit: "mg per piece"
+    conversion: "none; the source already reports mass per component piece"
+    sample_description: >
+      Ball-grid-array and pin-grid-array packages dismantled from 104 waste
+      printed circuit boards originating from PCs, servers and mobile phones.
+    measurement_method: "ICP-OES"
+    publication_year: 2024
+    source: FIRSCHING2024
+    evidence_type: measured
+    confidence: medium
+    notes: >
+      Reported as a MEAN with no standard deviation and no disclosed sample
+      count, hence medium rather than high. The source class is a PACKAGE TYPE
+      (BGA/PGA), not "CPU": a chipset or GPU in a BGA package falls in the same
+      class. Aurum's CPU class is likewise defined by package (LGA/PGA/BGA), so
+      the mapping is reasonable, but a detected CPU is not proven to be a
+      processor of this population.
+
+  # --- Connector, per piece -----------------------------------------------
+  - id: CONN-AU-001
+    component: Connector
+    subtype: general_connector
+    metal: Au
+    quantity: per_piece
+    value: 0.914
+    unit: "mg"
+    typical: 0.914
+    original_value: 0.914
+    original_unit: "mg per piece"
+    conversion: "none; the source already reports mass per component piece"
+    sample_description: >
+      Connectors of the general connector class (C) dismantled from 104 waste
+      printed circuit boards from PCs, servers and mobile phones.
+    measurement_method: "ICP-OES"
+    publication_year: 2024
+    source: FIRSCHING2024
+    evidence_type: measured
+    confidence: medium
+    notes: "Mean value; no standard deviation or sample count disclosed."
+
+  - id: CONN-AU-002
+    component: Connector
+    subtype: high_grade_connector
+    metal: Au
+    quantity: per_piece
+    value: 2.35
+    unit: "mg"
+    typical: 2.35
+    original_value: 2.35
+    original_unit: "mg per piece"
+    conversion: "none; the source already reports mass per component piece"
+    sample_description: >
+      The high-grade connector sub-class (Chg) from the same dismantled set.
+    measurement_method: "ICP-OES"
+    publication_year: 2024
+    source: FIRSCHING2024
+    evidence_type: measured
+    confidence: medium
+    notes: >
+      Used as the UPPER bound for an unqualified connector detection. Aurum
+      cannot tell a high-grade connector from an ordinary one in an image.
+
+  # --- Connector, gold fingers, by concentration --------------------------
+  - id: CONN-AU-003
+    component: Connector
+    subtype: gold_fingers
+    metal: Au
+    quantity: concentration
+    value: 6434
+    unit: "mg/kg"
+    original_value: 6434
+    original_unit: "ppm"
+    conversion: "1 ppm = 1 mg/kg; no numeric change"
+    sample_description: >
+      Gold-finger edges stamp-sheared from waste RAM module substrates
+      ("as-stamped" Au fingers), 0.5 g per assay sample.
+    sample_mass: "0.5 g per sample"
+    measurement_method: "chemical assay: roasting and acid digestion"
+    publication_year: 2023
+    source: LIN2023
+    evidence_type: measured
+    confidence: high
+    notes: >
+      This concentration belongs to the SHEARED CONTACT STRIP only. It is not
+      the composition of a whole RAM module and not the composition of a whole
+      connector. The mass of the strip is not reported, so this figure cannot
+      be turned into milligrams per detected component.
+
+  - id: CONN-AG-001
+    component: Connector
+    subtype: gold_fingers
+    metal: Ag
+    quantity: concentration
+    value: 93
+    unit: "mg/kg"
+    original_value: 93
+    original_unit: "ppm"
+    conversion: "1 ppm = 1 mg/kg; no numeric change"
+    sample_description: "as CONN-AU-003"
+    sample_mass: "0.5 g per sample"
+    measurement_method: "chemical assay: roasting and acid digestion"
+    publication_year: 2023
+    source: LIN2023
+    evidence_type: measured
+    confidence: high
+
+  - id: CONN-CU-001
+    component: Connector
+    subtype: gold_fingers
+    metal: Cu
+    quantity: concentration
+    value: 290447
+    unit: "mg/kg"
+    original_value: 290447
+    original_unit: "ppm"
+    conversion: "1 ppm = 1 mg/kg; no numeric change"
+    sample_description: "as CONN-AU-003"
+    sample_mass: "0.5 g per sample"
+    measurement_method: "chemical assay: roasting and acid digestion"
+    publication_year: 2023
+    source: LIN2023
+    evidence_type: measured
+    confidence: high
+
+  - id: CONN-NI-001
+    component: Connector
+    subtype: gold_fingers
+    metal: Ni
+    quantity: concentration
+    value: 18092
+    unit: "mg/kg"
+    original_value: 18092
+    original_unit: "ppm"
+    conversion: "1 ppm = 1 mg/kg; no numeric change"
+    sample_description: "as CONN-AU-003"
+    sample_mass: "0.5 g per sample"
+    measurement_method: "chemical assay: roasting and acid digestion"
+    publication_year: 2023
+    source: LIN2023
+    evidence_type: measured
+    confidence: high
+    notes: "Nickel underplate beneath the gold layer, in an Au-Ni-Cu lamellar structure."
+
+  - id: CONN-AL-001
+    component: Connector
+    subtype: gold_fingers
+    metal: Al
+    quantity: concentration
+    value: 26331
+    unit: "mg/kg"
+    original_value: 26331
+    original_unit: "ppm"
+    conversion: "1 ppm = 1 mg/kg; no numeric change"
+    sample_description: "as CONN-AU-003"
+    sample_mass: "0.5 g per sample"
+    measurement_method: "chemical assay: roasting and acid digestion"
+    publication_year: 2023
+    source: LIN2023
+    evidence_type: measured
+    confidence: high
+
+  # --- Reference masses ---------------------------------------------------
+  - id: RAM-MASS-001
+    component: RAM
+    subtype: dimm_module
+    metal: null
+    quantity: mass
+    value: 7.8040
+    unit: "g"
+    original_value: 7.8040
+    original_unit: "g"
+    conversion: "none"
+    sample_description: "One spent RAM module removed from a computer."
+    measurement_method: "weighed"
+    publication_year: 2024
+    source: ZINKOWSKA2024
+    evidence_type: measured
+    confidence: medium
+    notes: >
+      A single module (n = 1). Sufficient to state the order of magnitude of a
+      DIMM's mass; not sufficient to characterise the spread across module
+      types, and Aurum does not use it to derive any metal quantity, because it
+      has no RAM composition figure to pair it with.
+
+  - id: PCB-MASS-001
+    component: PCB
+    subtype: server_motherboard
+    metal: null
+    quantity: mass
+    value: 1800
+    unit: "g"
+    original_value: 1.8
+    original_unit: "kg"
+    conversion: "1.8 kg x 1 000 = 1 800 g"
+    sample_description: >
+      One multi-layer server printed circuit board, weighed with its electronic
+      components attached, reported as approximately 1.8 kg.
+    measurement_method: "weighed"
+    publication_year: 2022
+    source: OLIVEIRA2022
+    evidence_type: measured
+    confidence: low
+    notes: >
+      n = 1, and a SERVER board - among the largest boards there are. A laptop
+      motherboard or an expansion card is far lighter. Recorded for context;
+      deliberately NOT used as a default mass for a detected PCB, because one
+      server board cannot stand in for the PCB class.
+
+# ---------------------------------------------------------------------------
+# COMPONENTS
+#
+# The selection layer. Each subtype names, per metal, the evidence id that
+# supplies its figure. No value appears here - only references - so a figure
+# can never drift from the record that justifies it.
+# ---------------------------------------------------------------------------
+components:
+
+  PCB:
+    default_subtype: generic_wpcb
+    subtypes:
+      generic_wpcb:
+        description: >
+          A waste printed circuit board of unspecified origin. What Aurum
+          should assume when it has only detected "a board".
+        composition:
+          Au: PCB-AU-002
+          Ag: PCB-AG-002
+          Pd: PCB-PD-001
+          Cu: PCB-CU-002
+          Ni: PCB-NI-002
+          Sn: PCB-SN-002
+          Al: PCB-AL-001
+      desktop_motherboard_early_generation:
+        description: >
+          A desktop motherboard of the XT / 486 / Pentium era. Directly
+          measured, but not representative of a modern board.
+        composition:
+          Au: PCB-AU-001
+          Ag: PCB-AG-001
+          Cu: PCB-CU-001
+          Ni: PCB-NI-001
+          Sn: PCB-SN-001
+      server_motherboard:
+        description: "A multi-layer server board. Mass reference only."
+        composition: {}
+        mass: PCB-MASS-001
+
+  CPU:
+    default_subtype: bga_pga_package
+    subtypes:
+      bga_pga_package:
+        description: >
+          A processor in a ball-grid-array or pin-grid-array package, as
+          dismantled from waste boards.
+        composition:
+          Au: CPU-AU-001
+        upper_bound_subtype: null
+
+  Connector:
+    default_subtype: general_connector
+    subtypes:
+      general_connector:
+        description: >
+          A connector of unspecified grade - what a bare "Connector" detection
+          justifies.
+        composition:
+          Au: CONN-AU-001
+        upper_bound_subtype: high_grade_connector
+      high_grade_connector:
+        description: "A connector in the high-grade sub-class."
+        composition:
+          Au: CONN-AU-002
+      gold_fingers:
+        description: >
+          A stamp-sheared gold-finger contact strip. Concentration data only;
+          the strip mass is unreported, so no per-piece figure can be derived.
+        composition:
+          Au: CONN-AU-003
+          Ag: CONN-AG-001
+          Cu: CONN-CU-001
+          Ni: CONN-NI-001
+          Al: CONN-AL-001
+
+  RAM:
+    default_subtype: dimm_module
+    subtypes:
+      dimm_module:
+        description: >
+          A DIMM / SO-DIMM / RDIMM memory module. NO COMPOSITION DATA - see
+          `gaps.RAM`. The mass reference exists but has nothing to multiply.
+        composition: {}
+        mass: RAM-MASS-001
+
+# ---------------------------------------------------------------------------
+# RECOVERY
+#
+# Kept strictly apart from composition. A recovery factor is applied only when
+# a source measured recovery FROM A FEED THAT MATCHES WHAT AURUM DETECTED.
+# `applies_to_detection: false` means the figure is real but its measurement
+# context does not match a whole detected component, so the estimator will not
+# use it. That is a refusal, not a missing value.
+# ---------------------------------------------------------------------------
+recovery:
+  available: false
+  reason: >
+    No cited recovery factor applies to a whole detected component. The only
+    recovery figures in the database were measured on a liberated, stamp-sheared
+    and chemically decopperized gold-finger feed, which is a processed
+    intermediate rather than a component a camera can see. Applying them to a
+    detected connector would silently assume a full pre-treatment chain that
+    Aurum has neither performed nor observed.
+
+  factors:
+    - id: CONN-AU-REC-001
+      component: Connector
+      subtype: gold_fingers
+      metal: Au
+      recovery_rate: 88.7
+      unit: "%"
+      process: >
+        Ammonia thiosulfate leaching, 4 h residence, 50 mM Cu(II), 0.5 M
+        thiosulfate, 0.5 M NH3, 120 mL/min aeration, 25 C.
+      feed_description: "Decopperized gold fingers (after a copper pre-leach)."
+      scale: laboratory
+      source: LIN2023
+      evidence_type: measured
+      confidence: high
+      applies_to_detection: false
+      applies_reason: >
+        The feed was stamp-sheared from modules and then decopperized. A
+        detected connector has undergone neither step.
+
+    - id: CONN-AU-REC-002
+      component: Connector
+      subtype: gold_fingers
+      metal: Au
+      recovery_rate: 12.7
+      unit: "%"
+      process: "Ammonia thiosulfate leaching, 4 h, no pre-treatment."
+      feed_description: "As-stamped gold fingers, no pre-treatment."
+      scale: laboratory
+      source: LIN2023
+      evidence_type: measured
+      confidence: high
+      applies_to_detection: false
+      applies_reason: >
+        Still a stamp-sheared strip rather than a whole connector. Recorded
+        because it shows how sharply recovery depends on pre-treatment: the
+        same feed and reagent system moves from 12.7 % to 88.7 % on one
+        upstream step, which is why a generic "industry standard" recovery
+        percentage would be meaningless.
+
+    - id: CONN-AU-REC-003
+      component: Connector
+      subtype: gold_fingers
+      metal: Au
+      recovery_rate: 98
+      unit: "%"
+      process: >
+        Optimized ammonia thiosulfate leaching: 50 mM Cu(II), 120 mL/min
+        aeration, 0.5 M (NH3)2S2O3, 0.75 M NH4OH, 4 h, 25 C.
+      feed_description: "Gold fingers under optimized leach conditions."
+      scale: laboratory
+      source: LIN2023
+      evidence_type: measured
+      confidence: high
+      applies_to_detection: false
+      applies_reason: >
+        A best-case laboratory optimum on a prepared feed. Presenting this as
+        the recovery of a detected connector would be the single most
+        misleading number this repository could publish.
+
+# ---------------------------------------------------------------------------
+# GAPS - stated, not filled
+# ---------------------------------------------------------------------------
+gaps:
+  RAM:
+    missing: [Au, Ag, Pd, Pt, Cu, Ni, Sn, Al]
+    reason: >
+      No source giving whole-RAM-module composition could be read in full. The
+      closest study (CHARLES2017, AAS on DRAM modules from 1991-2008) is
+      nominally open access but its full text was unreachable, so its tables
+      were never inspected and no number was taken from it. LIN2023 measures
+      only the sheared gold-finger edge, and FIRSCHING2024 explicitly states
+      that gold-finger figures were not yet available. A detected RAM module
+      therefore returns `available: false`.
+  CPU:
+    missing: [Ag, Pd, Pt, Cu, Ni, Sn, Al]
+    reason: >
+      Only gold was found for processor packages, from FIRSCHING2024. No
+      source read gave silver, palladium or platinum per CPU package.
+  Connector:
+    missing: [Pd, Pt, Sn]
+    reason: "No palladium, platinum or tin figure was found for connectors."
+  PCB:
+    missing: [Pt]
+    reason: >
+      Neither source read reports platinum in printed circuit boards. Platinum
+      is generally associated with hard disk platters and catalysts rather
+      than with boards, and no figure is invented here.
+  all_components:
+    subtype_detection: >
+      Aurum's vision model cannot distinguish these subtypes from an image. A
+      "Connector" detection does not establish gold plating; a "PCB" detection
+      does not establish whether the board is a modern laptop board or a 1990s
+      desktop board. The default subtype is a stated assumption, not an
+      observation.

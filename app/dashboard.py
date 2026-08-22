@@ -110,14 +110,23 @@ def _summary_panel(
         _text(p, f"{weight['kg']:.3f} kg", (18, y), 0.72, TEXT, 2)
         y += 30
 
-    if recovery is not None and not recovery.get("available", False):
+    if recovery is not None:
         cv2.line(p, (18, y), (PANEL_W - 18, y), RULE, 1)
         y += 24
-        _text(p, "RECOVERY ESTIMATE", (18, y), 0.44, MUTED)
+        _text(p, "MATERIAL ESTIMATE", (18, y), 0.44, MUTED)
         y += 20
-        _text(p, "REFERENCE DATA", (18, y), 0.44, AMBER)
-        y += 18
-        _text(p, "NOT LOADED", (18, y), 0.44, AMBER)
+        if not recovery.get("available", False):
+            # The reference data *is* loaded; the estimate is blocked because a
+            # detected class has no cited figure. Saying "not loaded" would
+            # misattribute a fail-closed refusal to a missing file.
+            _text(p, "NO CITED DATA", (18, y), 0.44, AMBER)
+            y += 18
+            _text(p, "FOR THIS BATCH", (18, y), 0.44, AMBER)
+        else:
+            for metal, agg in sorted(recovery.get("material_estimate", {}).items()):
+                _text(p, f"{metal} ~{agg['typical_g']:.4f} g", (18, y), 0.46, GOLD, 1)
+                y += 18
+            _text(p, "ESTIMATE — NOT AN ASSAY", (18, y), 0.40, AMBER)
 
     # Controls, pinned to the bottom of the panel.
     cy = h - 92

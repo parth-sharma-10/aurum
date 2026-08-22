@@ -55,6 +55,36 @@ function MassProvenance({ weight }) {
   return <span className="chips">no mass recorded</span>;
 }
 
+/* An estimate and a refusal are different states and must not read alike. The
+   estimate always carries its evidence ids, so a reader can trace any figure
+   back to the paper it came from via docs/material-reference.md. */
+function MaterialEstimate({ estimate }) {
+  if (!estimate?.available) {
+    return (
+      <div className="notice neutral">
+        Material estimate: <strong>unavailable</strong>. {estimate?.reason}
+      </div>
+    );
+  }
+  const metals = Object.entries(estimate.material_estimate ?? {});
+  return (
+    <div className="notice">
+      <strong>ESTIMATE — not an assay.</strong> Reference composition for the
+      detected classes, confidence <strong>{estimate.confidence}</strong>.
+      <ul>
+        {metals.map(([metal, agg]) => (
+          <li key={metal}>
+            {metal}: <strong>{agg.typical_g} g</strong> typical
+            {agg.max_g != null ? ` (up to ${agg.max_g} g)` : ""} — evidence{" "}
+            {agg.evidence.join(", ")}
+          </li>
+        ))}
+      </ul>
+      Recovery: <strong>unavailable</strong>. {estimate.recovery?.reason}
+    </div>
+  );
+}
+
 function BatchModal({ record, onClose }) {
   const w = record.weight;
   const fields = [
@@ -104,9 +134,7 @@ function BatchModal({ record, onClose }) {
           </div>
         )}
 
-        <div className="notice neutral">
-          Recovery estimate: <strong>unavailable</strong>. {record.recovery_estimate?.reason}
-        </div>
+        <MaterialEstimate estimate={record.recovery_estimate} />
 
         <pre className="record">{JSON.stringify(record, null, 2)}</pre>
       </div>
