@@ -13,8 +13,28 @@ Bench-assembled and tested on 2026-08-22.
 | HX711 `DOUT` | `D2` | data |
 | HX711 `SCK` | `D3` | clock |
 | HX711 `VCC` / `GND` | `5V` / `GND` | powered from the Arduino |
-| Servo A signal | `D9` | **Phase 7.** Not driven by any current sketch |
-| Servo B signal | `D10` | **Phase 7.** Not driven by any current sketch |
+| Servo A signal | `D9` | Physically present, bench-tested |
+| Servo B signal | `D10` | Physically present, bench-tested |
+
+**Serial: 115200 baud.**
+
+### Servo parameters — bench values, not final geometry
+
+| Servo | Pin | REST | PUSH | Hold |
+|---|---|---|---|---|
+| A | `D9` | 0 deg | 90 deg | 700 ms |
+| B | `D10` | 0 deg | 90 deg | 700 ms |
+
+These came from independent bench testing. They are **configurable engineering
+parameters**, not validated mechanical geometry — no paddle has ever deflected
+an item, because there is no belt for an item to travel on.
+
+### KNOWN DISCREPANCY — reconcile before the bench test
+
+`configs/conveyor.yaml` and `hardware/arduino/aurum_weight/aurum_weight.ino`
+both use **9600** baud. The hardware runs at **115200**. They must agree or
+the link produces garbage. Deliberately left unchanged at checkpoint rather
+than edited without a board to test against. **First action next session.**
 
 ### Power
 
@@ -27,7 +47,10 @@ melted jumper wires; the arrangement above is the corrected, working one.
 
 The Phase 5 sketch does not reference the servo pins at all. Keeping actuation
 out of the sketch that runs during weighing means a bug in the weight path
-cannot move anything physical.
+cannot move anything physical — **use it for calibration.**
+
+**NO PHYSICAL CONVEYOR CURRENTLY EXISTS.** There is no belt, no motor and no
+frame. Every routing time in this project comes from the simulated profile.
 
 ## Firmware
 
@@ -125,14 +148,26 @@ and that is a real reading — never confused with an absent one.
 
 | Item | Status |
 |---|---|
-| HX711 responds to load | **Physically tested** — 180 g moved the reading by ~65 000 counts |
-| Servo A movement | **Physically tested**, independently, outside this software |
-| Servo B movement | **Physically tested**, independently, outside this software |
-| Corrected power wiring | **Physically working** after the earlier short |
-| Aurum weight sketch on the board | **NOT tested** — written this phase, never uploaded |
-| Python ↔ Arduino serial link | **NOT tested** — no board attached to a machine running Aurum |
+| HX711 hardware response | **VERIFIED** — 180 g moved the reading by ~65 000 counts |
+| Initial calibration experiment | **VERIFIED** — factor ≈ 361.9 counts/g derived |
+| **Final calibration validation** | **NOT VERIFIED** — no independent second-mass check |
+| Servo A movement (D9) | **BENCH VERIFIED**, independently, outside this software |
+| Servo B movement (D10) | **BENCH VERIFIED**, independently, outside this software |
+| Corrected power wiring | **WORKING** after the earlier short |
+| Aurum weight sketch on the board | **NOT tested** — never uploaded |
+| **Python ↔ Arduino communication** | **NOT VERIFIED** — never run |
+| Servo moved by Aurum code | **NEVER** |
 | Calibration workflow end to end | **NOT run** on hardware |
+| Physical conveyor | **DOES NOT EXIST** |
 | Conveyor motion, belt speed, distances | **NOT measured** |
+
+### The five levels, kept apart
+
+`SOFTWARE-TESTED` · `SIMULATION-VERIFIED` · `HARDWARE-BENCH-VERIFIED` ·
+`PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
+
+Aurum currently reaches level 3 for the servos and the HX711, level 2 for
+routing, and **level 4 and 5 for nothing at all.**
 
 Everything in the "NOT" rows is software-tested against a scripted reader and
 nothing more.

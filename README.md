@@ -818,6 +818,48 @@ Aurum
     └── Bin C has no servo — the fail-safe is the machine doing nothing
 ```
 
+## Project status
+
+**Aurum is a working software pipeline attached to partially-built hardware.
+It has never sorted anything.** There is no conveyor.
+
+| Phase | Status | Software | Hardware | Validation |
+|---|---|---|---|---|
+| 0 Checkpoint | COMPLETE | repo protected, research committed | n/a | n/a |
+| 1 Configuration | COMPLETE | `app/config.py`, 35 settings | n/a | software-tested |
+| 2 PMDI + pricing | COMPLETE | `app/valuation/` | n/a | software-tested; **no price provider** |
+| 3 A/B/C decision | COMPLETE | `app/decision/` | n/a | software-tested |
+| 4 Tracking | COMPLETE | `app/vision/`, `app/pipeline/` | camera | software-tested + real model |
+| 5 HX711 | COMPLETE (software) | `app/weight.py`, `app/calibrate.py` | HX711 responds | **calibration NOT verified** |
+| 6 Routing | COMPLETE (software) | `app/routing/` | none | simulation-verified only |
+| 7 Arduino/servo | **PARTIAL** | transport + command layer | servos bench-tested | **Arduino-Python NOT verified** |
+| 8 API/frontend | PENDING | — | — | — |
+| 9 End-to-end | PENDING | — | — | — |
+| 10 Validation | PENDING | — | — | — |
+
+### What the five levels mean
+
+`SOFTWARE-TESTED` · `SIMULATION-VERIFIED` · `HARDWARE-BENCH-VERIFIED` ·
+`PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
+
+Aurum reaches level 3 for the servos and HX711, level 2 for routing, and
+**nothing at all reaches level 4 or 5.**
+
+### Hardware, as built
+
+HX711 `DOUT`→D2, `SCK`→D3 · Servo A→D9 · Servo B→D10 · serial **115200** ·
+Servo A and B: REST 0 deg, PUSH 90 deg, 700 ms hold (bench values) ·
+AKSHA 5 V / 3 A external servo supply, common ground, **external +5 V NOT tied
+to Arduino +5 V** · **no physical conveyor**.
+
+HX711 responds and a 180 g experiment gives about 361.9 counts/g. That is an
+initial experiment, **not a validated calibration** — the independent
+second-mass check has not been done, so `configs/calibration.yaml` stays
+UNMEASURED and no reading can reach `MEASURED`.
+
+Full detail: [docs/hardware.md](docs/hardware.md) ·
+[docs/COMPLETION_PLAN.md](docs/COMPLETION_PLAN.md)
+
 ## What is and is not implemented
 
 | Capability | Status |

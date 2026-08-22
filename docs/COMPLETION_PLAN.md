@@ -1,5 +1,72 @@
 # Aurum — Completion Plan
 
+## NEXT SESSION CHECKPOINT
+
+**Read this first. It is the resume point.**
+
+| | |
+|---|---|
+| Branch | `feat/aurum-completion` (pushed) |
+| Phase 7 | **PARTIAL** |
+| Tests | **705 passing**, ruff check clean, ruff format clean, frontend builds |
+| Docs | Current as of this checkpoint |
+
+### DO NOT REDO PHASES 0-6. They are complete and committed.
+
+Phase 0 checkpoint · 1 config · 2 PMDI/pricing/valuation · 3 A/B/C decision ·
+4 tracking/item lifecycle · 5 HX711 software · 6 routing geometry + scheduler.
+
+### Phase 7 — what EXISTS
+
+- `app/hardware/transport.py` — `Transport`, `SerialTransport`,
+  `FakeTransport`; link states DISCONNECTED/CONNECTING/CONNECTED/DEGRADED.
+  Nothing above this file imports pyserial.
+- `app/hardware/arduino.py` — `AURUM/1` protocol, `Command` lifecycle
+  (CREATED/SENT/ACKED/FAILED/TIMED_OUT/SUPPRESSED), ACK against
+  `arduino.ack_timeout_ms`, duplicate protection per item **and** per command
+  id, **no automatic retry**.
+- `conveyor.arduino.enabled` — actuation ships **OFF**.
+
+Hand-verified only: ACK -> ACKED · repeat item -> SUPPRESSED · `C` ->
+BAD_TARGET · disabled -> FAILED.
+
+### Phase 7 — what REMAINS
+
+1. **`app/hardware/servos.py`** — the bridge from a DUE `ScheduledRoute` to a
+   command, then `scheduler.mark_executed()`. Routing and actuation are still
+   disconnected. Highest-value remaining piece.
+2. **`tests/test_arduino.py`** — the Phase 7 matrix: ACK, timeout, ERR,
+   disconnect, reconnect, duplicate, C, expired route, Servo A, Servo B.
+   The layer currently has **zero automated coverage**.
+3. **`hardware/arduino/aurum_sorter/aurum_sorter.ino`** — combined weight +
+   servo sketch at **115200**. The Phase 5 weight-only sketch is unchanged;
+   keep using it for calibration since it cannot move anything.
+4. API: `GET /arduino`, `GET /actuation`.
+5. Servo angles as configurable parameters (bench values: REST 0, PUSH 90,
+   700 ms hold).
+
+### FIRST ACTION NEXT SESSION
+
+**Reconcile the baud rate.** `configs/conveyor.yaml` and the Phase 5 sketch
+use **9600**; the hardware runs at **115200**. They must agree or the link
+produces garbage. Left unchanged at checkpoint because there was no board to
+test against.
+
+### PHYSICAL VALIDATION — none, for anything
+
+Verified by the user, independently of this software: HX711 responds (180 g ->
+about 65 000 counts), Servo A moves, Servo B moves, power wiring corrected.
+
+**Never done:** Arduino-Python communication · any servo moved by Aurum code ·
+calibration workflow run · anything involving a conveyor, which does not exist.
+
+Do not mark Phase 7 complete until the user has physically run
+`Python -> Arduino -> ACK -> Servo A`, the same for B, and confirmed `C` moves
+nothing.
+
+---
+
+
 Status: **Phase 0 complete.** Baseline green, all work pushed to
 `feat/aurum-completion`.
 

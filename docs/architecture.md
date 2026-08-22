@@ -154,6 +154,36 @@ change which bin an item is routed to.
 Velocity is reported in **pixels per frame** and deliberately not converted to
 cm/s: that needs a belt speed and a pixel scale, both `UNMEASURED`.
 
+## Actuation boundary (Phase 7, PARTIAL)
+
+```
+A/B/C decision -> routing scheduler -> ScheduledRoute -> DUE
+                -> Arduino command -> ACK -> Servo A / Servo B
+C -> NO_ACTION -> no command is ever sent
+```
+
+Four words that are not synonyms:
+
+| | Meaning |
+|---|---|
+| **decision** | Policy chose Bin A |
+| **route** | Geometry chose Servo A at a particular moment |
+| **command** | Software asked the board to move |
+| **execution** | The board acknowledged |
+
+**An ACK is not proof a servo moved.** A stalled servo, a disconnected signal
+wire or a dead supply rail all still ACK. Physical movement is established by
+bench observation and recorded in [hardware.md](hardware.md).
+
+| File | Role | State |
+|---|---|---|
+| `app/hardware/transport.py` | Serial boundary; `SerialTransport`, `FakeTransport` | Implemented |
+| `app/hardware/arduino.py` | Protocol, command lifecycle, ACK, duplicates | Implemented |
+| `app/hardware/servos.py` | Scheduler-to-actuator bridge | **NOT WRITTEN** |
+
+Nothing above `app/hardware/` imports pyserial. Actuation ships **off**
+(`conveyor.arduino.enabled: false`).
+
 ## Routing
 
 ```
