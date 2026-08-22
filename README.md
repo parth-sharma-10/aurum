@@ -758,8 +758,20 @@ Every batch record names these quantities so they cannot be confused:
 | `recovery` | kept separate; **unavailable**, with a reason |
 | `measured_material` | **always unavailable.** Aurum has no assay or XRF |
 
-**PMDI is not implemented and no formula for it exists in this repository.** It
-is named only in the capability table below. Nothing computes it.
+**PMDI is implemented.** Its formula comes from the Aurum concept document, §4:
+`PMDI = (Sigma (C_type x Y_estimated)) x P_spot`. Two things about it are worth
+knowing before reading a result.
+
+Its units are currency, not a density — nothing in it is divided by mass — so
+Aurum reports the concept document's figure as `pmdi_value` and the true
+density separately as `precious_mass_fraction_ppm`. Only the second works
+without a price, and **no live price provider is approved for this project**, so
+`pmdi_value` is `UNAVAILABLE` in the shipped configuration rather than a number
+nobody can attribute.
+
+`Y_estimated` is called a *yield* in the formula. Aurum holds *contained
+composition* and never renames one into the other; every amount is labelled
+`basis: contained`. See [docs/pmdi.md](docs/pmdi.md).
 
 ## Architecture
 
@@ -789,11 +801,17 @@ Aurum
 │   ├── evidence ids, unique and referenced
 │   └── provenance: original value, unit, method, sample
 │
-└── Valuation Layer
-    ├── composition estimate          implemented
-    ├── recovery estimate             refused — no applicable cited factor
-    ├── market prices                 not configured
-    └── estimated value               unavailable
+├── Valuation Layer                   app/valuation/
+│   ├── composition estimate          implemented
+│   ├── PMDI (precious signal)        implemented — value needs a price
+│   ├── precious mass fraction (ppm)  implemented — price-independent
+│   ├── base-metal signal             implemented, kept separate from PMDI
+│   ├── recovery estimate             refused — no applicable cited factor
+│   ├── market prices                 no approved provider — PRICE_UNAVAILABLE
+│   └── estimated value               unavailable until a provider is configured
+│
+└── Decision Policy                   Phase 3 — not implemented
+    └── PMDI is an INPUT to A/B/C, never the same thing
 ```
 
 ## What is and is not implemented
@@ -820,7 +838,11 @@ Aurum
 | Material estimation — RAM | **not implemented** — no cited composition data exists in the database |
 | Recovery estimation | **not implemented** — mechanism present, 3 cited factors on file, none applicable to a detection |
 | Valuation / pricing | **not implemented** — provider interface present, disabled, no price source |
-| PMDI | **not implemented** |
+| PMDI calculation (`app/valuation/pmdi.py`) | **implemented** — cited evidence, fails closed |
+| PMDI monetary value | **unavailable** — no approved live price provider |
+| Price provider abstraction | **implemented** — `unavailable` (default) and `static`/TEST |
+| Base-metal signal, separate from PMDI | **implemented** |
+| A/B/C decision engine | **not implemented** — Phase 3 |
 | Carbon figures | **not implemented** |
 | Object tracking across frames | **not implemented** |
 | Cyber-physical state machine | **not implemented** |

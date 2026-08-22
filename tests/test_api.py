@@ -244,6 +244,19 @@ class TestStats:
         assert "does not implement physical bin routing" in body["bin_breakdown_note"]
 
     def test_stats_exposes_no_valuation_or_recovery_figure(self, client):
+        """A deliberate contract on /stats, reviewed and kept in Phase 2.
+
+        /stats is the aggregate endpoint a dashboard renders without reading
+        any provenance. A money figure or a metal yield here would be quoted
+        with none of the evidence, staleness or simulation flags that qualify
+        it, which is exactly how an invented PMDI constant got screenshotted
+        elsewhere in this project's history.
+
+        The ban is scoped to /stats, not to the API. PMDI is a first-class
+        concept and IS exposed, on /batches/{id}/valuation and /prices, where
+        every figure travels with its evidence ids and status. See
+        TestPmdiIsExposedWithItsProvenance below.
+        """
         _closed_batch(client, weight_mode="simulated")
         blob = client.get("/stats").text.lower()
         for forbidden in ("value", "price", "gold_g", "recovery_g", "carbon", "pmdi"):
@@ -296,3 +309,63 @@ class TestMissingModel:
             r = c.post("/detect", files={"file": ("x.png", png_bytes(), "image/png")})
         assert r.status_code == 503
         assert "not trained" in r.json()["detail"].lower()
+
+
+class TestPmdiIsExposedWithItsProvenance:
+    """PMDI is a first-class project concept and the API exposes it.
+
+    The counterpart to TestStats.test_stats_exposes_no_valuation_or_recovery_figure:
+    that guard keeps money and yields off the un-annotated aggregate endpoint;
+    these confirm the figures are available where their evidence travels with
+    them.
+    """
+
+    def test_the_valuation_endpoint_carries_a_pmdi_block(self, client):
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        body = client.get(f"/batches/{batch_id}/valuation").json()
+        assert "pmdi" in body
+        assert body["pmdi"]["formula"] == "PMDI = (sum(C_type x Y_estimated)) x P_spot"
+
+    def test_every_pmdi_figure_travels_with_its_status(self, client):
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        pmdi = client.get(f"/batches/{batch_id}/valuation").json()["pmdi"]
+        for field in ("evidence_status", "mass_status", "price_status", "overall_status"):
+            assert pmdi[field]
+
+    def test_a_simulated_batch_stays_labelled_simulated(self, client):
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        body = client.get(f"/batches/{batch_id}/valuation").json()
+        assert body["item_valuation"]["weight_status"] in ("SIMULATED", "UNMEASURED")
+
+    def test_no_value_appears_without_a_price_provider(self, client):
+        """The shipped configuration prices nothing, so no figure may appear."""
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        body = client.get(f"/batches/{batch_id}/valuation").json()
+        assert body["pmdi"]["pmdi_value"] is None
+        assert body["item_valuation"]["total_value"] is None
+
+    def test_the_legacy_valuation_key_still_works(self, client):
+        """Existing consumers of this endpoint must not break."""
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        body = client.get(f"/batches/{batch_id}/valuation").json()
+        assert "recovery_estimate" in body
+        assert body["valuation"]["available"] is False
+
+
+class TestPricesEndpoint:
+    def test_it_reports_the_configured_provider(self, client):
+        body = client.get("/prices").json()
+        assert body["provider"] == "unavailable"
+
+    def test_no_price_is_fabricated(self, client):
+        body = client.get("/prices").json()
+        for metal, quote in body["prices"].items():
+            assert quote["status"] == "UNAVAILABLE", metal
+            assert quote["price_per_gram"] is None
+
+    def test_the_refusal_names_the_setting_that_would_change_it(self, client):
+        body = client.get("/prices").json()
+        assert "AURUM_PRICE_PROVIDER" in body["prices"]["Au"]["reason"]
+
+    def test_it_says_no_live_source_is_approved(self, client):
+        assert "No live market data source" in client.get("/prices").json()["note"]

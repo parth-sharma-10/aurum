@@ -18,7 +18,7 @@ flowchart LR
     API[FastAPI] --> LED
     LED --> DB[(SQLite ledger)]
     DB --> WEB[React dashboard]
-    DB -.-> VAL[Recovery -> Pricing<br/>DISABLED: no cited data]
+    DB -.-> VAL[PMDI -> Valuation<br/>value UNAVAILABLE: no price provider]
 ```
 
 **Both save paths meet at `app/ledger.py`.** The demo's `S` key and
@@ -26,10 +26,15 @@ flowchart LR
 appears in `/batches`, `/stats` and the React dashboard. There is one `INSERT`
 in the codebase and a test fails if a second appears.
 
-The dotted branch is built but inert: `app/batch.recovery_estimate` and
-`app/pricing.value_recovery` return explicit refusals until
-`configs/recovery_reference.yaml` and `configs/price_reference.yaml` are given
-cited figures.
+The dotted branch computes what it can and refuses the rest. `app/valuation/`
+produces PMDI and the price-independent `precious_mass_fraction_ppm` from cited
+evidence, but `pmdi_value` stays `UNAVAILABLE` because no live price provider is
+approved for this project. `configs/pricing.yaml` ships `provider: unavailable`
+as a decision, not a placeholder.
+
+PMDI is an **input to** the A/B/C decision policy, never the same thing as it.
+`app/valuation/` contains no grading logic and a test fails if it ever does.
+See [pmdi.md](pmdi.md).
 
 The dashed line matters: mass is optional and, when no load cell is attached,
 the reading is flagged `simulated: true` and rendered as **SIMULATED SENSOR**.
@@ -44,6 +49,20 @@ It is never presented as a measurement.
 | **FastAPI** | HTTP surface for the rest of the stack | The seam where the Aurum backend consumes identifications and batch records. |
 | **SQLite** | Batch ledger | Persists offline at the point of collection, which is the field constraint the concept doc calls out. Written by the API only. |
 | **React + Vite** | Browser view of the ledger | Reads `/stats` and `/batches` over HTTP and computes nothing of its own. Not a live camera view. |
+
+## Valuation subsystem
+
+| File | Role |
+|---|---|
+| `app/valuation/prices.py` | Provider abstraction, price status model, staleness, unit conversion |
+| `app/valuation/pmdi.py` | The PMDI calculation; precious / base / other split |
+| `app/valuation/valuation.py` | PMDI plus the separate base-metal signal, packaged for audit |
+| `app/config.py` | Every threshold and physical constant, `defaults -> YAML -> environment` |
+
+Grading thresholds in `configs/grading.yaml` are **configurable engineering
+approximations** for the prototype, not validated scientific cutoffs. The
+`preferred_classes` mechanism is an engineering sorting policy and says so at
+the point of use.
 
 ## Module map
 
@@ -99,4 +118,4 @@ Aurum Vision stops at identification. There is no endpoint that returns a metal
 content, because the model does not produce one. Recovery estimation is a
 separate, currently **disabled** mechanism — see
 [model-card.md](model-card.md#recovery-estimation) and
-`configs/recovery_reference.yaml`.
+`configs/material_reference.yaml`.

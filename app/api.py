@@ -27,6 +27,8 @@ from app import ledger, pricing
 from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
+from app.valuation import prices as prices_module
+from app.valuation import valuation as valuation_module
 from app.weight import get_weight_source
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -224,6 +226,27 @@ def get_batch(batch_id: str) -> dict:
     return record
 
 
+@app.get("/prices")
+def metal_prices() -> dict:
+    """What each metal costs, and whether that figure can be trusted.
+
+    Aurum ships no market data source. With `pricing.provider: unavailable`
+    every entry comes back UNAVAILABLE with the setting that would change it,
+    rather than a number nobody can attribute.
+    """
+    service = prices_module.PriceService.from_config()
+    quotes = service.prices(prices_module.materials.METAL_NAMES)
+    return {
+        "provider": getattr(service.provider, "name", "unknown"),
+        "max_age_seconds": service.max_age_seconds,
+        "prices": {metal: quote.as_dict() for metal, quote in sorted(quotes.items())},
+        "note": (
+            "No live market data source is approved for this project. A price "
+            "labelled TEST is fixture data and is not a market quote."
+        ),
+    }
+
+
 @app.get("/batches/{batch_id}/valuation")
 def batch_valuation(batch_id: str) -> dict:
     """Estimated value of a stored batch, priced at request time.
@@ -239,9 +262,20 @@ def batch_valuation(batch_id: str) -> dict:
     record = ledger.get(batch_id)
     if record is None:
         raise HTTPException(404, f"No batch {batch_id}")
+    result = valuation_module.value(
+        record.get("detections", {}),
+        mass=record.get("weight"),
+        item_id=batch_id,
+    )
     return {
         "batch_id": batch_id,
         "detected_components": record.get("detections", {}),
         "recovery_estimate": record.get("recovery_estimate", {}),
+        # The recovery-based path, kept working for existing consumers.
+        # Phase 10 consolidates it into the valuation subsystem below.
         "valuation": pricing.value_recovery(record.get("recovery_estimate", {})),
+        # The PMDI subsystem: the precious-metal signal, and the valuation that
+        # adds the separate base-metal signal to it.
+        "pmdi": result.pmdi.as_dict(),
+        "item_valuation": result.as_dict(),
     }

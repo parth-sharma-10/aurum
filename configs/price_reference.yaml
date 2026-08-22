@@ -4,10 +4,12 @@
 # This file is intentionally empty of figures and `enabled` is false.
 #
 # Valuation in Aurum is: estimated material quantity × price per unit. The
-# quantity comes from configs/recovery_reference.yaml (also unpopulated), and
-# the price comes from here. No prices were invented to fill this file, so
-# app/pricing.py reports valuation as unavailable and the API returns an
-# explicit refusal rather than a number.
+# quantity comes from configs/material_reference.yaml, and the price comes from
+# here. No prices were invented to fill this file, so valuation reports itself
+# unavailable and the API returns an explicit refusal rather than a number.
+#
+# This file is read only when configs/pricing.yaml sets `provider: static`, and
+# every price it yields is labelled TEST. It is never a live market quote.
 #
 # A spot price with no source and no timestamp is worse than no price: it gets
 # screenshotted, quoted, and outlives the conversation that qualified it.

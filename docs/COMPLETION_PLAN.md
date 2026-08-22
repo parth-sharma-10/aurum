@@ -175,7 +175,7 @@ cannot diverge.
 
 ---
 
-### Phase 2 — PMDI and pricing
+### Phase 2 — PMDI and pricing ✅ COMPLETE
 
 **Files:** `app/valuation/__init__.py`, `app/valuation/pmdi.py`,
 `app/valuation/prices.py`, `app/valuation/valuation.py` (new),
@@ -197,9 +197,17 @@ until a real source is configured.
 missing composition → `available: false`, never zero; price success, timeout,
 stale, absent; cache hit and expiry; evidence propagation.
 
-**Acceptance:** `tests/test_api.py:249` currently asserts `"pmdi"` never appears
-in API output. That test is updated, not deleted — it becomes an assertion that
-PMDI appears only with its evidence and status attached.
+**Acceptance:** 289 → 371 tests (82 new). `/prices` and the `pmdi` block on
+`/batches/{id}/valuation` verified live against a running server.
+
+**On the `"pmdi"` guard in `tests/test_api.py`:** reviewed and **kept**, not
+deleted. It is a deliberate contract scoped to `/stats` — the aggregate endpoint
+a dashboard renders with no provenance attached, where a money figure would be
+quoted stripped of the evidence, staleness and simulation flags that qualify it.
+PMDI *is* exposed, on `/batches/{id}/valuation` and `/prices`, where every
+figure travels with its evidence ids and status. The test's docstring now
+records that reasoning, and `TestPmdiIsExposedWithItsProvenance` asserts the
+other half.
 
 **Dependencies:** Phase 1. **Known risks:** no price provider is chosen yet;
 until one is, `pmdi_value` is permanently `UNAVAILABLE` and only the
