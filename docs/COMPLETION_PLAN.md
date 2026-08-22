@@ -94,9 +94,18 @@ gold per CPU package and no silver or palladium, so the CPU's precious total is
 gold alone. Any evidence-driven rule will therefore send **PCB → A and
 CPU → B**, which is the opposite of the intent stated in the brief (§5).
 
-Phase 3 does not resolve this silently. It ships the evidence-driven rule as
-the default and surfaces the conflict for an explicit product decision. The
-three options are recorded in Phase 3's *Known risks*.
+**DECIDED (Option 2 - class-aware engineering rules).** The evidence-driven
+ranking stands exactly as the evidence says it is: PMDI keeps its scientific
+meaning, and no cited figure is adjusted to make the bins behave. The A/B/C
+bins are a *sorting policy* applied after PMDI, not a ranking of precious-metal
+mass, so `grading.bin_a.preferred_classes` may route a class to the premium
+stream on operational grounds.
+
+Listing CPU there is an **engineering classification policy - not a scientific
+PMDI threshold**, and `configs/grading.yaml` says so at the point of use. The
+mechanism is general (class + evidence + metrics + confidence + configured
+policy -> A/B/C), not a hardcoded `CPU -> A` special case, so it can be retired
+when cited Ag/Pd figures for CPU packages exist.
 
 ---
 
@@ -137,13 +146,14 @@ research present on the remote — all verified.
 
 ---
 
-### Phase 1 — Configuration foundation
+### Phase 1 — Configuration foundation ✅ COMPLETE
 
 **Files:** `app/config.py` (new), `env.example` (extend), `configs/conveyor.yaml`
 (new), `configs/grading.yaml` (new), `tests/test_config.py` (new).
 
-**Implementation:** one settings object resolving **defaults → `.env` → CLI**,
-with CLI winning. Covers camera index and backend, YOLO confidence, host/port,
+**Implementation:** one settings object resolving **defaults → YAML →
+environment**, with the environment winning. Command-line arguments still beat
+all three, applied by each caller at its own argparse site. Covers camera index and backend, YOLO confidence, host/port,
 load-cell settings, `ARDUINO_PORT`/`ARDUINO_BAUD`, servo geometry, belt speed,
 timing offset, price provider, cache duration, and `SIMULATION`. No new
 dependency: a ~25-line `.env` parser, since `python-dotenv` would be one import
@@ -152,12 +162,16 @@ for one file format.
 **Tests:** precedence (CLI beats env beats default), missing file, malformed
 line, type coercion, `UNMEASURED` sentinel handling.
 
-**Acceptance:** no module reads `os.environ` directly except `config.py`;
-`pytest`, `ruff`, frontend build all green.
+**Acceptance:** 289 tests pass (50 new), ruff check and format clean, API
+starts, frontend builds. `config.load()` resolves 33 settings.
 
-**Dependencies:** none. **Known risks:** `app/weight.py` and `ml/train.py`
-already read env vars; they must be migrated without changing training defaults,
-which are bound to the published model release.
+**Deliberately deferred:** `app/weight.py` and `ml/train.py` still read
+`os.environ` directly. Migrating them belongs to Phase 5 and to the ML work
+respectively - `ml/train.py`'s defaults are bound to the published model
+release, and changing them here would reach outside this phase. Until then
+`config.py` is the single resolution point for everything new, and reuses the
+existing `AURUM_HX711_PORT` and `AURUM_CAMERA_BACKEND` names so the two paths
+cannot diverge.
 
 ---
 
