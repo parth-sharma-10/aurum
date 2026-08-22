@@ -360,9 +360,7 @@ export default function App() {
           ) : (
             <div className="stream placeholder">Camera not started</div>
           )}
-          <p className="section-note">
-            No conveyor exists. {state?.conveyor?.note}
-          </p>
+          <p className="section-note">{state?.conveyor?.note}</p>
         </section>
 
         <section className="glass-panel chain">
