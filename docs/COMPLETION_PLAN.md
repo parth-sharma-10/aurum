@@ -282,7 +282,7 @@ the real model on translated stills.
 
 ---
 
-### Phase 5 — HX711 weight integration
+### Phase 5 — HX711 weight integration ✅ COMPLETE
 
 **Files:** `app/sensing/weight.py` (moved from `app/weight.py`),
 `tests/test_weight.py` (extend).
@@ -298,11 +298,21 @@ to refuse concentration maths on simulated mass.
 reading; simulated mode; simulated mass never satisfies a concentration
 calculation.
 
-**Acceptance:** PCB valuation is computable from a real stable reading and
-refused from a simulated one.
+**Acceptance:** 612 tests (73 new). PCB valuation is computable from a
+`MEASURED` reading and refused from `SIMULATED`, `STABLE`, `UNSTABLE` or
+`UNAVAILABLE` ones.
 
-**Dependencies:** Phases 1, 4. **Known risks:** no HX711 hardware is attached;
-everything is verified in simulation until it is.
+**Module move deferred.** This phase kept the code in `app/weight.py` rather
+than moving it to `app/sensing/weight.py`. The move is mechanical but touches
+`app/api.py`, `app/demo.py` and two test modules, and doing it inside a phase
+that also changes behaviour would mix a rename into a functional diff. It is
+folded into the Phase 10 cleanup as one move-only commit.
+
+**Known risks:** the hardware exists and responds -- a 180 g mass moved the
+cell by ~65 000 counts on the bench -- but **nothing in this phase has run
+against it.** The sketch has never been uploaded, the serial link has never
+been opened by Aurum, and the calibration workflow has never been executed.
+`configs/calibration.yaml` stays UNMEASURED until it is.
 
 ---
 

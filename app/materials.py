@@ -224,6 +224,16 @@ def _usable_mass_g(mass: dict | None, counts: dict[str, int]) -> tuple[float | N
             "a concentration needs a mass, and this batch's weight is SIMULATED; "
             "refusing to multiply an invented mass by a real concentration"
         )
+    # `simulated: false` is not by itself enough. A reading from real hardware
+    # can still be unsettled, or rest on a calibration nobody verified against
+    # a second known mass. Readings that predate the measurement path carry no
+    # status and keep their previous behaviour.
+    status = mass.get("status")
+    if status is not None and status != "MEASURED":
+        return None, (
+            "a concentration needs a measured mass, and this batch's weight is "
+            f"{status}; refusing to multiply an unverified mass by a real concentration"
+        )
     grams = mass.get("grams")
     if grams is None and mass.get("kg") is not None:
         grams = float(mass["kg"]) * 1000.0

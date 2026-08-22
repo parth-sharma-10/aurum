@@ -104,10 +104,26 @@ class ItemPipeline:
         return self.process_detections(self.detector_tracker.track(frame), frame_id=frame_id)
 
     def attach_weight(self, item_id: str, grams: float | None, status: str) -> TrackedItem | None:
-        """Record a mass against an item. Phase 5 owns the load cell itself."""
+        """Record a mass against an item, by identity."""
         item = self.tracker.get(item_id)
         if item is not None:
             item.attach_weight(grams, status)
+        return item
+
+    def weigh_item(self, item_id: str, sensor, now=None) -> TrackedItem | None:
+        """Read the load cell and attach the result to an existing identity.
+
+        The mass lands on the `AUR-ITEM-` the tracker already minted; no second
+        identity is created here. A refusal attaches too, carrying its status
+        and reason, because "this item could not be weighed" is information the
+        decision engine needs rather than an absence to paper over.
+        """
+        item = self.tracker.get(item_id)
+        if item is None:
+            return None
+        reading = sensor.read(now=now)
+        item.attach_weight(reading.grams, str(reading.status), reading.timestamp)
+        item.weight_reading = reading.as_dict()
         return item
 
     def finish(self) -> list[TrackedItem]:

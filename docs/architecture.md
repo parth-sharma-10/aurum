@@ -59,6 +59,28 @@ It is never presented as a measurement.
 | `app/valuation/valuation.py` | PMDI plus the separate base-metal signal, packaged for audit |
 | `app/config.py` | Every threshold and physical constant, `defaults -> YAML -> environment` |
 
+## Mass measurement
+
+```
+HX711 -> Arduino (raw counts) -> serial -> median filter -> stability window
+      -> calibration -> WeightStatus -> the item's existing AUR-ITEM- identity
+```
+
+| File | Role |
+|---|---|
+| `app/weight.py` | Protocol parsing, calibration record, filter, stability, `WeightSensor` |
+| `app/calibrate.py` | The two-mass calibration workflow |
+| `hardware/arduino/aurum_weight/` | Weight-only sketch. No servo code. |
+| `configs/calibration.yaml` | The measured factor. **Ships UNMEASURED.** |
+
+The Arduino sends **raw counts**; Python owns the calibration, so the factor
+lives in version control next to the workflow that produced it and the second
+known mass that verified it. Only a `MEASURED` reading -- settled, on a
+*verified* calibration, from real hardware -- may drive a concentration-based
+metal estimate. Everything else routes to Bin C.
+
+Full wiring, protocol and validation status: [hardware.md](hardware.md).
+
 ## Item identity and lifecycle
 
 ```

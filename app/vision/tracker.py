@@ -123,6 +123,10 @@ class TrackedItem:
     weight_status: str | None = None
     weight_timestamp: str | None = None
 
+    #: The full weight record, when the item was weighed through the sensor.
+    #: Carries the status and the reason a refusal happened.
+    weight_reading: dict | None = None
+
     #: Filled by a later phase from app.decision. No grading logic lives here.
     decision: dict | None = None
 
@@ -198,6 +202,7 @@ class TrackedItem:
             "weight_g": self.weight_g,
             "weight_status": self.weight_status,
             "weight_timestamp": self.weight_timestamp,
+            "weight_reading": self.weight_reading,
             "decision": self.decision,
         }
 

@@ -181,6 +181,7 @@ SPEC: dict[str, tuple] = {
         "AURUM_WEIGHT_STABILITY_TOLERANCE_G",
     ),
     "conveyor.weight.timeout_s": (_non_negative, 5.0, "AURUM_WEIGHT_TIMEOUT_S"),
+    "conveyor.weight.filter_samples": (_int, 5, "AURUM_WEIGHT_FILTER_SAMPLES"),
     "conveyor.weight.calibration_factor": (
         _float,
         UNMEASURED,

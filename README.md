@@ -833,7 +833,10 @@ Aurum
 | Leakage-safe dataset split + independent validator | **implemented** |
 | External-image evaluation (no ground truth) | **implemented** |
 | Simulated load cell | **implemented, labelled** |
-| HX711 serial class | **exists, never verified against hardware** |
+| HX711 measurement path (filter, stability, states) | **implemented** — software-tested only |
+| Two-mass calibration workflow (`python -m app.calibrate`) | **implemented** — never run on hardware |
+| Weight-only Arduino sketch | **implemented** — never uploaded to a board |
+| HX711 calibration factor | **UNMEASURED** — bench evidence exists, calibration does not |
 | Arduino integration / sketch | **not implemented** |
 | Servo sorting, physical routing, bin actuation | **not implemented** |
 | Material composition reference (22 cited records, 6 papers) | **implemented** |

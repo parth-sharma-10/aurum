@@ -54,6 +54,12 @@ conveyor:
     # Give up waiting for a stable reading after this long; the item then has
     # no measured mass and routes to C.
     timeout_s: 5.0
+
+    # ENGINEERING APPROXIMATION — not research-derived.
+    # Samples in the median filter. Median rather than mean: one electrically
+    # noisy sample should not move the answer, and a spike is exactly what a
+    # mean would smear in.
+    filter_samples: 5
     # MEASURE THIS: raw HX711 counts per gram, from a known reference mass.
     calibration_factor: UNMEASURED
     # Serial port of the board publishing load-cell readings. Null until wired.

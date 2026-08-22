@@ -1,0 +1,40 @@
+# Aurum - HX711 calibration record.
+#
+# ========================= NOT CALIBRATED =================================
+# This ships UNMEASURED. Nothing here is a default waiting to be improved: an
+# uncalibrated load cell reports UNAVAILABLE rather than a number, because a
+# guessed counts-per-gram turns every mass, every metal estimate and every
+# routing decision downstream into a guess as well.
+# ==========================================================================
+#
+# To calibrate, on the real machine:
+#
+#     python -m app.calibrate --port <COM3 or /dev/ttyACM0> \
+#         --reference-mass 180 --verify-mass <a DIFFERENT known mass>
+#
+# The workflow tares an empty pan, records the counts for a known reference
+# mass, derives counts_per_gram, then places a SECOND known mass and checks
+# the prediction. `verified` becomes true only if that check passes.
+#
+# One reference mass shows the cell responds. Two show the scale is linear and
+# the factor is right. Only a verified calibration produces MEASURED readings,
+# and only MEASURED readings may drive a concentration-based metal estimate.
+#
+# This file is measured data about ONE physical machine. It does not transfer
+# to another rig, and it is not a setting to hand-edit.
+
+calibration:
+  counts_per_gram: UNMEASURED
+  tare_counts: UNMEASURED
+  reference_mass_g: UNMEASURED
+  verified: false
+  verification_mass_g: UNMEASURED
+  verification_error_g: UNMEASURED
+  recorded_at: null
+  notes: >
+    Not calibrated. A bench experiment on 2026-08-22 with a 180 g reference
+    mass suggested roughly 361.9 counts/g (empty about -261600, loaded about
+    -196470). That is evidence the hardware responds correctly. It is NOT a
+    calibration: it was not recorded by this workflow and it was never checked
+    against a second known mass, so the software continues to report
+    UNMEASURED until it is.
