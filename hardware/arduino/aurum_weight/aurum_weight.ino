@@ -44,7 +44,10 @@ const unsigned long SAMPLE_INTERVAL_MS = 100;  // 10 Hz; the HX711 runs at 10 SP
 const unsigned long READY_TIMEOUT_MS   = 500;
 
 void setup() {
-  Serial.begin(9600);
+  // 115200, matching conveyor.arduino.baudrate and the sorter sketch.
+  // app/calibrate.py opens the port at that rate, so a 9600 board here reads
+  // as garbage rather than as silence - the more confusing failure.
+  Serial.begin(115200);
   pinMode(PIN_DOUT, INPUT);
   pinMode(PIN_SCK, OUTPUT);
   digitalWrite(PIN_SCK, LOW);
