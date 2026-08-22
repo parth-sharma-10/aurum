@@ -59,6 +59,79 @@ It is never presented as a measurement.
 | `app/valuation/valuation.py` | PMDI plus the separate base-metal signal, packaged for audit |
 | `app/config.py` | Every threshold and physical constant, `defaults -> YAML -> environment` |
 
+## Item identity and lifecycle
+
+```
+frame -> detector -> ByteTrack -> TrackedItem (stable item_id) -> weight -> PMDI -> decision -> routing
+```
+
+A camera pointed at the conveyor produces a CPU in frame 1, a CPU in frame 2
+and a CPU in frame 3. That is **one** physical object, and everything
+downstream -- one weighing, one decision, one servo firing, one ledger row --
+depends on saying so.
+
+| File | Role |
+|---|---|
+| `app/vision/tracker.py` | `ItemTracker`, the lifecycle state machine; `DetectorTracker`, the ByteTrack adapter |
+| `app/pipeline/item_pipeline.py` | Composes detector, tracker and lifecycle; the seam later phases hang off |
+| `configs/tracking.yaml` | Track-loss tolerance and confirmation threshold |
+
+### A `track_id` is not an `item_id`
+
+**These are deliberately different things.** ByteTrack numbers tracks from 1 and
+starts over every process, so using its number as the ledger identity would
+collide across restarts -- two different CPUs from two different sessions both
+filed as item 1. Aurum mints `AUR-ITEM-xxxxxxxx` and carries the `track_id`
+alongside it for debugging only.
+
+A track id recycled by the tracker after an item has finalized produces a **new**
+item identity, never a revived one.
+
+### Lifecycle
+
+```
+NEW  ->  TRACKING  ->  CONFIRMED  ->  LEAVING  ->  FINALIZED
+```
+
+| State | Meaning |
+|---|---|
+| `NEW` | Seen once. Not yet something to act on. |
+| `TRACKING` | Seen repeatedly, below the confirmation threshold. |
+| `CONFIRMED` | Eligible to be weighed, decided and routed. |
+| `LEAVING` | Missing from recent frames, still inside tolerance. May return. |
+| `FINALIZED` | Terminal. Handed over exactly once. |
+
+There is no `MEASURING` state: nothing drives one yet. Phase 5 attaches a mass
+to an item while it is `CONFIRMED`, through the `weight_g` / `weight_status` /
+`weight_timestamp` slots the model already carries.
+
+**An item is not finalized because it blinked.** A detection miss or an
+occluded frame moves it to `LEAVING`; only
+`tracking.max_missing_frames` consecutive absences finalize it. Finalization is
+idempotent, and `drain_finalized()` hands each item over exactly once -- that is
+what stops one physical component becoming several ledger rows.
+
+### Confidence has one documented meaning
+
+`TrackedItem.confidence` is the **mean over every observation**, and that is the
+figure the decision engine reads. A single lucky frame must not promote an item
+into the premium bin, nor a single unlucky one demote it. `latest_confidence`
+and `max_confidence` are also exposed, and the output states which basis was
+used.
+
+The majority class over all observations wins, so a one-frame class flip cannot
+change which bin an item is routed to.
+
+### Engineering approximations
+
+| Setting | Value | Source |
+|---|---|---|
+| `tracking.max_missing_frames` | 15 (~0.5 s at 30 fps) | **none -- engineering approximation** |
+| `tracking.min_detections_to_confirm` | 3 | **none -- engineering approximation** |
+
+Velocity is reported in **pixels per frame** and deliberately not converted to
+cm/s: that needs a belt speed and a pixel scale, both `UNMEASURED`.
+
 ## Decision policy
 
 | File | Role |

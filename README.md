@@ -846,11 +846,12 @@ Aurum
 | PMDI monetary value | **unavailable** — no approved live price provider |
 | Price provider abstraction | **implemented** — `unavailable` (default) and `static`/TEST |
 | Base-metal signal, separate from PMDI | **implemented** |
+| Object tracking across frames (`app/vision/tracker.py`) | **implemented** — ByteTrack, stable `AUR-ITEM-` identities |
+| Item lifecycle + duplicate prevention | **implemented** — one physical item finalizes exactly once |
 | A/B/C decision engine (`app/decision/engine.py`) | **implemented** — auditable, fail-closed |
 | Grading thresholds | **implemented as engineering approximations**, configurable, not scientific cutoffs |
 | Physical routing / servo actuation | **not implemented** — Phases 6-7 |
 | Carbon figures | **not implemented** |
-| Object tracking across frames | **not implemented** |
 | Cyber-physical state machine | **not implemented** |
 | Live camera stream in the browser | **not implemented** |
 

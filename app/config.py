@@ -37,7 +37,7 @@ CONFIG_DIR = ROOT / "configs"
 # The top-level key of each file is also the first segment of every key it
 # owns, so `configs/grading.yaml` holds `grading:` and nothing else. That keeps
 # dotted lookup uniform across files with no per-file special cases.
-CONFIG_FILES = ("conveyor.yaml", "grading.yaml", "pricing.yaml")
+CONFIG_FILES = ("conveyor.yaml", "grading.yaml", "pricing.yaml", "tracking.yaml")
 
 UNMEASURED_TOKEN = "UNMEASURED"
 
@@ -225,6 +225,9 @@ SPEC: dict[str, tuple] = {
     ),
     "pricing.provider": (_one_of("unavailable", "static"), "unavailable", "AURUM_PRICE_PROVIDER"),
     "pricing.max_age_seconds": (_non_negative, 900.0, "AURUM_PRICE_MAX_AGE_SECONDS"),
+    "tracking.tracker": (_text, "bytetrack.yaml", "AURUM_TRACKER"),
+    "tracking.max_missing_frames": (_int, 15, "AURUM_TRACK_MAX_MISSING_FRAMES"),
+    "tracking.min_detections_to_confirm": (_int, 3, "AURUM_TRACK_MIN_DETECTIONS"),
 }
 
 

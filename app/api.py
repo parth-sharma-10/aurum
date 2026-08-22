@@ -28,6 +28,7 @@ from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.decision import engine as decision_engine
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
+from app.pipeline import ItemPipeline
 from app.valuation import prices as prices_module
 from app.valuation import valuation as valuation_module
 from app.weight import get_weight_source
@@ -65,6 +66,18 @@ app.add_middleware(
 
 _detector: AurumDetector | None = None
 _sessions: dict[str, BatchSession] = {}
+_pipeline: ItemPipeline | None = None
+
+
+def pipeline() -> ItemPipeline:
+    """The tracking session this process is running.
+
+    One per process, because item identity is only meaningful within a run.
+    """
+    global _pipeline
+    if _pipeline is None:
+        _pipeline = ItemPipeline(detector=detector())
+    return _pipeline
 
 
 def detector() -> AurumDetector:
@@ -151,6 +164,52 @@ async def detect_annotated(file: UploadFile = File(...)) -> Response:
     if not ok:
         raise HTTPException(500, "Could not encode annotated image")
     return Response(io.BytesIO(buf.tobytes()).getvalue(), media_type="image/jpeg")
+
+
+@app.post("/track")
+async def track(file: UploadFile = File(...)) -> dict:
+    """One frame of a tracking run: detections folded into item lifecycles.
+
+    Unlike `/detect`, this is stateful. Repeated calls with the same object
+    continue one item rather than reporting a new one each time, which is what
+    keeps a single physical component from becoming several ledger rows.
+    """
+    p = pipeline()
+    items = p.process_detections(
+        p.detector_tracker.track(_decode(await file.read())),
+    )
+    return {
+        "frames_processed": p.frames_processed,
+        "active_items": [item.as_dict() for item in items],
+        "current_item": p.current_item.as_dict() if p.current_item else None,
+    }
+
+
+@app.get("/items")
+def list_items() -> dict:
+    """Items in the current tracking run."""
+    return pipeline().snapshot()
+
+
+@app.get("/items/current")
+def current_item() -> dict:
+    """The confirmed item most recently seen, or an explicit absence."""
+    item = pipeline().current_item
+    if item is None:
+        return {
+            "current_item": None,
+            "reason": (
+                "No confirmed item. An object seen once is not yet something to weigh or route."
+            ),
+        }
+    return {"current_item": item.as_dict()}
+
+
+@app.post("/track/reset")
+def reset_tracking() -> dict:
+    """Start a fresh run: new identities, tracker numbering restarted."""
+    pipeline().reset()
+    return {"status": "reset", "frames_processed": 0}
 
 
 @app.post("/batch/start")

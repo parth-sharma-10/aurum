@@ -24,12 +24,40 @@ from app import ledger as ledger_mod
 from app.detector import Detection, FrameResult
 
 
+class StubModel:
+    """The slice of the Ultralytics model surface the tracker adapter uses.
+
+    `AurumDetector` exposes `.model`, and `app/vision/tracker.py` calls
+    `.track()` on it. The stub mirrors that rather than being special-cased in
+    production code.
+    """
+
+    names = {0: "PCB", 1: "RAM", 2: "CPU", 3: "Connector"}
+
+    def __init__(self, detections):
+        self._dets = detections
+        self.predictor = None
+
+    def track(self, _frame, **_kwargs):
+        # `boxes = None` is the real "the tracker has not associated anything
+        # yet" case, which the adapter must handle without a torch tensor in
+        # sight. Identity behaviour itself is tested in tests/test_tracker.py
+        # against the pure state machine.
+        class _Result:
+            boxes = None
+
+        return [_Result()]
+
+
 class StubDetector:
     """Deterministic stand-in so API tests do not depend on trained weights."""
 
     model_version = "Aurum Vision v-test"
     classes = ["PCB", "RAM", "CPU", "Connector"]
     meta: dict = {}
+    conf = 0.35
+    iou = 0.5
+    imgsz = 512
 
     def __init__(self, detections=None):
         self._dets = (
@@ -40,6 +68,8 @@ class StubDetector:
                 Detection(cls="RAM", conf=0.87, xyxy=(120, 20, 200, 60)),
             ]
         )
+
+        self.model = StubModel(self._dets)
 
     def warmup(self):
         return None
@@ -406,3 +436,44 @@ class TestDecisionIsExposed:
         decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
         if decision["decision"] == "C":
             assert decision["servo"] is None
+
+
+class TestTrackingEndpoints:
+    """Tracking is stateful; these confirm identity survives across requests."""
+
+    @pytest.fixture(autouse=True)
+    def _fresh_pipeline(self, client):
+        client.post("/track/reset")
+        yield
+        client.post("/track/reset")
+
+    def test_a_frame_returns_active_items(self, client):
+        body = client.post("/track", files={"file": ("f.png", png_bytes(), "image/png")}).json()
+        assert "active_items" in body
+        assert body["frames_processed"] == 1
+
+    def test_items_reports_the_tracking_policy_as_approximate(self, client):
+        body = client.get("/items").json()
+        assert "engineering approximations" in body["tracking_policy"]["note"]
+
+    def test_the_current_item_endpoint_explains_an_absence(self, client):
+        body = client.get("/items/current").json()
+        if body["current_item"] is None:
+            assert "not yet something to weigh or route" in body["reason"]
+
+    def test_a_reset_clears_the_run(self, client):
+        client.post("/track", files={"file": ("f.png", png_bytes(), "image/png")})
+        assert client.post("/track/reset").json()["frames_processed"] == 0
+        assert client.get("/items").json()["frames_processed"] == 0
+
+    def test_item_ids_are_aurum_identities_not_tracker_numbers(self, client):
+        client.post("/track", files={"file": ("f.png", png_bytes(), "image/png")})
+        for item in client.get("/items").json()["items"]:
+            assert item["item_id"].startswith("AUR-ITEM-")
+            assert item["item_id"] != str(item["track_id"])
+
+    def test_existing_detect_endpoint_is_unaffected(self, client):
+        """The stateless path must keep working alongside the stateful one."""
+        body = client.post("/detect", files={"file": ("f.png", png_bytes(), "image/png")}).json()
+        assert "detections" in body
+        assert "item_id" not in body

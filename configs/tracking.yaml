@@ -1,0 +1,24 @@
+# Aurum — following one physical item across frames.
+#
+# A camera pointed at the conveyor sees the same CPU in many frames. These
+# settings decide when those frames become one item, and when that item is
+# considered gone.
+
+tracking:
+  # Ultralytics ships this; no extra tracking stack is introduced.
+  # bytetrack.yaml | botsort.yaml
+  tracker: bytetrack.yaml
+
+  # ENGINEERING APPROXIMATION — not research-derived.
+  # Consecutive frames an item may go undetected before it is finalized. An
+  # item that blinks out for one frame behind a hand or through a detection
+  # miss must not be closed and re-opened as a second object. At ~30 fps this
+  # is half a second of tolerance. Raise it if the belt occludes items, lower
+  # it if items are closely spaced and identities are bleeding together.
+  max_missing_frames: 15
+
+  # ENGINEERING APPROXIMATION — not research-derived.
+  # Observations before an item is CONFIRMED and therefore eligible to be
+  # weighed, decided and routed. One frame is a flicker; three is a decision
+  # you can defend to a servo.
+  min_detections_to_confirm: 3

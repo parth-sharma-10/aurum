@@ -252,7 +252,7 @@ be retired the day cited Ag/Pd figures for CPU packages are added.
 
 ---
 
-### Phase 4 — Tracking and item lifecycle
+### Phase 4 — Tracking and item lifecycle ✅ COMPLETE
 
 **Files:** `app/vision/__init__.py`, `app/vision/tracker.py`,
 `app/pipeline/item_pipeline.py`, `app/models/item.py` (new),
@@ -266,10 +266,19 @@ paths coexist per the brief's §4.
 **Tests:** stable IDs across frames; lost and reappearing tracks; one physical
 item never produces two ledger records; state transitions.
 
-**Acceptance:** an item retains identity from first detection to ledger write.
+**Acceptance:** 539 tests (91 new). Verified with the real model and real
+ByteTrack: two RAM modules held identity across ten translated frames, velocity
+tracked at 6 px/frame, finalized exactly twice, a second finish closed nothing.
 
-**Dependencies:** Phase 1. **Known risks:** ByteTrack ID switches on occlusion;
-mitigated by the singulator, which is a physical, not software, guarantee.
+**New dependency:** `lap==0.5.13`, required by ByteTrack for its linear
+assignment step. Ultralytics AutoUpdate pip-installs it on first use, which is a
+network call in the middle of a demo -- it is now pinned in `requirements.txt`
+so it installs up front instead.
+
+**Known risks:** ByteTrack ID switches on occlusion, mitigated by the
+singulator, which is a physical rather than a software guarantee. Tracking has
+**not** been validated against a real camera on a real conveyor -- only against
+the real model on translated stills.
 
 ---
 

@@ -14,6 +14,13 @@ pillow==12.3.0
 pyyaml==6.0.3
 imagehash==4.3.2           # perceptual hashing for near-duplicate leakage checks
 
+# --- object tracking -------------------------------------------------------
+# Required by Ultralytics' ByteTrack (app/vision/tracker.py) for the linear
+# assignment step. Ultralytics AutoUpdate will pip-install this on first use if
+# it is missing, which is a network call in the middle of a demo -- pin it here
+# so it is installed up front instead.
+lap==0.5.13
+
 # --- serving + dashboard backend ------------------------------------------
 fastapi==0.141.1
 uvicorn[standard]==0.52.3
