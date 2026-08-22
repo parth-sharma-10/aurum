@@ -136,3 +136,47 @@ and that is a real reading — never confused with an absent one.
 
 Everything in the "NOT" rows is software-tested against a scripted reader and
 nothing more.
+
+
+## Routing geometry — the measurement checklist
+
+None of these has been measured. Each goes into `configs/conveyor.yaml`, and
+**no Python changes when they do**.
+
+| # | Quantity | Config key | How to measure |
+|---|---|---|---|
+| 1 | Belt speed | `conveyor.belt.speed_cm_s` | Time a marked item over a known distance. Repeat 5x, take the median. |
+| 2 | Camera to load cell | `conveyor.geometry.camera_to_load_cell_cm` | Along the belt, from the camera's field-of-view centre to the pan centre. |
+| 3 | Camera to Servo A | `conveyor.geometry.camera_to_servo_a_cm` | Along the belt, FOV centre to the paddle's line of action. |
+| 4 | Camera to Servo B | `conveyor.geometry.camera_to_servo_b_cm` | Same, for the second paddle. |
+| 5 | Servo actuation delay | `conveyor.timing.servo_actuation_delay_ms` | Command sent to paddle physically in the stream. Film at high frame rate, or measure with a switch. |
+| 6 | Timing offset | `conveyor.timing.offset_ms` | Calibrate last, on the running machine: watch where items land and trim. Negative fires earlier. |
+
+Until 1, 3 and 5 exist, an A route is refused with a reason code naming the
+missing quantity. Until 1, 4 and 5 exist, so is a B route. Bin C works
+regardless, because it needs no actuator.
+
+### Sequence
+
+Measure 1–5 with the belt running and the servos idle. Set them, confirm the
+`/routing` endpoint reports `routable: true`, then tune 6 with real items.
+
+## Hardware status
+
+Accurate as of Phase 6. **Do not read this as a working machine.**
+
+| Item | Status |
+|---|---|
+| HX711 | Physically connected and responding |
+| Load cell | Physically responding — 180 g moved it ~65 000 counts |
+| HX711 calibration | **Not yet fully physically verified** |
+| Arduino to Python link | **Not yet validated end to end** |
+| Servo A (D9) | Bench-tested independently, outside this software |
+| Servo B (D10) | Bench-tested independently, outside this software |
+| External 5 V supply, common ground | Working after the earlier short |
+| **Physical conveyor** | **Does not exist yet** |
+| Routing geometry | **UNMEASURED** — all six quantities |
+| Routing scheduler | Software-tested only, against TEST geometry |
+
+The demonstration runs on the simulated conveyor profile. That is a model of a
+machine, not a machine.

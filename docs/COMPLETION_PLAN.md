@@ -316,7 +316,7 @@ been opened by Aurum, and the calibration workflow has never been executed.
 
 ---
 
-### Phase 6 — Routing geometry and scheduler
+### Phase 6 — Routing geometry and scheduler ✅ COMPLETE
 
 **Files:** `app/routing/geometry.py`, `app/routing/scheduler.py` (new),
 `configs/conveyor.yaml`, `tests/test_routing.py` (new).
@@ -329,12 +329,15 @@ geometry value makes the scheduler refuse and route to C.
 A and B; duplicate-fire prevention; a decision arriving after the item has
 passed the servo; `UNMEASURED` → C.
 
-**Acceptance:** the §18 simulator prints a correct firing schedule for a
-mixed stream.
+**Acceptance:** 705 tests (93 new). The full demonstration chain runs end to
+end on the simulated profile: camera to tracking to identity to weight to
+PMDI to A/B/C to a scheduled route with a countdown that becomes DUE.
 
-**Dependencies:** Phases 3, 4. **Known risks:** timing error from Python,
-serial latency and inference jitter is roughly ±150–250 ms — ±2.5 cm at
-10 cm/s, ±12 cm at 50 cm/s. Run the belt slow and make bin mouths wide.
+**Known risks:** timing error from Python, serial latency and inference jitter
+is roughly +/-150-250 ms - +/-2.5 cm at 10 cm/s, +/-12 cm at 50 cm/s. Run the
+belt slow and make bin mouths wide. And the larger one: **the conveyor does not
+exist.** Every routing number so far comes from a TEST profile, and none of the
+six physical quantities has been measured.
 
 ---
 

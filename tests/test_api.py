@@ -477,3 +477,26 @@ class TestTrackingEndpoints:
         body = client.post("/detect", files={"file": ("f.png", png_bytes(), "image/png")}).json()
         assert "detections" in body
         assert "item_id" not in body
+
+
+class TestRoutingEndpoint:
+    """Routing state is visible over HTTP. Nothing here actuates anything."""
+
+    def test_it_reports_the_geometry_mode(self, client):
+        body = client.get("/routing").json()
+        assert body["mode"] in ("REAL", "SIMULATED")
+
+    def test_an_unmeasured_machine_reports_itself_unroutable(self, client):
+        """The shipped configuration has no measured geometry."""
+        body = client.get("/routing").json()
+        assert body["routable"] is False
+        assert body["geometry"]["belt_speed_cm_s"] is None
+
+    def test_the_belt_speed_is_not_described_as_measured(self, client):
+        basis = client.get("/routing").json()["geometry"]["belt_speed_basis"]
+        assert "no encoder" in basis
+
+    def test_the_queue_starts_empty(self, client):
+        body = client.get("/routing").json()
+        assert body["pending"] == []
+        assert body["due"] == []

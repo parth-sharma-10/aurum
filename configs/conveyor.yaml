@@ -75,9 +75,31 @@ conveyor:
     # How long to wait for an ACK before treating a command as unacknowledged.
     ack_timeout_ms: 500
 
+  # ==========================================================================
+  # DEMONSTRATION PROFILE - TEST VALUES ONLY
+  #
+  # The physical conveyor does not exist yet. These numbers exist so the whole
+  # pipeline can be demonstrated end to end, and they are NOT measurements of
+  # anything. Every routing result computed from them is stamped
+  # mode: SIMULATED.
+  #
+  # They are reachable ONLY when runtime.simulation is true. With simulation
+  # off, the geometry above applies and stays UNMEASURED, so an unmeasured
+  # machine refuses to schedule rather than routing on plausible-looking
+  # numbers. Do not move these values up into the real geometry block.
+  # ==========================================================================
+  simulation:
+    belt_speed_cm_s: 20.0            # TEST
+    camera_to_load_cell_cm: 25.0     # TEST
+    camera_to_servo_a_cm: 60.0       # TEST
+    camera_to_servo_b_cm: 90.0       # TEST
+    servo_actuation_delay_ms: 150    # TEST
+    timing_offset_ms: 0              # TEST
+
   runtime:
-    # true runs the whole pipeline with no hardware. Simulated values are
-    # labelled everywhere they appear and never enter production statistics.
+    # true runs the whole pipeline with no hardware, and switches the routing
+    # layer onto the TEST geometry above. Simulated values are labelled
+    # everywhere they appear and never enter production statistics.
     simulation: false
     host: 127.0.0.1
     port: 8000

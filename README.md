@@ -853,7 +853,10 @@ Aurum
 | Item lifecycle + duplicate prevention | **implemented** — one physical item finalizes exactly once |
 | A/B/C decision engine (`app/decision/engine.py`) | **implemented** — auditable, fail-closed |
 | Grading thresholds | **implemented as engineering approximations**, configurable, not scientific cutoffs |
-| Physical routing / servo actuation | **not implemented** — Phases 6-7 |
+| Routing geometry + scheduler (`app/routing/`) | **implemented** — software-tested against TEST geometry |
+| Mock conveyor demonstration mode | **implemented** — every result stamped SIMULATED |
+| Routing geometry measurements | **UNMEASURED** — all six; see docs/hardware.md |
+| Physical servo actuation | **not implemented** — Phase 7 |
 | Carbon figures | **not implemented** |
 | Cyber-physical state machine | **not implemented** |
 | Live camera stream in the browser | **not implemented** |

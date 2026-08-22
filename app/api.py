@@ -29,6 +29,7 @@ from app.dashboard import draw_detections
 from app.decision import engine as decision_engine
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
 from app.pipeline import ItemPipeline
+from app.routing import RoutingScheduler
 from app.valuation import prices as prices_module
 from app.valuation import valuation as valuation_module
 from app.weight import get_weight_source
@@ -67,6 +68,15 @@ app.add_middleware(
 _detector: AurumDetector | None = None
 _sessions: dict[str, BatchSession] = {}
 _pipeline: ItemPipeline | None = None
+_routing: RoutingScheduler | None = None
+
+
+def _scheduler() -> RoutingScheduler:
+    """The routing queue for this process, sharing the tracker's identities."""
+    global _routing
+    if _routing is None:
+        _routing = RoutingScheduler(lifecycle=pipeline().tracker)
+    return _routing
 
 
 def pipeline() -> ItemPipeline:
@@ -164,6 +174,18 @@ async def detect_annotated(file: UploadFile = File(...)) -> Response:
     if not ok:
         raise HTTPException(500, "Could not encode annotated image")
     return Response(io.BytesIO(buf.tobytes()).getvalue(), media_type="image/jpeg")
+
+
+@app.get("/routing")
+def routing_status() -> dict:
+    """The routing queue: what is scheduled, what is due, and what was refused.
+
+    A route is a time, not a movement. Nothing in this phase actuates a servo;
+    a DUE route is one Phase 7 will act on.
+    """
+    import time as _time
+
+    return _scheduler().snapshot(now=_time.monotonic())
 
 
 @app.post("/track")

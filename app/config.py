@@ -192,6 +192,30 @@ SPEC: dict[str, tuple] = {
     "conveyor.arduino.baudrate": (_int, 9600, "AURUM_ARDUINO_BAUDRATE"),
     "conveyor.arduino.timeout_s": (_non_negative, 1.0, "AURUM_ARDUINO_TIMEOUT_S"),
     "conveyor.arduino.ack_timeout_ms": (_non_negative, 500.0, "AURUM_ARDUINO_ACK_TIMEOUT_MS"),
+    # The demonstration profile. TEST values, used ONLY when
+    # conveyor.runtime.simulation is true. See configs/conveyor.yaml.
+    "conveyor.simulation.belt_speed_cm_s": (_non_negative, 20.0, "AURUM_SIM_BELT_SPEED_CM_S"),
+    "conveyor.simulation.camera_to_load_cell_cm": (
+        _non_negative,
+        25.0,
+        "AURUM_SIM_CAMERA_TO_LOAD_CELL_CM",
+    ),
+    "conveyor.simulation.camera_to_servo_a_cm": (
+        _non_negative,
+        60.0,
+        "AURUM_SIM_CAMERA_TO_SERVO_A_CM",
+    ),
+    "conveyor.simulation.camera_to_servo_b_cm": (
+        _non_negative,
+        90.0,
+        "AURUM_SIM_CAMERA_TO_SERVO_B_CM",
+    ),
+    "conveyor.simulation.servo_actuation_delay_ms": (
+        _non_negative,
+        150.0,
+        "AURUM_SIM_SERVO_ACTUATION_DELAY_MS",
+    ),
+    "conveyor.simulation.timing_offset_ms": (_float, 0.0, "AURUM_SIM_TIMING_OFFSET_MS"),
     "conveyor.runtime.simulation": (_bool, False, "AURUM_SIMULATION"),
     "conveyor.runtime.host": (_text, "127.0.0.1", "AURUM_HOST"),
     "conveyor.runtime.port": (_int, 8000, "AURUM_PORT"),

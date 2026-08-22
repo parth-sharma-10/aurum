@@ -154,6 +154,89 @@ change which bin an item is routed to.
 Velocity is reported in **pixels per frame** and deliberately not converted to
 cm/s: that needs a belt speed and a pixel scale, both `UNMEASURED`.
 
+## Routing
+
+```
+decision (A/B/C) -> routing feasibility -> scheduled action -> [Phase 7] servo
+```
+
+| File | Role |
+|---|---|
+| `app/routing/geometry.py` | Physical constants and the travel-time arithmetic |
+| `app/routing/scheduler.py` | The queue, the reason codes, the `ScheduledRoute` record |
+| `configs/conveyor.yaml` | Real geometry (UNMEASURED) and the TEST demonstration profile |
+
+### The timing model
+
+```
+travel_s   = distance_cm / belt_speed_cm_s
+execute_at = detected_at
+           + travel_s                        when the item arrives
+           - servo_actuation_delay_ms / 1000  send early: the paddle takes time
+           + timing_offset_ms / 1000          the calibration knob
+```
+
+The actuation delay is **subtracted** because it is time the servo spends
+moving: to have the paddle in the stream at arrival, the command must leave
+before arrival. It is a separate parameter from the distance and is never
+folded into it.
+
+**Sign convention:** negative `timing_offset_ms` fires **earlier**, positive
+fires **later**.
+
+Distances are measured from the camera's field-of-view centre, along the belt.
+A caller who has measured a pixel-to-centimetre scale may pass
+`position_offset_cm` per item; the prototype does not, because that scale is
+UNMEASURED.
+
+### Three things that are not the same
+
+| | |
+|---|---|
+| **Decision** | The evidence and policy justify bin A. |
+| **Routability** | The machine can currently put it there. |
+| **Actuation** | A paddle physically moved. |
+
+An unmeasured belt makes an item unroutable while leaving its decision exactly
+as it was. The scheduler **never** rewrites an A into a C to express "I could
+not schedule it": the record keeps `decision: A`, `target: A`,
+`status: UNSCHEDULED`, `reason_code: BELT_SPEED_UNMEASURED`.
+
+Nothing in `app/routing/` opens a serial port or moves a servo. A test asserts
+the package contains no serial vocabulary at all.
+
+### Bin C
+
+`decision = C` produces `status: NO_ACTION`, `servo: None`. There is no Servo
+C and none is invented. C needs no geometry, so it resolves even on a
+completely unmeasured machine — the fail-safe is the machine doing nothing,
+which is also what happens if this software crashes.
+
+### Failure modes
+
+| Reason code | When |
+|---|---|
+| `BELT_SPEED_UNMEASURED` | Speed is UNMEASURED, zero or negative |
+| `SERVO_GEOMETRY_UNMEASURED` | The distance this route needs is missing or negative |
+| `ACTUATION_DELAY_UNMEASURED` | The paddle delay was never timed |
+| `TIMING_EXPIRED` | The firing moment already passed. **Never fires late to catch up** — the item has gone, and a catch-up strikes whatever is behind it |
+| `TIMING_UNAVAILABLE` | The detection time is not a finite number |
+| `INVALID_POSITION` | A position offset is unusable, or puts the item past the servo |
+| `INVALID_DECISION` | The decision names no valid bin |
+| `ALREADY_ROUTED` | One physical item gets one physical routing action |
+| `STALE_ITEM` | The item lifecycle has never heard of this identity |
+
+### Demonstration mode
+
+The physical conveyor does not exist. `configs/conveyor.yaml` carries a
+`simulation:` block of **TEST** values, reachable *only* when
+`conveyor.runtime.simulation` is true. Every result computed from them is
+stamped `mode: SIMULATED`, and a test asserts the production geometry ships
+UNMEASURED so TEST distances cannot quietly become real ones.
+
+Belt speed is a **configured constant, an engineering approximation**. This
+machine has no encoder, so nothing here measures conveyor velocity.
+
 ## Decision policy
 
 | File | Role |
