@@ -6,5 +6,6 @@ one of its own.
 """
 
 from app.pipeline.item_pipeline import ItemPipeline
+from app.pipeline.session import DemoSession
 
-__all__ = ["ItemPipeline"]
+__all__ = ["DemoSession", "ItemPipeline"]

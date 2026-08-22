@@ -266,12 +266,17 @@ class TestStats:
         assert w["batches_with_weight"] == 0
         assert w["simulated_grams"] == 0.0
 
-    def test_bin_breakdown_is_empty_because_routing_does_not_exist(self, client):
-        """Guard against a bin field appearing before an actuator does."""
+    def test_bin_breakdown_is_empty_because_a_batch_carries_no_bin(self, client):
+        """Bins are per item, and these aggregates are per batch.
+
+        The demonstration session assigns a bin to an `AUR-ITEM-`, never to a
+        stored batch record, so a bin figure appearing here would be an
+        invention rather than an aggregate.
+        """
         _closed_batch(client, weight_mode="simulated")
         body = client.get("/stats").json()
         assert body["bin_breakdown"] == {}
-        assert "does not implement physical bin routing" in body["bin_breakdown_note"]
+        assert "a batch carries no bin assignment" in body["bin_breakdown_note"]
 
     def test_stats_exposes_no_valuation_or_recovery_figure(self, client):
         """A deliberate contract on /stats, reviewed and kept in Phase 2.
@@ -294,7 +299,12 @@ class TestStats:
 
 
 class TestCORS:
-    """Only the Vite dev origin may read this service, and only by reading."""
+    """Only the Vite dev origin may reach this service, and only by GET or POST.
+
+    POST was added when the dashboard began driving the demonstration session
+    (start the camera, connect the board, weigh the item). The origin list did
+    not widen, and no method beyond those two is allowed.
+    """
 
     def test_dev_origin_is_allowed(self, client):
         r = client.get("/stats", headers={"Origin": "http://localhost:5173"})
@@ -308,7 +318,7 @@ class TestCORS:
         r = client.get("/stats", headers={"Origin": "http://localhost:5173"})
         assert "access-control-allow-credentials" not in r.headers
 
-    def test_preflight_refuses_a_write_method(self, client):
+    def test_preflight_refuses_a_destructive_method(self, client):
         r = client.options(
             "/batches",
             headers={
@@ -317,7 +327,18 @@ class TestCORS:
             },
         )
         assert r.status_code == 400
-        assert r.headers.get("access-control-allow-methods") == "GET"
+        assert r.headers.get("access-control-allow-methods") == "GET, POST"
+
+    def test_preflight_allows_the_session_post(self, client):
+        r = client.options(
+            "/session/measure",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert r.status_code == 200
+        assert "POST" in r.headers.get("access-control-allow-methods", "")
 
 
 class TestMissingModel:

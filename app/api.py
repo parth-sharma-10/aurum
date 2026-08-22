@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import json
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -21,14 +22,14 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 from app import ledger, pricing
 from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.decision import engine as decision_engine
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
-from app.pipeline import ItemPipeline
+from app.pipeline import DemoSession, ItemPipeline
 from app.routing import RoutingScheduler
 from app.valuation import prices as prices_module
 from app.valuation import valuation as valuation_module
@@ -61,7 +62,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET"],
+    # POST is allowed because the demonstration dashboard drives the session:
+    # start the camera, connect the board, weigh the item on the pan. Still
+    # only that one origin, and still no credentials.
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -69,6 +73,19 @@ _detector: AurumDetector | None = None
 _sessions: dict[str, BatchSession] = {}
 _pipeline: ItemPipeline | None = None
 _routing: RoutingScheduler | None = None
+_demo: DemoSession | None = None
+
+
+def demo_session() -> DemoSession:
+    """The demonstration session for this process.
+
+    One per process, because item identity is only meaningful within a run and
+    there is only one camera and one board to go round.
+    """
+    global _demo
+    if _demo is None:
+        _demo = DemoSession(detector=detector())
+    return _demo
 
 
 def _scheduler() -> RoutingScheduler:
@@ -188,6 +205,107 @@ def routing_status() -> dict:
     return _scheduler().snapshot(now=_time.monotonic())
 
 
+# ---------------------------------------------------------------------------
+# The demonstration session.
+#
+#   camera -> item identity -> [operator moves it] -> load cell -> PMDI ->
+#   A/B/C -> Servo A / Servo B / nothing
+#
+# There is no conveyor, so there is no scheduling here: the decision is taken
+# and the paddle moves. The operator carries the component between stages and
+# says when; the operator never says which bin.
+# ---------------------------------------------------------------------------
+
+
+@app.post("/session/start")
+def session_start(mode: str = "webcam", path: str | None = None) -> dict:
+    """Open the camera and begin detecting and tracking in the background."""
+    return demo_session().start_camera(mode=mode, path=path)
+
+
+@app.post("/session/board/connect")
+def session_board_connect() -> dict:
+    """Open the single serial link the HX711 and both servos share."""
+    return demo_session().connect_board()
+
+
+@app.get("/session")
+def session_state() -> dict:
+    """Everything the dashboard renders: items, evidence, decisions, hardware."""
+    return demo_session().snapshot()
+
+
+@app.post("/session/measure")
+def session_measure(item_id: str | None = None) -> dict:
+    """Weigh the item on the pan, grade it, and move the paddle it earns.
+
+    Defaults to the confirmed item most recently seen, which is the one the
+    operator just carried over. The class comes from the model, the mass from
+    the cell and the bin from the decision engine: no route can be requested
+    through this endpoint.
+    """
+    return demo_session().measure_and_route(item_id)
+
+
+@app.post("/session/stop")
+def session_stop() -> dict:
+    """Release the camera and the serial port."""
+    demo_session().stop()
+    return {"running": False}
+
+
+@app.get("/session/frame")
+def session_frame() -> Response:
+    """The most recent annotated frame, as a JPEG."""
+    frame = demo_session().latest_jpeg()
+    if frame is None:
+        raise HTTPException(503, "No frame yet. Start the session with POST /session/start.")
+    return Response(frame, media_type="image/jpeg")
+
+
+@app.get("/session/stream")
+def session_stream() -> StreamingResponse:
+    """The annotated camera feed as multipart MJPEG, for an <img> tag."""
+
+    def frames():
+        while True:
+            frame = demo_session().latest_jpeg()
+            if frame is not None:
+                yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+            time.sleep(0.05)
+
+    return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/arduino")
+def arduino_status() -> dict:
+    """The link to the board, and every command this run has issued.
+
+    `ACKED` means the board received a well-formed frame and reports it acted.
+    It is not evidence that a servo physically moved.
+    """
+    session = demo_session()
+    return {
+        "board": session.link.snapshot() if session.link else {"connected": False},
+        "actuation": (
+            session.controller.snapshot()
+            if session.controller
+            else {
+                "connected": False,
+                "actuation_enabled": False,
+                "reason": "No board is connected. POST /session/board/connect.",
+            }
+        ),
+        "wiring": {
+            "servo_a_pin": "D9",
+            "servo_b_pin": "D10",
+            "hx711_dout": "D2",
+            "hx711_sck": "D3",
+            "bin_c": "no servo - reached by this system doing nothing",
+        },
+    }
+
+
 @app.post("/track")
 async def track(file: UploadFile = File(...)) -> dict:
     """One frame of a tracking run: detections folded into item lifecycles.
@@ -287,9 +405,10 @@ def stats() -> dict:
         **agg,
         "bin_breakdown": {},
         "bin_breakdown_note": (
-            "Aurum does not implement physical bin routing or servo actuation. No "
-            "stored record carries a bin assignment, so this is empty by fact, not "
-            "by omission."
+            "Empty by fact, not by omission: these aggregates are over the stored "
+            "batch ledger, and a batch carries no bin assignment. Per-item bins and "
+            "servo actuation live in the demonstration session (GET /session), which "
+            "is held in memory for the length of a run and is not written here."
         ),
     }
 

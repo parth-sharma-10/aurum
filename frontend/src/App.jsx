@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
 const API = import.meta.env.VITE_AURUM_API ?? "http://127.0.0.1:8000";
-const POLL_MS = 5000;
+
+// The chain is meant to be watched, so it is polled fast enough that a judge
+// sees the mass and the bin land rather than a table that refreshes later.
+const POLL_MS = 400;
 
 const CLASS_COLOR = {
   PCB: "var(--cls-pcb)",
@@ -10,159 +13,270 @@ const CLASS_COLOR = {
   Connector: "var(--cls-connector)",
 };
 
-const kg = (grams) => (grams / 1000).toFixed(3);
-const pct = (conf) => (conf ? `${(conf * 100).toFixed(1)}%` : "--");
-const clock = (iso) => (iso ? iso.replace("T", " ").replace("+00:00", "Z") : "--");
+const BIN_CLASS = { A: "badge-a", B: "badge-b", C: "badge-c" };
 
-async function getJSON(path) {
-  const res = await fetch(`${API}${path}`);
+const pct = (c) => (c == null ? "--" : `${(c * 100).toFixed(1)}%`);
+const grams = (g) => (g == null ? "--" : `${g.toFixed(1)} g`);
+const num = (v, digits = 4) => (v == null ? "--" : Number(v).toFixed(digits));
+
+async function call(path, method = "GET") {
+  const res = await fetch(`${API}${path}`, { method });
   if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}`);
   return res.json();
 }
 
-/** Weight is either simulated or measured, and the two never merge into one figure. */
-function WeightBadge({ weight }) {
-  if (!weight) return <span className="badge-c">NO READING</span>;
-  return weight.simulated ? (
-    <span className="badge-c">SIMULATED</span>
-  ) : (
-    <span className="badge-b">
-      <span className="dot" />
-      MEASURED
+/** A status pill that never reads green unless the thing is actually true. */
+function Pill({ ok, label, detail }) {
+  return (
+    <span className={ok ? "badge-b" : "badge-c"} title={detail ?? ""}>
+      {ok && <span className="dot" />}
+      {label}
     </span>
   );
 }
 
-/** Where the ledger's mass came from.
- *
- * Absence is not evidence of measurement: with no data, or with a ledger that
- * holds no reading at all, this says so rather than falling through to the
- * green MEASURED badge.
- */
-function MassProvenance({ weight }) {
-  if (!weight) return <span className="chips">no data</span>;
-  if (weight.simulated_grams > 0) {
-    return <span className="badge-c">{kg(weight.simulated_grams)} kg SIMULATED</span>;
-  }
-  if (weight.measured_grams > 0) {
-    return (
-      <span className="badge-b">
-        <span className="dot" />
-        MEASURED
-      </span>
-    );
-  }
-  return <span className="chips">no mass recorded</span>;
-}
-
-/* An estimate and a refusal are different states and must not read alike. The
-   estimate always carries its evidence ids, so a reader can trace any figure
-   back to the paper it came from via docs/material-reference.md. */
-function MaterialEstimate({ estimate }) {
-  if (!estimate?.available) {
-    return (
-      <div className="notice neutral">
-        Material estimate: <strong>unavailable</strong>. {estimate?.reason}
-      </div>
-    );
-  }
-  const metals = Object.entries(estimate.material_estimate ?? {});
+/** One row of the chain. `state` drives the colour, never the value's presence. */
+function Stage({ n, title, value, note, state = "neutral" }) {
   return (
-    <div className="notice">
-      <strong>ESTIMATE — not an assay.</strong> Reference composition for the
-      detected classes, confidence <strong>{estimate.confidence}</strong>.
-      <ul>
-        {metals.map(([metal, agg]) => (
-          <li key={metal}>
-            {metal}: <strong>{agg.typical_g} g</strong> typical
-            {agg.max_g != null ? ` (up to ${agg.max_g} g)` : ""} — evidence{" "}
-            {agg.evidence.join(", ")}
-          </li>
-        ))}
-      </ul>
-      Recovery: <strong>unavailable</strong>. {estimate.recovery?.reason}
+    <div className={`stage stage-${state}`}>
+      <div className="stage-n">{n}</div>
+      <div className="stage-body">
+        <div className="stage-title">{title}</div>
+        <div className="stage-value">{value}</div>
+        {note && <div className="stage-note">{note}</div>}
+      </div>
     </div>
   );
 }
 
-function BatchModal({ record, onClose }) {
-  const w = record.weight;
-  const fields = [
-    ["Batch", record.batch_id],
-    ["Model", record.model_version],
-    ["Source", record.source],
-    ["Started", clock(record.started_at)],
-    ["Closed", clock(record.timestamp)],
-    ["Frames observed", record.frames_observed],
-    ["Objects", record.total_objects],
-    ["Mean confidence", pct(record.average_confidence)],
+/**
+ * The mass, with the one distinction the whole estimate rests on.
+ *
+ * MEASURED means a settled reading on a calibration verified against a second
+ * known mass. STABLE means it settled on a factor nobody checked, and it is
+ * shown differently because a concentration estimate refuses it.
+ */
+function massState(status) {
+  if (status === "MEASURED") return "good";
+  if (status === "STABLE" || status === "UNSTABLE") return "warn";
+  return "bad";
+}
+
+function metalRows(pmdi) {
+  if (!pmdi?.available) return [];
+  return [
+    ...Object.entries(pmdi.precious_metals ?? {}).map(([m, a]) => [m, a, "precious"]),
+    ...Object.entries(pmdi.base_metals ?? {}).map(([m, a]) => [m, a, "base"]),
+    ...Object.entries(pmdi.other_metals ?? {}).map(([m, a]) => [m, a, "other"]),
   ];
+}
+
+/** The chain for one item, stage by stage, in the order a judge watches it. */
+function ItemChain({ item }) {
+  if (!item) {
+    return (
+      <div className="notice neutral">
+        No confirmed item. Hold a component in front of the camera until it is
+        <strong> CONFIRMED</strong> — an object seen once is not yet something to weigh.
+      </div>
+    );
+  }
+
+  const v = item.valuation;
+  const pmdi = v?.pmdi;
+  const d = item.decision;
+  const act = item.actuation;
+  const metals = metalRows(pmdi);
+
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="glass-panel modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <div>
-            <h2 className="section-title">Batch record</h2>
-            <p className="section-note">{record.counting_method}</p>
-          </div>
-          <button className="close" onClick={onClose} aria-label="Close">
-            ×
-          </button>
+    <>
+      <div className="item-head">
+        <div>
+          <div className="field-label">Item</div>
+          <div className="item-id">{item.item_id}</div>
         </div>
-
-        <div className="field-grid">
-          {fields.map(([label, value]) => (
-            <div key={label}>
-              <div className="field-label">{label}</div>
-              <div className="field-value">{value ?? "--"}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="chips" style={{ marginBottom: 18 }}>
-          {Object.entries(record.detections ?? {}).map(([cls, n]) => (
-            <span key={cls} className="chip" style={{ "--swatch": CLASS_COLOR[cls] }}>
-              {cls} {n}
-            </span>
-          ))}
-        </div>
-
-        {w && (
-          <div className={w.simulated ? "notice" : "notice neutral"}>
-            <strong>{kg(w.grams)} kg</strong> — {w.source}.{" "}
-            {w.warning ?? "Physical reading from the load cell."}
+        {d && (
+          <div className="bin-block">
+            <div className="field-label">Destination</div>
+            <span className={`${BIN_CLASS[d.decision]} bin-big`}>BIN {d.decision}</span>
           </div>
         )}
-
-        <MaterialEstimate estimate={record.recovery_estimate} />
-
-        <pre className="record">{JSON.stringify(record, null, 2)}</pre>
       </div>
-    </div>
+
+      <Stage
+        n="1"
+        title="Vision"
+        value={
+          <>
+            <span className="chip" style={{ "--swatch": CLASS_COLOR[item.class_name] }}>
+              {item.class_name ?? "unknown"}
+            </span>
+            <span className="mono"> {pct(item.confidence)}</span>
+          </>
+        }
+        note={`${item.detection_count} observations · confidence is the mean over all of them`}
+        state={item.class_name ? "good" : "bad"}
+      />
+
+      <Stage
+        n="2"
+        title="Mass — HX711"
+        value={
+          <>
+            <span className="mono big">{grams(item.weight_g)}</span>{" "}
+            <span className={massState(item.weight_status) === "good" ? "badge-b" : "badge-c"}>
+              {item.weight_status ?? "NOT WEIGHED"}
+            </span>
+          </>
+        }
+        note={item.weight_reading?.reason}
+        state={massState(item.weight_status)}
+      />
+
+      <Stage
+        n="3"
+        title="Material evidence"
+        value={
+          pmdi?.available ? (
+            <span className="mono">{pmdi.evidence_sources.join(", ")}</span>
+          ) : (
+            <span className="muted">unavailable</span>
+          )
+        }
+        note={
+          pmdi?.available
+            ? `cited composition, confidence ${pmdi.confidence ?? "--"} — contained, not recoverable`
+            : pmdi?.reason
+        }
+        state={pmdi?.available ? "good" : "bad"}
+      />
+
+      {metals.length > 0 && (
+        <table className="metals">
+          <thead>
+            <tr>
+              <th>Metal</th>
+              <th>Contained</th>
+              <th>Basis</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {metals.map(([metal, amount, kind]) => (
+              <tr key={metal} className={kind === "precious" ? "precious" : ""}>
+                <td className="mono">{metal}</td>
+                <td className="mono">{num(amount.grams, 6)} g</td>
+                <td className="muted small">{amount.calculation}</td>
+                <td className="mono small">{amount.evidence.join(", ")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <Stage
+        n="4"
+        title="PMDI"
+        value={
+          pmdi?.available ? (
+            <>
+              <span className="mono big">{num(pmdi.precious_mass_fraction_ppm, 1)}</span>
+              <span className="muted"> ppm precious</span>
+              <span className="mono">
+                {" "}
+                · {num(pmdi.precious_mass_g, 6)} g of {num(pmdi.mass_g, 1)} g
+              </span>
+            </>
+          ) : (
+            <span className="muted">unavailable</span>
+          )
+        }
+        note="PMDI = (sum(C_type x Y_estimated)) x P_spot — the ppm figure needs no price"
+        state={pmdi?.available ? "good" : "bad"}
+      />
+
+      <Stage
+        n="5"
+        title="Estimated value"
+        value={
+          pmdi?.pmdi_value != null ? (
+            <span className="mono big">
+              {num(pmdi.pmdi_value, 2)} {pmdi.currency}
+            </span>
+          ) : (
+            <span className="badge-c">NO PRICE SOURCE</span>
+          )
+        }
+        note={pmdi?.reason ?? "Aurum ships no market data feed; a price with no source is worse than none."}
+        state={pmdi?.pmdi_value != null ? "good" : "warn"}
+      />
+
+      <Stage
+        n="6"
+        title="Decision"
+        value={
+          d ? (
+            <>
+              <span className={BIN_CLASS[d.decision]}>BIN {d.decision}</span>
+              <span className="mono"> {d.reason_code}</span>
+            </>
+          ) : (
+            <span className="muted">not yet graded</span>
+          )
+        }
+        note={d?.reason}
+        state={d ? "good" : "neutral"}
+      />
+
+      <Stage
+        n="7"
+        title="Actuator"
+        value={
+          act ? (
+            act.commanded ? (
+              <>
+                <span className="mono big">{act.servo}</span>{" "}
+                <span className={act.state === "ACKED" ? "badge-b" : "badge-c"}>{act.state}</span>
+              </>
+            ) : (
+              <span className="badge-c">NO SERVO</span>
+            )
+          ) : (
+            <span className="muted">no command</span>
+          )
+        }
+        note={act?.reason}
+        state={act?.state === "ACKED" ? "good" : act?.commanded ? "bad" : "neutral"}
+      />
+
+      {act?.state === "ACKED" && (
+        <div className="notice neutral">
+          <strong>ACKED</strong> means the board reports it completed the stroke. It is not
+          evidence that the servo physically moved — watch the paddle, not this badge.
+        </div>
+      )}
+    </>
   );
 }
 
 export default function App() {
-  const [stats, setStats] = useState(null);
-  const [batches, setBatches] = useState([]);
+  const [state, setState] = useState(null);
   const [health, setHealth] = useState(null);
   const [error, setError] = useState(null);
-  const [selected, setSelected] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const [lastResult, setLastResult] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [h, s, b] = await Promise.all([
-        getJSON("/health"),
-        getJSON("/stats"),
-        getJSON("/batches?limit=50"),
-      ]);
-      setHealth(h);
-      setStats(s);
-      setBatches(b.batches);
+      setState(await call("/session"));
       setError(null);
-    } catch (err) {
-      setError(`${err.message}. Is the API running at ${API}?`);
+    } catch (e) {
+      setError(e.message);
     }
+  }, []);
+
+  useEffect(() => {
+    call("/health").then(setHealth).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -171,111 +285,152 @@ export default function App() {
     return () => clearInterval(id);
   }, [load]);
 
-  const weight = stats?.total_weight;
+  const act = async (label, path) => {
+    setBusy(label);
+    try {
+      const out = await call(path, "POST");
+      setLastResult(out);
+      setError(out.error ? `${out.error}: ${out.reason}` : null);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const running = state?.running;
+  const board = state?.board ?? {};
+  const actuation = state?.actuation ?? {};
+  const cal = state?.calibration ?? {};
+  const processed = (state?.items ?? []).filter((i) => i.decision);
 
   return (
     <div className="shell">
       <header className="glass-panel masthead">
         <div>
           <h1 className="wordmark">AURUM</h1>
-          <p className="tagline">E-waste component identification · batch ledger</p>
+          <p className="tagline">Identification · Measurement · Recovery routing</p>
         </div>
-        {error ? (
-          <span className="badge-c">API UNREACHABLE</span>
-        ) : (
-          <span className="badge-b">
-            <span className="dot" />
-            {health?.status === "ok" ? health.model_version : "MODEL MISSING"}
-          </span>
-        )}
+        <div className="pills">
+          <Pill ok={running} label={running ? "CAMERA LIVE" : "CAMERA OFF"} detail={state?.camera?.error} />
+          <Pill ok={board.connected} label={board.connected ? "BOARD LINKED" : "NO BOARD"} detail={board.last_error} />
+          <Pill
+            ok={cal.verified}
+            label={cal.verified ? "CALIBRATED" : "NOT CALIBRATED"}
+            detail="MEASURED needs a factor verified against a second known mass"
+          />
+          <Pill
+            ok={actuation.actuation_enabled}
+            label={actuation.actuation_enabled ? "ACTUATION ON" : "ACTUATION OFF"}
+          />
+        </div>
       </header>
 
-      {error && <div className="glass-panel banner">{error}</div>}
+      <div className="glass-panel controls">
+        <button disabled={busy} onClick={() => act("camera", "/session/start")}>
+          {busy === "camera" ? "Starting…" : "Start camera"}
+        </button>
+        <button disabled={busy} onClick={() => act("board", "/session/board/connect")}>
+          {busy === "board" ? "Connecting…" : "Connect board"}
+        </button>
+        <button className="primary" disabled={busy} onClick={() => act("measure", "/session/measure")}>
+          {busy === "measure" ? "Measuring…" : "Measure & route"}
+        </button>
+        <button disabled={busy} onClick={() => act("stop", "/session/stop")}>
+          Stop
+        </button>
+        <span className="controls-note">
+          The operator carries the component between stages and says <em>when</em>. The class comes
+          from the model, the mass from the cell, the bin from the decision engine.
+        </span>
+      </div>
 
-      <div className="metric-row">
-        <div className="glass-panel metric">
-          <div className="metric-label">Components counted</div>
-          <div className="metric-value">{stats?.total_count ?? "--"}</div>
-          <div className="metric-foot chips">
-            {Object.entries(stats?.component_breakdown ?? {}).map(([cls, n]) => (
-              <span key={cls} className="chip" style={{ "--swatch": CLASS_COLOR[cls] }}>
-                {cls} {n}
-              </span>
-            ))}
-          </div>
-        </div>
+      {error && <div className="notice bad">{error}</div>}
+      {state?.camera?.error && <div className="notice bad">Camera: {state.camera.error}</div>}
 
-        <div className="glass-panel metric">
-          <div className="metric-label">Mass on the ledger</div>
-          <div className="metric-value">
-            {weight ? kg(weight.measured_grams + weight.simulated_grams) : "--"}
-            <span className="metric-unit">kg</span>
-          </div>
-          <div className="metric-foot">
-            <MassProvenance weight={weight} />
-          </div>
-        </div>
+      <div className="split">
+        <section className="glass-panel feed">
+          <h2 className="section-title">Camera</h2>
+          <p className="section-note">
+            {state?.camera?.source ?? "not started"} · {state?.frames_processed ?? 0} frames
+          </p>
+          {running ? (
+            <img className="stream" src={`${API}/session/stream`} alt="Live detection feed" />
+          ) : (
+            <div className="stream placeholder">Camera not started</div>
+          )}
+          <p className="section-note">
+            No conveyor exists. {state?.conveyor?.note}
+          </p>
+        </section>
 
-        <div className="glass-panel metric">
-          <div className="metric-label">Batches recorded</div>
-          <div className="metric-value">{stats?.batch_count ?? "--"}</div>
-          <div className="metric-foot chips">
-            {weight ? `${weight.batches_with_weight} carry a mass reading` : ""}
-          </div>
-        </div>
-
-        <div className="glass-panel metric">
-          <div className="metric-label">Classes detected</div>
-          <div className="metric-value">{health?.classes?.length ?? "--"}</div>
-          <div className="metric-foot chips">{health?.classes?.join(" · ")}</div>
-        </div>
+        <section className="glass-panel chain">
+          <h2 className="section-title">Current item</h2>
+          <p className="section-note">
+            Model {health?.model_version ?? "--"} · {state?.confirmed_count ?? 0} confirmed in view
+          </p>
+          <ItemChain item={lastResult?.item_id ? lastResult : state?.current_item} />
+        </section>
       </div>
 
       <section className="glass-panel">
-        <div className="section-head">
-          <h2 className="section-title">Ledger</h2>
-          <span className="section-note">
-            {batches.length} closed {batches.length === 1 ? "batch" : "batches"} · select a row for
-            the full record
-          </span>
-        </div>
-        <div className="table-scroll">
-          <table className="ledger-table">
-            <thead>
-              <tr>
-                <th>Batch</th>
-                <th>Closed</th>
-                <th className="num">Objects</th>
-                <th className="num">Mean conf.</th>
-                <th className="num">Mass</th>
-                <th>Mass source</th>
+        <h2 className="section-title">Routed this run</h2>
+        <p className="section-note">
+          One physical item, one identity, one movement. {processed.length} processed.
+        </p>
+        <table className="ledger">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Class</th>
+              <th>Conf.</th>
+              <th>Mass</th>
+              <th>ppm</th>
+              <th>Bin</th>
+              <th>Servo</th>
+              <th>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            {processed.map((i) => (
+              <tr key={i.item_id}>
+                <td className="mono small">{i.item_id}</td>
+                <td>
+                  <span className="chip" style={{ "--swatch": CLASS_COLOR[i.class_name] }}>
+                    {i.class_name}
+                  </span>
+                </td>
+                <td className="mono">{pct(i.confidence)}</td>
+                <td className="mono">
+                  {grams(i.weight_g)}{" "}
+                  <span className="muted small">{i.weight_status}</span>
+                </td>
+                <td className="mono">
+                  {num(i.valuation?.pmdi?.precious_mass_fraction_ppm, 1)}
+                </td>
+                <td>
+                  <span className={BIN_CLASS[i.decision.decision]}>{i.decision.decision}</span>
+                </td>
+                <td className="mono small">{i.actuation?.servo ?? "—"}</td>
+                <td className="muted small">{i.decision.reason_code}</td>
               </tr>
-            </thead>
-            <tbody>
-              {batches.map((b) => (
-                <tr key={b.batch_id} tabIndex={0} onClick={() => setSelected(b)}>
-                  <td style={{ color: "var(--gold)" }}>{b.batch_id}</td>
-                  <td>{clock(b.timestamp)}</td>
-                  <td className="num">{b.total_objects}</td>
-                  <td className="num">{pct(b.average_confidence)}</td>
-                  <td className="num">{b.weight ? `${kg(b.weight.grams)} kg` : "--"}</td>
-                  <td>
-                    <WeightBadge weight={b.weight} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {batches.length === 0 && !error && (
-            <div className="empty">
-              No closed batches yet. Run the demo, or POST frames to /batch/&#123;id&#125;/frame and
-              close the batch.
-            </div>
-          )}
-        </div>
+            ))}
+            {processed.length === 0 && (
+              <tr>
+                <td colSpan={8} className="muted">
+                  Nothing routed yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </section>
 
-      {selected && <BatchModal record={selected} onClose={() => setSelected(null)} />}
+      <footer className="foot">
+        Aurum identifies components and estimates contained metal from cited composition. It does
+        not assay anything. Mechanical conveying and singulation are the next hardware stage.
+      </footer>
     </div>
   );
 }

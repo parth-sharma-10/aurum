@@ -30,7 +30,7 @@ python-multipart==0.0.32   # required by FastAPI to accept file uploads
 matplotlib==3.11.1
 
 # --- optional --------------------------------------------------------------
-# pyserial>=3.5            # only for a real HX711 load cell over serial.
+pyserial>=3.5              # the HX711 and both servos, over one USB link.
 #                          # Without it the dashboard uses a clearly labelled
 #                          # SIMULATED sensor; app/weight.py raises a message
 #                          # telling you to install it if you ask for hx711.

@@ -192,9 +192,18 @@ SPEC: dict[str, tuple] = {
     # Actuation ships OFF. Nothing moves until someone turns this on with the
     # board connected and bench-verified.
     "conveyor.arduino.enabled": (_bool, False, "AURUM_ARDUINO_ENABLED"),
-    "conveyor.arduino.baudrate": (_int, 9600, "AURUM_ARDUINO_BAUDRATE"),
+    "conveyor.arduino.baudrate": (_int, 115200, "AURUM_ARDUINO_BAUDRATE"),
     "conveyor.arduino.timeout_s": (_non_negative, 1.0, "AURUM_ARDUINO_TIMEOUT_S"),
-    "conveyor.arduino.ack_timeout_ms": (_non_negative, 500.0, "AURUM_ARDUINO_ACK_TIMEOUT_MS"),
+    # The board acknowledges AFTER the paddle has finished its stroke, so this
+    # must exceed conveyor.servo.actuation_ms plus travel. 2 s against a 700 ms
+    # hold leaves room for a slower servo without waiting on a dead link.
+    "conveyor.arduino.ack_timeout_ms": (_non_negative, 2000.0, "AURUM_ARDUINO_ACK_TIMEOUT_MS"),
+    # Servo geometry. BENCH/TEST values from independent servo testing, not
+    # calibrated against a conveyor - there is no conveyor. The board reads
+    # these at boot via the CFG frame, so tuning them needs no reflash.
+    "conveyor.servo.rest_angle_deg": (_non_negative, 0.0, "AURUM_SERVO_REST_ANGLE_DEG"),
+    "conveyor.servo.push_angle_deg": (_non_negative, 90.0, "AURUM_SERVO_PUSH_ANGLE_DEG"),
+    "conveyor.servo.actuation_ms": (_non_negative, 700.0, "AURUM_SERVO_ACTUATION_MS"),
     # The demonstration profile. TEST values, used ONLY when
     # conveyor.runtime.simulation is true. See configs/conveyor.yaml.
     "conveyor.simulation.belt_speed_cm_s": (_non_negative, 20.0, "AURUM_SIM_BELT_SPEED_CM_S"),
