@@ -1,0 +1,77 @@
+# Aurum — the physical machine.
+#
+# Every value here is overridable by the AURUM_* environment variable named in
+# app/config.py's SPEC table. Environment beats this file; this file beats the
+# shipped defaults.
+#
+# UNMEASURED is a value, not a blank. It means nobody has put a tape measure or
+# a scale to this quantity yet. Consumers must call `Config.require()`, which
+# refuses to return it, so an unmeasured machine routes every item to Bin C
+# instead of guessing where an item is on the belt. Replace each one with a
+# number measured on the real rig.
+
+conveyor:
+  camera:
+    index: 0
+    # auto | CAP_DSHOW (Windows) | CAP_AVFOUNDATION (macOS) | CAP_MSMF | CAP_ANY
+    backend: auto
+    width: 1280
+    height: 720
+
+  detection:
+    # Matches the demo and API default the v0.1 model was characterised at.
+    # Source: reports/test_metrics.json (conf_threshold_for_examples).
+    confidence: 0.35
+    iou: 0.5
+
+  belt:
+    # MEASURE THIS. Time a marked item over a known distance, repeat 5 times,
+    # take the median. Timing error scales directly with speed: at 10 cm/s a
+    # 200 ms scheduling error is 2 cm; at 50 cm/s it is 10 cm.
+    speed_cm_s: UNMEASURED
+
+  geometry:
+    # MEASURE THESE, along the belt, from the camera's field-of-view centre.
+    camera_to_load_cell_cm: UNMEASURED
+    camera_to_servo_a_cm: UNMEASURED
+    camera_to_servo_b_cm: UNMEASURED
+
+  timing:
+    # Calibration knob. Positive fires later, negative fires earlier. Tune on
+    # the real machine once geometry and speed are measured; no model of a belt
+    # predicts its own latency correctly.
+    offset_ms: 0
+    # MEASURE THIS: command sent -> paddle physically in the stream.
+    servo_actuation_delay_ms: UNMEASURED
+
+  weight:
+    # ENGINEERING APPROXIMATION — not research-derived.
+    # A reading counts as stable when it stays within tolerance for the whole
+    # window. 500 ms / 0.5 g is a starting point for a settling HX711; both
+    # need tuning against the real load cell and the belt's vibration.
+    stability_window_ms: 500
+    stability_tolerance_g: 0.5
+    # Give up waiting for a stable reading after this long; the item then has
+    # no measured mass and routes to C.
+    timeout_s: 5.0
+    # MEASURE THIS: raw HX711 counts per gram, from a known reference mass.
+    calibration_factor: UNMEASURED
+    # Serial port of the board publishing load-cell readings. Null until wired.
+    hx711_port: null
+
+  arduino:
+    # Null until a board is attached. Windows looks like COM3, macOS like
+    # /dev/tty.usbmodem1101, Linux like /dev/ttyACM0. Never hardcode it.
+    port: null
+    baudrate: 9600
+    timeout_s: 1.0
+    # ENGINEERING APPROXIMATION — not research-derived.
+    # How long to wait for an ACK before treating a command as unacknowledged.
+    ack_timeout_ms: 500
+
+  runtime:
+    # true runs the whole pipeline with no hardware. Simulated values are
+    # labelled everywhere they appear and never enter production statistics.
+    simulation: false
+    host: 127.0.0.1
+    port: 8000

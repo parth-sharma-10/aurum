@@ -1,0 +1,79 @@
+# Aurum — A/B/C sorting policy.
+#
+# READ THIS FIRST.
+#
+# The thresholds in this file are CONFIGURABLE ENGINEERING APPROXIMATIONS for
+# the current prototype. They are NOT presented as universally validated
+# scientific cutoffs, and none of them comes from a cited source. The material
+# evidence in configs/material_reference.yaml is cited; these numbers are not.
+#
+# The distinction that matters:
+#
+#   PMDI              what the cited evidence implies economically
+#   grading policy    what the machine does about it
+#
+# These are not the same thing, and this file only governs the second. Nothing
+# here changes a measured or cited quantity.
+#
+# On class_aware, and why it exists:
+#
+# On the currently cited data a PCB outranks a CPU on every precious-metal
+# metric — roughly 2 200 ppm against roughly 110 ppm — because FIRSCHING2024
+# reports gold per CPU package and gives no silver or palladium, while the PCB
+# profile carries all three. That is a gap in the database, not a statement
+# about physics, and the evidence-driven ranking is left exactly as the
+# evidence says it is.
+#
+# The A/B bins are a processing policy rather than a ranking of precious-metal
+# mass, so `preferred_classes` lets a class be routed to the premium stream on
+# operational grounds. Listing CPU here is an ENGINEERING SORTING POLICY. It is
+# NOT a claim that a CPU contains more precious metal than a PCB. When cited
+# Ag/Pd figures for CPU packages are added, revisit this list.
+
+grading:
+  bin_a:
+    # ENGINEERING APPROXIMATION — no source.
+    # An order of magnitude above the generic waste-PCB gold figure, so "A"
+    # means notably enriched rather than merely non-zero.
+    minimum_precious_fraction_ppm: 1000
+
+    # ENGINEERING APPROXIMATION — no source.
+    # Well above the model's 0.35 operating threshold: firing a servo needs a
+    # stronger detection than merely drawing a box.
+    minimum_confidence: 0.75
+
+    # Currency per item. UNMEASURED until a real price provider is configured;
+    # while unmeasured, the price-independent fraction rule decides alone. No
+    # amount is invented here.
+    minimum_precious_value: UNMEASURED
+
+    # ENGINEERING SORTING POLICY — not a PMDI threshold, not research.
+    # Classes routed to the premium stream on operational grounds.
+    preferred_classes:
+      - CPU
+      - Connector
+
+  bin_b:
+    # ENGINEERING APPROXIMATION — no source.
+    # Above the analytical noise floor of the cited sources, so "B" means the
+    # evidence supports a real recoverable content.
+    minimum_precious_fraction_ppm: 100
+
+    # ENGINEERING APPROXIMATION — no source.
+    minimum_confidence: 0.60
+
+  # Where anything unjustified goes. C has no servo: an item reaching the end
+  # of the belt falls into it. C does not mean worthless; it means Aurum
+  # cannot justify routing the item into A or B.
+  fallback: C
+
+  policy:
+    # Allow bin_a.preferred_classes to apply. Set false for a purely
+    # evidence-driven ranking, in which case PCB outranks CPU as above.
+    class_aware: true
+
+    # What to do when no fresh metal price is available.
+    #   mass_fraction_only  decide on the price-independent fraction rule
+    #   route_to_c          refuse to grade without a price
+    # Never fabricate a price, and never silently reuse an ancient one.
+    price_unavailable_policy: mass_fraction_only
