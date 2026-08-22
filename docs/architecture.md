@@ -59,6 +59,27 @@ It is never presented as a measurement.
 | `app/valuation/valuation.py` | PMDI plus the separate base-metal signal, packaged for audit |
 | `app/config.py` | Every threshold and physical constant, `defaults -> YAML -> environment` |
 
+## Decision policy
+
+| File | Role |
+|---|---|
+| `app/decision/engine.py` | The A/B/C ladder, reason codes, and the explainable `Decision` record |
+| `configs/grading.yaml` | Thresholds and the class-aware policy |
+
+```
+material evidence -> PMDI / valuation -> DECISION POLICY -> A / B / C -> routing (Phase 6)
+```
+
+The three are separate on purpose. PMDI says what the evidence implies
+economically; the decision engine says what the machine does about it; routing
+translates a bin into a servo firing. Nothing in `app/decision/` changes a cited
+or measured quantity, and no class name or threshold appears in its logic --
+both come from configuration.
+
+**Bin C is the fail-safe and has no servo.** An item nobody routes reaches the
+end of the belt and falls into C, so every refusal is also the safe hardware
+state. See [pmdi.md](pmdi.md) for the ladder and the reason codes.
+
 Grading thresholds in `configs/grading.yaml` are **configurable engineering
 approximations** for the prototype, not validated scientific cutoffs. The
 `preferred_classes` mechanism is an engineering sorting policy and says so at

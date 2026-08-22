@@ -26,6 +26,7 @@ from fastapi.responses import Response
 from app import ledger, pricing
 from app.batch import BatchSession
 from app.dashboard import draw_detections
+from app.decision import engine as decision_engine
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
 from app.valuation import prices as prices_module
 from app.valuation import valuation as valuation_module
@@ -278,4 +279,12 @@ def batch_valuation(batch_id: str) -> dict:
         # adds the separate base-metal signal to it.
         "pmdi": result.pmdi.as_dict(),
         "item_valuation": result.as_dict(),
+        # The sorting policy's verdict on that evidence. A batch holding more
+        # than one class has no single component class, so it cannot be routed
+        # and the engine says so rather than picking one.
+        "decision": decision_engine.decide(
+            result.component_class,
+            record.get("average_confidence"),
+            result,
+        ).as_dict(),
     }

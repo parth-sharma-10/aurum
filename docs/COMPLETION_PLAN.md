@@ -215,7 +215,7 @@ price-independent path works. This does not block sorting.
 
 ---
 
-### Phase 3 — Approximate A/B/C decision engine
+### Phase 3 — Approximate A/B/C decision engine ✅ COMPLETE
 
 **Files:** `app/decision/__init__.py`, `app/decision/engine.py` (new),
 `configs/grading.yaml`, `tests/test_decision.py` (new).
@@ -238,14 +238,17 @@ path.
 
 **Dependencies:** Phases 1–2.
 
-**Known risks:** the PCB-outranks-CPU conflict documented above. Three options,
-to be decided explicitly rather than silently:
-1. **Accept the evidence-driven ordering** — PCB → A, CPU → B. Honest, and
-   contradicts the brief's stated intent.
-2. **Class-aware rules in `grading.yaml`** — labelled as an engineering
-   approximation, not as research. Matches the brief's intent; is a proxy.
-3. **Close the data gap** — find cited Ag and Pd figures for CPU packages.
-   Correct, and the slowest.
+**Resolved:** Option 2 was chosen and implemented. `class_aware` selects which
+gate Bin A uses — `preferred_classes` membership when true, the fraction and
+value thresholds when false. Both are configuration; neither edits the
+evidence. With the default policy CPU and Connector reach A while PCB reaches
+B; with `class_aware: false` the evidence-driven ordering returns and PCB
+reaches A. Both behaviours are tested, and the reason code on every decision
+says which gate fired.
+
+**Remaining risk:** the data gap itself. CPU evidence is gold only, so the
+class-aware policy is standing in for evidence that does not exist yet. It can
+be retired the day cited Ag/Pd figures for CPU packages are added.
 
 ---
 

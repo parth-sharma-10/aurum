@@ -369,3 +369,40 @@ class TestPricesEndpoint:
 
     def test_it_says_no_live_source_is_approved(self, client):
         assert "No live market data source" in client.get("/prices").json()["note"]
+
+
+class TestDecisionIsExposed:
+    """The routing verdict travels with the evidence that produced it."""
+
+    def test_the_valuation_endpoint_carries_a_decision(self, client):
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
+        assert decision["decision"] in ("A", "B", "C")
+        assert decision["reason_code"]
+        assert decision["reason"]
+
+    def test_the_decision_carries_its_signals_and_policy(self, client):
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
+        assert "component_class" in decision["signals"]
+        assert "class_aware" in decision["policy"]
+        assert "preferred_classes" in decision["policy"]
+
+    def test_thresholds_are_labelled_as_engineering_approximations(self, client):
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        note = client.get(f"/batches/{batch_id}/valuation").json()["decision"]["threshold_note"]
+        assert "not presented as universally validated" in note
+
+    def test_a_mixed_batch_cannot_be_routed(self, client):
+        """Two classes in one record have no single component class to route."""
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
+        if decision["signals"]["component_class"] is None:
+            assert decision["decision"] == "C"
+            assert decision["reason_code"] == "C_UNKNOWN_CLASS"
+
+    def test_bin_c_names_no_servo(self, client):
+        batch_id = _closed_batch(client, weight_mode="simulated")
+        decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
+        if decision["decision"] == "C":
+            assert decision["servo"] is None

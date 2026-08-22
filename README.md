@@ -810,8 +810,12 @@ Aurum
 │   ├── market prices                 no approved provider — PRICE_UNAVAILABLE
 │   └── estimated value               unavailable until a provider is configured
 │
-└── Decision Policy                   Phase 3 — not implemented
-    └── PMDI is an INPUT to A/B/C, never the same thing
+└── Decision Policy                   app/decision/
+    ├── PMDI is an INPUT to A/B/C, never the same thing
+    ├── 7-step ladder, never short-circuited by a strong signal
+    ├── 14 machine-readable reason codes
+    ├── thresholds from configs/grading.yaml, all approximations
+    └── Bin C has no servo — the fail-safe is the machine doing nothing
 ```
 
 ## What is and is not implemented
@@ -842,7 +846,9 @@ Aurum
 | PMDI monetary value | **unavailable** — no approved live price provider |
 | Price provider abstraction | **implemented** — `unavailable` (default) and `static`/TEST |
 | Base-metal signal, separate from PMDI | **implemented** |
-| A/B/C decision engine | **not implemented** — Phase 3 |
+| A/B/C decision engine (`app/decision/engine.py`) | **implemented** — auditable, fail-closed |
+| Grading thresholds | **implemented as engineering approximations**, configurable, not scientific cutoffs |
+| Physical routing / servo actuation | **not implemented** — Phases 6-7 |
 | Carbon figures | **not implemented** |
 | Object tracking across frames | **not implemented** |
 | Cyber-physical state machine | **not implemented** |

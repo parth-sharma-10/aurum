@@ -153,8 +153,80 @@ and the ranking is left exactly as the evidence says it is.
 
 Bin A therefore also consults `grading.bin_a.preferred_classes`, an
 **engineering sorting policy, not a scientific PMDI threshold**. Listing CPU
-there is not a claim that a CPU contains more precious metal than a PCB. Set
-`grading.policy.class_aware: false` for the purely evidence-driven behaviour.
+there is not a claim that a CPU contains more precious metal than a PCB.
+
+### What `class_aware` actually switches
+
+It selects which gate Bin A uses. Both gates are configuration; neither edits
+the evidence.
+
+| Mode | Bin A gate | CPU (110 ppm) | PCB (2 200 ppm) |
+|---|---|---|---|
+| `class_aware: true` (default) | membership of `preferred_classes` | **A** — `A_PREFERRED_CLASS` | **B** — `B_PRECIOUS_FRACTION` |
+| `class_aware: false` | fraction and value thresholds alone | **B** — `B_PRECIOUS_FRACTION` | **A** — `A_PRECIOUS_FRACTION` |
+
+The second row is the purely evidence-driven ordering, and it is one setting
+away at all times. The reason code on every decision says which gate fired.
+
+## The decision ladder
+
+Walked in order, never short-circuited. A strong signal does not excuse a
+failed safety check: a preferred class cannot rescue an unmeasured weight, and
+a high fraction cannot rescue a weak detection.
+
+```
+1. detection valid?          no -> C_UNKNOWN_CLASS / C_INVALID_DATA
+2. cited composition?        no -> C_UNSUPPORTED_MATERIAL / C_MISSING_EVIDENCE
+3. required measurement?     no -> C_UNMEASURED_WEIGHT
+4. data and price valid?     no -> C_MISSING_EVIDENCE / C_PRICE_UNAVAILABLE
+5. Bin A policy              yes -> A_PREFERRED_CLASS | A_PRECIOUS_FRACTION | A_PMDI_VALUE
+6. Bin B policy              yes -> B_PRECIOUS_FRACTION | B_BASE_METAL_VALUE | B_SUPPORTED_RECOVERABLE
+7. otherwise                     -> C_LOW_CONFIDENCE / C_BELOW_THRESHOLD
+```
+
+Step 3 is derived from the database, not from a hardcoded list: a class needs a
+measured mass when its default subtype's composition is cited as a
+concentration. Add per-piece evidence for a class and it stops needing one.
+
+### Reason codes
+
+| Code | Meaning |
+|---|---|
+| `A_PREFERRED_CLASS` | Configured premium class, confidence cleared. Engineering policy. |
+| `A_PRECIOUS_FRACTION` | Fraction met the premium ppm threshold. |
+| `A_PMDI_VALUE` | PMDI value met the premium value threshold. |
+| `B_PRECIOUS_FRACTION` | Fraction met the recoverable ppm threshold. |
+| `B_BASE_METAL_VALUE` | Cited base-metal content is worth recovering. |
+| `B_SUPPORTED_RECOVERABLE` | Per-piece evidence, no mass needed, no density formable. |
+| `C_UNKNOWN_CLASS` | No cited material profile for this class. |
+| `C_UNSUPPORTED_MATERIAL` | Class known, no cited composition. **RAM today.** |
+| `C_MISSING_EVIDENCE` | The material estimate is unavailable. |
+| `C_UNMEASURED_WEIGHT` | Concentration evidence without a measured mass. |
+| `C_LOW_CONFIDENCE` | Below the minimum for any routed bin. |
+| `C_PRICE_UNAVAILABLE` | `route_to_c` policy with no current price. |
+| `C_INVALID_DATA` | Confidence missing, non-numeric or outside 0..1. |
+| `C_BELOW_THRESHOLD` | Fraction below the recoverable threshold, no base-metal value. |
+
+### Fail-closed, by physical design
+
+Bin C has **no servo**. An item nobody routes reaches the end of the belt and
+falls into it, so C is reached by the machine *doing nothing*. Every refusal
+above is therefore also the safe hardware state, not just the safe software
+state.
+
+C does not mean worthless. It means Aurum cannot justify routing the item into
+A or B.
+
+### Price unavailable
+
+`grading.policy.price_unavailable_policy` decides, and both modes are tested:
+
+| Mode | Behaviour with no price |
+|---|---|
+| `mass_fraction_only` (default) | Decide on the price-independent fraction. **The conveyor keeps sorting.** |
+| `route_to_c` | Refuse to grade. Everything falls to C. |
+
+A stale price does not count as current for `route_to_c`.
 
 ## Limitations
 

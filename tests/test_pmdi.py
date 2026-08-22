@@ -353,3 +353,53 @@ class TestPrecisionAndLabelling:
     def test_the_formula_is_stated_in_the_output(self):
         record = pmdi_module.compute({"CPU": 1}, mass=MEASURED_CPU, now=NOW).as_dict()
         assert record["formula"] == "PMDI = (sum(C_type x Y_estimated)) x P_spot"
+
+
+class TestFractionDenominatorRegression:
+    """Pins down exactly what `precious_mass_fraction_ppm` divides by.
+
+    A live ledger record showed 2.56 ppm for one CPU while an audit example had
+    said 110 ppm. Both are right: the fraction divides by *the mass that was
+    weighed*, and those two cases weighed different things. The audit's 42.7 g
+    was an illustrative CPU mass; the ledger record carries 1840 g, the base
+    value of the SIMULATED load cell standing in for whatever sat on the scale.
+
+    These tests exist so that denominator can never drift silently.
+    """
+
+    CPU_AU_G = 0.00471  # CPU-AU-001: 4.71 mg per piece
+
+    def test_the_denominator_is_the_weighed_mass(self):
+        result = pmdi_module.compute({"CPU": 1}, mass={"grams": 42.7, "simulated": False})
+        assert result.precious_mass_g == self.CPU_AU_G
+        assert result.mass_g == 42.7
+        assert result.precious_mass_fraction_ppm == pytest.approx(self.CPU_AU_G / 42.7 * 1e6)
+        assert result.precious_mass_fraction_ppm == pytest.approx(110.3044, abs=1e-4)
+
+    def test_the_same_component_on_a_heavier_scale_reading_gives_a_smaller_fraction(self):
+        """1840 g is the simulated load cell's base, not a CPU's mass."""
+        result = pmdi_module.compute({"CPU": 1}, mass={"grams": 1840.0, "simulated": False})
+        assert result.precious_mass_g == self.CPU_AU_G
+        assert result.precious_mass_fraction_ppm == pytest.approx(2.5598, abs=1e-4)
+
+    def test_no_reference_mass_from_the_database_leaks_into_the_denominator(self):
+        """PCB-MASS-001 is 1800 g and RAM-MASS-001 is 7.804 g. Neither is a
+        denominator: only the weighed mass is."""
+        for grams in (10.0, 250.0, 1800.0):
+            result = pmdi_module.compute({"CPU": 1}, mass={"grams": grams, "simulated": False})
+            assert result.mass_g == grams
+            assert result.precious_mass_fraction_ppm == pytest.approx(self.CPU_AU_G / grams * 1e6)
+
+    def test_ppm_is_parts_per_million_by_mass(self):
+        """A gram of precious metal in a kilogram is 1000 ppm, by definition."""
+        result = pmdi_module.compute(
+            {"PCB": 1}, mass={"grams": 1000.0, "simulated": False}, prices=unpriced(), now=NOW
+        )
+        expected = result.precious_mass_g / 1000.0 * 1e6
+        assert result.precious_mass_fraction_ppm == pytest.approx(expected)
+        assert result.precious_mass_fraction_ppm == pytest.approx(2200.0)
+
+    def test_milligram_evidence_is_converted_to_grams_before_dividing(self):
+        """4.71 mg must not be divided as if it were 4.71 g."""
+        result = pmdi_module.compute({"CPU": 1}, mass={"grams": 4710.0, "simulated": False})
+        assert result.precious_mass_fraction_ppm == pytest.approx(1.0)
