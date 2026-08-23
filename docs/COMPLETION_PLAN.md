@@ -6,11 +6,58 @@
 
 | | |
 |---|---|
-| Branch | `feat/sih-demo-pipeline` |
-| Phase 7 | **COMPLETE in software.** Not physically validated |
-| Phases 8–9 | **COMPLETE for the demonstration's scope** |
-| Tests | **790 passing**, ruff check clean, ruff format clean, frontend builds |
-| Blocking | One bench session: flash, calibrate, watch a paddle move |
+| Branch | `feat/demo-mock-mass` |
+| Phases 0-9 | **COMPLETE** for the demonstration's scope |
+| Tests | **836 passing**, ruff clean, frontend builds |
+| Hardware | Board, both sketches, both servos: **PHYSICALLY VERIFIED** 2026-08-22 |
+| Blocking | **The load cell is mechanically bypassed.** Nothing else |
+
+### HARDWARE STATE — 2026-08-22 bench session
+
+Verified by running it, not by reading it:
+
+- Arduino Uno at `/dev/cu.usbmodem101`, both sketches flashed at 115200
+- `W,1,...,OK` frames streaming; HX711 converting, 64-157 count noise floor
+- `PING` -> `PONG` over the real serial port
+- **Servo A moved by Aurum's own command** (ACK in 709 ms), watched
+- **Servo B moved by Aurum's own command**, watched
+- Replayed command id -> `ACK ... DUP`, no second stroke
+- Bin C -> no bytes written to the board at all
+
+**NOT verified: the load cell under load.** 180 g moves it 2.2 counts against a
+64-count noise floor; 400 g moves it -10.5 counts, the wrong direction. The cell
+converts correctly and sees no strain. This is a MOUNTING fault - a bar cell
+must be a cantilever with one end fixed and the free end able to bend. No
+software change substitutes for it, and none was made.
+
+Until it is fixed `configs/calibration.yaml` stays UNMEASURED, so a PCB routes
+to Bin C on `C_UNMEASURED_WEIGHT`. That is the fail-closed design working.
+
+### THE ARDUINO IDE WILL STEAL THE PORT
+
+Close the Serial Monitor. It reopens itself whenever the board enumerates and
+holds the port exclusively - it caused two upload failures and one apparent
+"board vanished from USB". `pkill -f serial-monitor` releases it.
+
+Flash with `arduino-cli`, not the IDE:
+
+    arduino-cli compile --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
+    arduino-cli upload -p /dev/cu.usbmodem101 --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
+
+### THE MOCK-MASS FALLBACK
+
+`AURUM_DEMO_MOCK_MASS=true` gives an unweighable item a per-class stand-in
+(CPU 25 g / PCB 180 g / RAM 30 g / Connector 5 g) so the pipeline can be
+demonstrated. Ships OFF. Everything derived from it is stamped SIMULATED, the
+permission rides on the reading rather than on configuration, and it cannot
+conjure evidence - RAM still reaches C.
+
+### FIRST ACTION NEXT SESSION
+
+**Re-mount the load cell as a cantilever, then re-run the calibration.** A
+working mount shows ~65 000 counts under 180 g, visible immediately in the
+`tare` vs `loaded` lines. Then PCB -> B on a real measurement rather than a
+stand-in, and the demonstration needs no fallback at all.
 
 ### SCOPE CHANGE — the demonstration has no conveyor
 

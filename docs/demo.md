@@ -44,6 +44,17 @@ published assays, and the dashboard labels it as one.
 
 ## Before the demonstration
 
+### 0. Close the Arduino IDE Serial Monitor
+
+Do this first, and keep it closed. The IDE reopens it automatically whenever
+the board enumerates and then holds the port exclusively — it broke two uploads
+and looked exactly like the board dropping off USB.
+
+```bash
+lsof /dev/cu.usbmodem101      # anything listed owns the port, not you
+pkill -f serial-monitor       # release it
+```
+
 ### 1. Flash the board
 
 Two sketches exist, and the difference matters.
@@ -57,6 +68,13 @@ Calibrate on the weight-only sketch. A bug in the weight path then cannot
 swing a paddle while your hand is on the pan.
 
 Both run at **115200 baud**, matching `configs/conveyor.yaml`.
+
+```bash
+arduino-cli compile --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
+arduino-cli upload -p /dev/cu.usbmodem101 --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
+```
+
+`arduino-cli lib install Servo` once, if the sorter sketch will not compile.
 
 ### 2. Wiring check
 
@@ -99,6 +117,38 @@ hardware responds, not a calibration.
 If verification fails, check the tare, the mounting, and that both masses are
 what they claim to be before touching `--tolerance`.
 
+### 4. If the load cell will not calibrate — the mock-mass fallback
+
+As of 2026-08-22 the cell is **mechanically bypassed**: 180 g moves it 2.2
+counts against a 64-count noise floor, and 400 g moves it backwards. See
+`docs/hardware.md` for the measurements and the mounting fix.
+
+Fixing it is a bench job. When the demonstration is sooner than the bench job:
+
+```bash
+export AURUM_DEMO_MOCK_MASS=true
+```
+
+An item that cannot be weighed is then given a per-class stand-in mass —
+**CPU 25 g · PCB 180 g · RAM 30 g · Connector 5 g** — so the rest of the
+pipeline can be shown running. Per class, because a precious fraction is metal
+over *total* mass: one flat value made a CPU read 26 ppm where 188 is right.
+
+The number is fabricated and the system says so everywhere: the reading is
+`SIMULATED` and never `usable`, the PMDI and valuation carry
+`overall_status: SIMULATED`, and the console shows a `MOCK MASS` pill plus a
+banner listing the assumed masses.
+
+**Say it out loud during the demo.** The screen already admits it, and
+volunteering it is far stronger than being caught by a question:
+
+> "The load-cell mount is being rebuilt, so I'm using an assumed mass — you'll
+> see it flagged SIMULATED throughout. The class, the cited composition and the
+> routing decision are real. The mass is not."
+
+It ships **off**. Without the flag, a PCB routes to Bin C on
+`C_UNMEASURED_WEIGHT`, which is the correct fail-closed behaviour.
+
 ---
 
 ## Running it
@@ -108,8 +158,10 @@ Three terminals.
 ```bash
 # 1 — the backend
 cd aurum && source .venv/bin/activate
-export AURUM_ARDUINO_PORT=/dev/tty.usbmodem1101   # your port
+export AURUM_ARDUINO_PORT=/dev/cu.usbmodem101     # ls /dev/cu.usbmodem* to find yours
 export AURUM_ARDUINO_ENABLED=true                 # actuation ships OFF
+export AURUM_CAMERA_INDEX=0                       # 0 was the external webcam here
+export AURUM_DEMO_MOCK_MASS=true                  # ONLY while the load cell is broken
 uvicorn app.api:app --port 8000
 
 # 2 — the dashboard
@@ -123,15 +175,20 @@ Then, in the dashboard:
 | # | Action | What to expect |
 |---|---|---|
 | 1 | **Start camera** | Live feed appears; pills show `CAMERA LIVE` |
-| 2 | **Connect board** | `BOARD LINKED`, `CALIBRATED`, `ACTUATION ON` all green |
+| 2 | **Connect board** | `BOARD LINKED` and `ACTUATION ON` green. `NOT CALIBRATED` stays amber while the cell is broken |
 | 3 | Hold the component to the camera | Box appears labelled `AUR-ITEM-xxxxxxxx CPU 0.94` |
 | 4 | Wait for CONFIRMED | Three observations; "current item" fills in |
 | 5 | Place it on the load cell | — |
 | 6 | **Measure & route** | Mass lands on the same item id, then PMDI, bin, servo |
 | 7 | Watch the paddle | Servo A or Servo B strokes; Bin C moves nothing |
 
-All four pills must be green before step 6. A red pill is the system telling
-you something is genuinely not ready — it is not cosmetic.
+`CAMERA LIVE`, `BOARD LINKED` and `ACTUATION ON` must be green before step 6. A
+red or amber pill is the system telling you something is genuinely not ready —
+it is not cosmetic. `NOT CALIBRATED` and `MOCK MASS` are expected while the load
+cell is bypassed, and are exactly what you should be narrating.
+
+Stages after the camera read "not weighed yet" / "waiting" until you press
+**Measure & route**. That is pending, not failed.
 
 ---
 
@@ -142,13 +199,22 @@ Rehearse with all three so nothing is a surprise on camera.
 | Component | Bin | Why | Needs a verified calibration? |
 |---|---|---|---|
 | **CPU** | **A** → Servo A | Configured premium class; cited gold per package (`CPU-AU-001`) is per-piece, so it needs no mass | No |
-| **PCB** | **B** → Servo B | 2 200 ppm precious from cited composition, above the 100 ppm recoverable threshold | **Yes** — concentration data needs a measured mass |
+| **PCB** | **B** → Servo B | 2 200 ppm precious from cited composition, above the 100 ppm recoverable threshold | **Yes** — or a mock mass |
 | **RAM** | **C** → nothing | No cited composition exists for a whole RAM module. Routing it anywhere would be a guess | No |
 | **Connector** | **A** → Servo A | Configured premium class, cited gold per piece | No |
 
 **RAM going to C is the best thing in the demonstration.** It is not a
 failure — it is the system refusing to invent data it does not have, and
-saying exactly why: `C_UNSUPPORTED_MATERIAL`. Point at it deliberately.
+saying exactly why: `C_UNSUPPORTED_MATERIAL`. Point at it deliberately. Note
+that the mock-mass fallback does not rescue it: a stand-in mass changes the
+arithmetic, never the evidence.
+
+**RAM is also the hardest class to get on camera.** The model scores 0.51 recall
+on it — the worst of the four — so a module flickers in and out where a CPU
+holds steady at 0.95. Present it **flat-on and still**, on a plain background,
+and give it a couple of seconds to reach CONFIRMED. A confirmed item now
+survives a brief flicker, so it stays measurable once it has been seen enough
+times, but a module held edge-on may never be detected at all.
 
 Bin A for CPU is an **engineering sorting policy** (`configs/grading.yaml`),
 not a claim that a CPU holds more precious metal than a PCB. On the cited
