@@ -342,10 +342,10 @@ the file changes, because a median across unrelated photographs is meaningless.
 }
 ```
 
-`recovery_estimate` is `available: false` above because the batch contains a
-**RAM** module, and RAM has no cited composition figure — so the whole estimate
-refuses rather than reporting a total that quietly omits it. A batch of CPUs and
-connectors does produce a figure:
+`recovery_estimate` is `available: false` above because nothing in that batch
+could be valued. A batch mixing classes reports `PARTIAL_ESTIMATE` instead,
+naming what it did and did not cover. A batch of CPUs and connectors is
+`COMPLETE`:
 
 ```json
 {
@@ -590,19 +590,35 @@ multiplying the simulated load cell's invented mass by a real concentration woul
 produce an invented quantity that reads as measured. A mixed batch is refused
 too, because its total mass cannot be attributed to one class.
 
-### It fails closed
+### It fails closed, and it says how far it got
 
-A detected class with no cited figure blocks the **whole** estimate rather than
-contributing a silent zero, because a total that quietly omits a component still
-reads as a total. Since RAM has no data, any batch containing RAM returns:
+A detected class with no usable figure never contributes a silent zero, because
+a total that quietly omits a component still reads as a total. What the estimate
+reports instead is its own **completeness**:
+
+| | |
+|---|---|
+| `COMPLETE` | every detected class was valued from cited data |
+| `PARTIAL_ESTIMATE` | some were; `not_valued` names the rest, with the reason |
+| `INSUFFICIENT_EVIDENCE` | nothing could be valued; no numeric field appears at all |
+
+A partial estimate is not a degraded total — it is a total *of the components in
+`valued`*, and it says so in its own `reason`. A motherboard is the everyday
+case: its processor, connectors and memory modules are all cited per piece and
+are valued, while the board's own per-kilogram figure is refused, because the
+one measured mass covers every component sitting on it.
 
 ```json
-{ "available": false,
-  "reason": "Estimation is blocked because not every detected component has usable cited data. RAM has no cited composition data: …" }
+{ "available": true,
+  "completeness": "PARTIAL_ESTIMATE",
+  "valued": [{"component": "RAM", "count": 2, "metals": ["Ag","Au","Cu","Pd"]}, …],
+  "not_valued": [{"component": "PCB", "count": 1,
+                  "reason": "a concentration needs a mass that belongs to this class alone … the same physical grams valued twice"}],
+  "reason": "PARTIAL ESTIMATE. … The totals below cover the valued components ONLY and are not a total for the whole object." }
 ```
 
-No numeric field appears at all in a refusal — there is nothing a UI could
-mistake for a figure.
+On `INSUFFICIENT_EVIDENCE` no numeric field appears at all — there is nothing a
+UI could mistake for a figure.
 
 ### Composition is not recovery
 
@@ -768,23 +784,84 @@ Used by Aurum for:
 
 Evidence type:
 AAS on DRAM modules placed on the market 1991–2008 — the most directly relevant
-study found for whole RAM modules. It is nominally CC-BY, but every route to the
-full text was blocked while this database was built, so **its tables were never
-read and no number was taken from it**. Its abstract was verified and supports
-only qualitative claims: stable gold and silver over time, an 80 % fall in
-palladium across 1991–2008, and a 0.23 g/module/year rise in copper. This is why
-RAM has no composition figure, and why the estimate refuses on any batch
-containing RAM.
+study found for whole RAM modules, and **its tables have now been read**. The
+article is CC-BY; the working route is the Internet Archive's capture of the
+CORE deposit, recorded in `docs/sources/material_sources.yaml` because the
+obvious routes do not work — ScienceDirect returns 403 to non-browser clients
+and the Swansea repository times out.
 
-## Valuation — still disabled, and why
+Table 2's "DIMMs (4–15)" row — the row the authors themselves use for the
+valuation in their Table 4 — gives **Au 18.0 mg, Ag 28.4 mg, Pd 1.2 mg and
+Cu 3.4 g per module**, measured by AAS after comminution and acid digestion.
+Each average was recomputed from the twelve per-sample rows before being
+accepted. The three SIMM samples are excluded, as the authors exclude them: they
+are early-1990s modules and two of the three have tin rather than gold edge
+contacts.
 
-Valuation is the layer past recovery, and it remains off:
+**Platinum is a cited negative result, not a gap.** The authors looked for it and
+found none in any of the 15 modules, below 6 µg per module at their stated
+detection limit. It is recorded as a documented absence — never as a zero.
 
-`configs/price_reference.yaml` **ships empty and disabled**, so
-`/batches/{id}/valuation` returns an explicit refusal. Enabling it requires
-prices with a real source and timestamp. A spot price with no source and no
-timestamp is worse than no price: it gets screenshotted and outlives the
-conversation that qualified it.
+## Valuation — reference prices, never live ones
+
+`configs/price_reference.yaml` ships a **dated snapshot of real published
+prices**, so a valuation produces a figure in rupees. Every quote carries the
+status `REFERENCE`, which means exactly one thing: a real price, published on a
+stated date, being used deliberately after that date.
+
+| Metal | As published | Source | Date |
+|---|---|---|---|
+| Au | ₹160,620 / 10 g | IBJA 999 PM — the RBI/MoF benchmark | 2026-08-21 |
+| Ag | ₹246,630 / kg | IBJA 999 PM | 2026-08-21 |
+| Cu | ₹1,385.80 / kg | MCX near-month futures | 2026-08-21 |
+| Pd | $1,331.00 / ozt | Kitco spot bid, converted at ECB USD/INR 95.70 | 2026-08-23 |
+
+**No live feed ships, and the difference is never blurred.** `REFERENCE` is not
+`LIVE`, and it is not `STALE` either — age does not degrade a price that was
+published on a date and is being read as such, so only a live feed that goes
+quiet is ever called stale. No keyless market-data source exists to point a live
+provider at (LBMA's tabulated data is behind an ICE Benchmark Administration
+licence; the metals APIs all need keys), so `FallbackProvider` composes
+LIVE → REFERENCE for the day one is configured, and the pipeline cannot be taken
+down by a feed outage.
+
+Set `pricing.provider: unavailable` to run on grams and ppm alone, with no
+currency figure anywhere.
+
+**Two conversions are done explicitly, because both are easy to get wrong by a
+large factor.** A troy ounce is 31.1034768 g, never the avoirdupois 28.3495 g —
+a 9 % error that looks entirely plausible. And a price in one currency is
+converted through a cited, dated rate; a currency with no rate on file is an
+error, not an assumed parity of 1.
+
+### Contained is not recoverable
+
+Three quantities, kept apart:
+
+| | |
+|---|---|
+| **contained** | what the cited assays say is present. This is what Aurum reports. |
+| **recoverable** | contained × a recovery factor measured on *this* component. **Unavailable** — no cited factor qualifies. |
+| **scrap value** | what a recycler would pay. Not modelled, not guessed. |
+
+Charles et al. quote >95 % gold recovery at integrated refineries and ~70 % at
+pre-processing, but as secondary citations about WEEE in general rather than
+measurements on a module — and their own argument is that recovery depends
+almost entirely on the pre-processing route, which is the one thing a camera
+cannot observe. So `recoverable_value` is a refusal carrying that reason. Never
+a number, and never a zero.
+
+A worked example, the whole chain for one module:
+
+```
+RAM x 1     evidence RAM-AU-001 (Charles et al. 2017, per module)
+  Au   18.0 mg -> 0.0180 g  x  16,062.00 INR/g  =  INR 289.12
+  Ag   28.4 mg -> 0.0284 g  x     246.63 INR/g  =  INR   7.00
+  Pd    1.2 mg -> 0.0012 g  x   4,095.256 INR/g =  INR   4.91
+  Cu    3.4 g              x      1.3858 INR/g  =  INR   4.71
+                                CONTAINED VALUE  =  INR 305.75
+                              RECOVERABLE VALUE  =  NOT SUPPORTED BY EVIDENCE
+```
 
 Composition data and market prices are deliberately different layers — no metal
 price is hardcoded into the material database:
@@ -867,8 +944,10 @@ Aurum
 │   ├── precious mass fraction (ppm)  implemented — price-independent
 │   ├── base-metal signal             implemented, kept separate from PMDI
 │   ├── recovery estimate             refused — no applicable cited factor
-│   ├── market prices                 no approved provider — PRICE_UNAVAILABLE
-│   └── estimated value               unavailable until a provider is configured
+│   ├── market prices                 dated REFERENCE snapshot, never LIVE
+│   ├── currency + unit conversion    explicit: ozt -> g, USD -> INR
+│   ├── CONTAINED value               implemented — reported in INR
+│   └── RECOVERABLE value             refused — no component-specific factor
 │
 └── Decision Policy                   app/decision/
     ├── PMDI is an INPUT to A/B/C, never the same thing
@@ -889,7 +968,7 @@ is no conveyor, and the operator carries components between stages.
 |---|---|---|---|---|
 | 0 Checkpoint | COMPLETE | repo protected, research committed | n/a | n/a |
 | 1 Configuration | COMPLETE | `app/config.py`, 35 settings | n/a | software-tested |
-| 2 PMDI + pricing | COMPLETE | `app/valuation/` | n/a | software-tested; **no price provider** |
+| 2 PMDI + pricing | COMPLETE | `app/valuation/` | n/a | software-tested; **REFERENCE prices, no live feed** |
 | 3 A/B/C decision | COMPLETE | `app/decision/` | n/a | software-tested |
 | 4 Tracking | COMPLETE | `app/vision/`, `app/pipeline/` | camera | software-tested + real model |
 | 5 HX711 | COMPLETE (software) | `app/weight.py`, `app/calibrate.py` | HX711 responds | **calibration NOT verified** |
@@ -951,15 +1030,17 @@ Full detail: [docs/hardware.md](docs/hardware.md) ·
 | HX711 calibration factor | **UNMEASURED** — bench evidence exists, calibration does not |
 | Combined weight + servo sketch (`aurum_sorter`) | **implemented** — flashed and verified |
 | Servo actuation from a decision | **implemented — PHYSICALLY VERIFIED**, both paddles |
-| Material composition reference (22 cited records, 6 papers) | **implemented** |
+| Material composition reference (26 cited records, 6 papers) | **implemented** |
 | Material estimation — CPU, Connector | **implemented** — per-piece figures, no scale needed |
 | Material estimation — PCB | **implemented, conditional** — needs a *measured* batch mass |
-| Material estimation — RAM | **not implemented** — no cited composition data exists in the database |
-| Recovery estimation | **not implemented** — mechanism present, 3 cited factors on file, none applicable to a detection |
-| Valuation / pricing | **not implemented** — provider interface present, disabled, no price source |
+| Material estimation — RAM | **implemented** — Au/Ag/Pd/Cu per module, Charles et al. 2017, no scale needed |
+| Recovery estimation | **not implemented** — mechanism present, cited factors on file, none applicable to a detection |
+| Valuation / pricing | **implemented** — dated REFERENCE snapshot in INR; no live feed |
 | PMDI calculation (`app/valuation/pmdi.py`) | **implemented** — cited evidence, fails closed |
-| PMDI monetary value | **unavailable** — no approved live price provider |
-| Price provider abstraction | **implemented** — `unavailable` (default) and `static`/TEST |
+| PMDI monetary value | **implemented** — REFERENCE prices, explicitly never presented as live |
+| CONTAINED vs RECOVERABLE value | **implemented** — recoverable reports NOT_SUPPORTED, never zero |
+| Price provider abstraction | **implemented** — `reference` (default), `unavailable`, `static`/TEST, plus `FallbackProvider` |
+| Unit + currency conversion | **implemented** — troy ounce 31.1034768 g; FX through a cited dated rate |
 | Base-metal signal, separate from PMDI | **implemented** |
 | Object tracking across frames (`app/vision/tracker.py`) | **implemented** — ByteTrack, stable `AUR-ITEM-` identities |
 | Item lifecycle + duplicate prevention | **implemented** — one physical item finalizes exactly once |
@@ -1034,12 +1115,21 @@ figure.
   determine composition, purity or recoverable value. Detection is a *precursor*
   to valuation, not a substitute for assay. The material layer supplies a
   *literature reference estimate* for the class — never an assay of the object.
-- **RAM has no composition data.** One of the four detected classes carries no
-  cited figure at all, so any batch containing RAM returns no estimate. See
-  [docs/material-reference.md](docs/material-reference.md) §12.
-- **No recovery factor is applied anywhere.** The three cited factors on file were
+- **RAM's composition rests on one study of twelve modules, none later than
+  2008.** Charles et al. (2017) is the only whole-module characterisation found.
+  It contains no DDR4 or DDR5, so the DDR2–DDR5 subtypes stay empty and a
+  detection resolves to an unspecified module. Palladium in particular is likely
+  **overstated** for a modern module (it fell ~80 % across the sampled period)
+  and copper **understated** (+0.23 g/module/year). Every figure derived from it
+  is capped at `medium` confidence.
+- **No recovery factor is applied anywhere.** The cited factors on file were
   measured on a liberated, decopperized gold-finger feed, not on components as
-  detected. "Present" is not "recoverable".
+  detected. "Present" is not "recoverable", and `recoverable_value` says so
+  rather than returning a number.
+- **Prices are a dated snapshot, not a market feed.** Every figure is stamped
+  `REFERENCE` with its source and date. The palladium quote has the weakest
+  provenance of the four — a dealer spot bid rather than a benchmark print,
+  because LBMA data is licence-gated — and it is ~1.6 % of a module's value.
 - **Measured domain gap.** On 27 photographs from a different source the model
   detects something in 44% of images and finds **zero CPUs** despite CPU scoring
   0.965 mAP@50 on the held-out test set.

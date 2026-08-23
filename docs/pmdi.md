@@ -68,13 +68,31 @@ CPU-AU-001:  4.71 mg Au per piece   (Firsching et al. 2024, ICP-OES)
 1 piece   ->  4.71 mg  =  0.00471 g Au
 measured mass 42.7 g
 fraction  ->  0.00471 / 42.7 x 1e6  =  110.3 ppm precious
-pmdi_value -> UNAVAILABLE (no price provider configured)
+pmdi_value ->  0.00471 g x 16,062.00 INR/g  =  INR 75.65   (REFERENCE price)
 ```
+
+**Worked example — one RAM module**, the case where per-piece evidence needs no
+scale at all:
+
+```
+RAM-AU-001 .. RAM-CU-001  (Charles et al. 2017, Table 2, DIMMs 4-15, n=12, AAS)
+  Au   18.0 mg -> 0.0180 g  x  16,062.00 INR/g  =  INR 289.12
+  Ag   28.4 mg -> 0.0284 g  x     246.63 INR/g  =  INR   7.00
+  Pd    1.2 mg -> 0.0012 g  x   4,095.256 INR/g =  INR   4.91
+  Cu    3.4 g              x      1.3858 INR/g  =  INR   4.71
+                              CONTAINED VALUE    =  INR 305.75
+```
+
+No mass appears anywhere in that calculation. That is the whole reason the
+per-module basis was chosen: the detector counts modules, while the load cell
+weighs the entire object on the pan. A module on an 842 g motherboard is worth
+exactly what a loose module is worth, and **the board's mass is never treated as
+the memory's mass**.
 
 ## Evidence
 
 Every figure resolves to a cited record in `configs/material_reference.yaml`,
-whose `source` resolves to a paper in `docs/sources/material_sources.yaml`. 22
+whose `source` resolves to a paper in `docs/sources/material_sources.yaml`. 26
 records, 6 papers. Nothing enters a calculation without an evidence id, and the
 ids travel all the way to the API response.
 
@@ -88,7 +106,7 @@ The formula calls `Y_estimated` a *yield*. **Aurum does not have yields.**
 
 | | Meaning | In Aurum |
 |---|---|---|
-| Contained composition | How much metal is in the component | **What we have.** 22 cited records |
+| Contained composition | How much metal is in the component | **What we have.** 26 cited records |
 | Recovery yield | How much a process actually extracts | **Not applicable.** Refused |
 
 The distinction is not pedantic — a recovery figure is always smaller than a
@@ -100,22 +118,40 @@ this subsystem produces is labelled `basis: contained`.
 
 ## Pricing
 
-**No live provider is approved for this project.** `configs/pricing.yaml` ships
-`provider: unavailable`, which is a decision, not a placeholder.
+**No live market feed is configured**, because none is available without a
+licence or an API key. `configs/pricing.yaml` ships `provider: reference`: a
+dated snapshot of real published prices, labelled as such everywhere it appears.
 
 | Provider | Status it produces | Purpose |
 |---|---|---|
-| `unavailable` | `UNAVAILABLE` | **The default.** Prices nothing, names the setting that would change it |
-| `static` | `TEST` | Pinned prices from `configs/price_reference.yaml`, for testing the pipeline |
+| `reference` | `REFERENCE` | **The default.** A dated snapshot of published prices from `configs/price_reference.yaml` |
+| `unavailable` | `UNAVAILABLE` | Prices nothing, names the setting that would change it. Set this to run on grams and ppm alone |
+| `static` | `TEST` | Pinned fixture prices, for testing the pipeline |
 
-A `static` price is labelled **TEST** and is never reported as LIVE, SPOT, or a
-current market price, whatever the file says.
+`FallbackProvider(primary, fallback)` composes two of them, which is how a live
+feed is added later: LIVE first, REFERENCE when it cannot answer. Whichever
+provider actually answered is on the quote, so a fallback can never be mistaken
+for a live price.
+
+### Units and currency — the two 30x mistakes
+
+```
+price_per_unit / GRAMS_PER_UNIT[unit]   ->  currency per gram
+              x fx[currency].rate       ->  reporting currency per gram
+```
+
+A troy ounce is **31.1034768 g**. The avoirdupois ounce (28.3495 g) appears
+nowhere in this project and must never be used for metal — it is a 9 % error
+that produces an entirely plausible-looking number. A unit with no conversion
+factor raises rather than being guessed, and a currency with no rate on file is
+an error rather than an assumed parity of 1.
 
 ### Price status model
 
 | Status | Meaning |
 |---|---|
-| `LIVE` | From an approved market source. **No provider produces this today.** |
+| `LIVE` | From a live market feed. **No provider produces this today.** |
+| `REFERENCE` | A real published price, with a real date, used deliberately after it. **The default.** Never presented as current — and never degraded by age either, because a snapshot is not a feed that went quiet. |
 | `TEST` | Deterministic fixture data. Not a market quote. |
 | `SIMULATED` | Generated for a demo, labelled as such. |
 | `STALE` | Real but older than `pricing.max_age_seconds`. Carries its number; the caller decides. |
@@ -232,10 +268,15 @@ A stale price does not count as current for `route_to_c`.
 
 Stated plainly, because each one changes what a result means.
 
-**RAM has no cited composition of any kind.** Eight metals missing. The closest
-study (CHARLES2017, AAS on DRAM modules 1991–2008) was unreachable in full text,
-so no number was taken from it. Any RAM detection returns `available: false`
-and routes to C. A regression test fails if RAM ever acquires a value.
+**RAM rests on one study of twelve modules, none later than 2008.** CHARLES2017
+(AAS on DRAM modules 1991–2008) is the only whole-module characterisation found,
+and it contains no DDR4 or DDR5. The DDR2–DDR5 subtypes are defined and empty; a
+detection resolves to an unspecified module, because a generation cannot be read
+from an image. Palladium is likely **overstated** for a modern module and copper
+**understated**, and both directions are recorded in the evidence notes rather
+than corrected by guesswork. Nickel, tin and aluminium were not analysed at all —
+that is ignorance, unlike platinum, which the authors looked for and did not
+find. A test fails if RAM ever acquires a figure without a citation.
 
 **CPU evidence is gold only.** No cited silver or palladium exists for processor
 packages. FIRSCHING2024 reports means with no sample count and no standard
@@ -246,8 +287,18 @@ a real load-cell reading the estimate is refused. A simulated mass is refused
 too — deliberately, since a concentration times an invented mass produces an
 invented quantity.
 
-**No approved live price provider.** `pmdi_value` is permanently `UNAVAILABLE`
-in production until one is configured.
+**Prices are a dated reference snapshot, not a market feed.** `pmdi_value` is
+produced, and every quote behind it is stamped `REFERENCE` with its source and
+date. Nothing in the system claims a live price. The palladium quote has the
+weakest provenance of the four — a dealer spot bid rather than a benchmark
+print, because LBMA's tabulated data is licence-gated.
+
+**Contained is not recoverable.** No cited recovery factor was measured on a
+component as Aurum detects it, so `recoverable_value` is a refusal carrying that
+reason — never a number, and never a zero. The >95 % gold recovery figure that
+appears in the literature is a secondary citation about WEEE processing in
+general, and applying it would convert a measured quantity into a process
+assumption while leaving it looking like a measurement.
 
 **Grading thresholds are engineering approximations.** The A/B/C numbers in
 `configs/grading.yaml` are configurable prototype starting points, labelled as
@@ -271,7 +322,7 @@ A simulated mass with a stale price reports `SIMULATED`, not `ESTIMATED`.
 
 | File | Role |
 |---|---|
-| `app/valuation/prices.py` | Providers, status model, staleness, unit conversion |
+| `app/valuation/prices.py` | Providers, status model, staleness, unit **and currency** conversion |
 | `app/valuation/pmdi.py` | The PMDI calculation and precious/base/other split |
 | `app/valuation/valuation.py` | PMDI plus the separate base-metal signal, packaged for audit |
 | `configs/pricing.yaml` | Provider selection and staleness limit |

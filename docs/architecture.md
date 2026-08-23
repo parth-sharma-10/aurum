@@ -18,7 +18,7 @@ flowchart LR
     API[FastAPI] --> LED
     LED --> DB[(SQLite ledger)]
     DB --> WEB[React dashboard]
-    DB -.-> VAL[PMDI -> Valuation<br/>value UNAVAILABLE: no price provider]
+    DB -.-> VAL[PMDI -> Valuation<br/>CONTAINED value, INR, REFERENCE prices]
 ```
 
 **Both save paths meet at `app/ledger.py`.** The demo's `S` key and
@@ -27,10 +27,23 @@ appears in `/batches`, `/stats` and the React dashboard. There is one `INSERT`
 in the codebase and a test fails if a second appears.
 
 The dotted branch computes what it can and refuses the rest. `app/valuation/`
-produces PMDI and the price-independent `precious_mass_fraction_ppm` from cited
-evidence, but `pmdi_value` stays `UNAVAILABLE` because no live price provider is
-approved for this project. `configs/pricing.yaml` ships `provider: unavailable`
-as a decision, not a placeholder.
+produces PMDI, the price-independent `precious_mass_fraction_ppm`, and a
+CONTAINED value in rupees, all from cited evidence.
+
+`configs/pricing.yaml` ships `provider: reference`: a dated snapshot of real
+published prices (IBJA, MCX, Kitco, with ECB for the FX), every quote stamped
+`REFERENCE`. That status means one thing — a real price, published on a stated
+date, being read as such. It is never `LIVE`, and it is never downgraded to
+`STALE` either, because age is not a defect in a snapshot; `STALE` keeps its one
+meaning of a live feed that went quiet. No live provider ships because no
+keyless market-data source exists; `FallbackProvider` composes LIVE → REFERENCE
+for the day one is configured.
+
+What the valuation will **not** produce is a recoverable value. No cited
+recovery factor was measured on a component as Aurum detects it, so
+`recoverable_value` is a refusal carrying that reason rather than a number or a
+zero. Contained, recoverable and scrap value are three different quantities and
+the code names all three even though only one has a figure.
 
 PMDI is an **input to** the A/B/C decision policy, never the same thing as it.
 `app/valuation/` contains no grading logic and a test fails if it ever does.
@@ -54,7 +67,7 @@ It is never presented as a measurement.
 
 | File | Role |
 |---|---|
-| `app/valuation/prices.py` | Provider abstraction, price status model, staleness, unit conversion |
+| `app/valuation/prices.py` | Providers (reference / unavailable / static / fallback), status model, staleness, unit **and currency** conversion |
 | `app/valuation/pmdi.py` | The PMDI calculation; precious / base / other split |
 | `app/valuation/valuation.py` | PMDI plus the separate base-metal signal, packaged for audit |
 | `app/config.py` | Every threshold and physical constant, `defaults -> YAML -> environment` |
@@ -358,8 +371,11 @@ app/
   batch.py       Batch composition + the recovery-estimate guard.
   weight.py      HX711 backend, or a clearly-labelled simulation.
   ledger.py      Every read and write of the SQLite store. One INSERT.
-  pricing.py     Price providers and estimated_quantity x price. Disabled by
-                 default; no price data ships.
+  pricing.py     SUPERSEDED by app/valuation/prices.py; still serving the batch
+                 endpoints. Declines a multi-currency snapshot rather than
+                 half-pricing it - it matches units exactly and cannot convert
+                 currencies, so it would emit a gold-only figure labelled as a
+                 total.
   api.py         FastAPI endpoints. Holds no SQL of its own.
 
 frontend/
