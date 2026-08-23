@@ -76,6 +76,23 @@ const pct = (c) => (c == null ? "--" : `${(c * 100).toFixed(1)}%`);
 const grams = (g) => (g == null ? "--" : `${g.toFixed(1)} g`);
 const num = (v, digits = 4) => (v == null ? "--" : Number(v).toFixed(digits));
 
+/** Money, or an explicit absence. Never renders a missing figure as zero. */
+const money = (v, currency) =>
+  v == null
+    ? null
+    : `${currency === "INR" ? "₹" : `${currency ?? ""} `}${Number(v).toLocaleString(
+        undefined,
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+      )}`;
+
+/** Milligrams where that reads better than a long decimal of grams. */
+const metalMass = (grams) =>
+  grams == null
+    ? "--"
+    : grams < 1
+      ? `${(grams * 1000).toFixed(2)} mg`
+      : `${grams.toFixed(3)} g`;
+
 async function call(path, method = "GET") {
   const res = await fetch(`${API}${path}`, { method });
   if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}`);
@@ -149,6 +166,7 @@ function ItemChain({ item }) {
   const d = item.decision;
   const act = item.actuation;
   const metals = metalRows(pmdi);
+  const priceRows = Object.entries(v?.prices ?? {});
 
   // Nothing after the camera has run until the operator presses the button.
   // Those stages are PENDING, not failed: rendering them red made a perfectly
@@ -300,19 +318,38 @@ function ItemChain({ item }) {
             <tr>
               <th>Metal</th>
               <th>Contained</th>
+              <th>Price</th>
+              <th>Value</th>
               <th>Basis</th>
               <th>Evidence</th>
             </tr>
           </thead>
           <tbody>
-            {metals.map(([metal, amount, kind]) => (
-              <tr key={metal} className={kind === "precious" ? "precious" : ""}>
-                <td className="mono">{metal}</td>
-                <td className="mono">{num(amount.grams, 6)} g</td>
-                <td className="muted small">{amount.calculation}</td>
-                <td className="mono small">{amount.evidence.join(", ")}</td>
-              </tr>
-            ))}
+            {metals.map(([metal, amount, kind]) => {
+              const price = v?.prices?.[metal];
+              const cash =
+                price?.price_per_gram == null
+                  ? null
+                  : money(amount.grams * price.price_per_gram, price.currency);
+              return (
+                <tr key={metal} className={kind === "precious" ? "precious" : ""}>
+                  <td className="mono">{metal}</td>
+                  <td className="mono">{metalMass(amount.grams)}</td>
+                  <td className="mono small">
+                    {price?.price_per_gram == null ? (
+                      <span className="badge-c">NO PRICE</span>
+                    ) : (
+                      `${money(price.price_per_gram, price.currency)}/g`
+                    )}
+                  </td>
+                  <td className="mono">
+                    {cash ?? <span className="muted">not priced</span>}
+                  </td>
+                  <td className="muted small">{amount.calculation}</td>
+                  <td className="mono small">{amount.evidence.join(", ")}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -344,12 +381,15 @@ function ItemChain({ item }) {
 
       <Stage
         n="5"
-        title="Estimated value"
+        title="Estimated CONTAINED value"
         value={
-          pmdi?.pmdi_value != null ? (
-            <span className="mono big">
-              {num(pmdi.pmdi_value, 2)} {pmdi.currency}
-            </span>
+          v?.contained_value != null ? (
+            <>
+              <span className="mono big">
+                {money(v.contained_value, v.currency)}
+              </span>
+              <span className="muted"> contained</span>
+            </>
           ) : graded ? (
             <span className="badge-c">NO PRICE SOURCE</span>
           ) : (
@@ -358,12 +398,65 @@ function ItemChain({ item }) {
         }
         note={
           graded
-            ? (pmdi?.reason ??
-              "Aurum ships no market data feed; a price with no source is worse than none.")
+            ? (v?.reason ??
+              "What the cited assays say is PRESENT — not what a process would recover, and not what a recycler would pay.")
             : null
         }
-        state={pmdi?.pmdi_value != null ? "good" : graded ? "warn" : "neutral"}
+        state={v?.contained_value != null ? "good" : graded ? "warn" : "neutral"}
       />
+
+      {graded && v?.recoverable_value && (
+        <Stage
+          n="5b"
+          title="Estimated RECOVERABLE value"
+          value={
+            v.recoverable_value.available ? (
+              <span className="mono big">
+                {money(v.recoverable_value.value, v.recoverable_value.currency)}
+              </span>
+            ) : (
+              <span className="badge-c">NOT SUPPORTED BY CURRENT EVIDENCE</span>
+            )
+          }
+          note={v.recoverable_value.reason}
+          state={v.recoverable_value.available ? "good" : "warn"}
+        />
+      )}
+
+      {graded && priceRows.length > 0 && (
+        <div className="notice">
+          <strong>
+            {priceRows[0][1].status === "REFERENCE"
+              ? "REFERENCE PRICES"
+              : `${priceRows[0][1].status} PRICES`}
+          </strong>{" "}
+          — dated published figures used after their date, not a live market
+          feed.
+          <table className="metals">
+            <tbody>
+              {priceRows.map(([metal, q]) => (
+                <tr key={`p-${metal}`}>
+                  <td className="mono">{metal}</td>
+                  <td className="mono">
+                    {q.price_per_gram == null
+                      ? "--"
+                      : `${money(q.price_per_gram, q.currency)}/g`}
+                  </td>
+                  <td className="mono small">
+                    {q.quoted_price} {q.quoted_unit}
+                  </td>
+                  <td className="mono small">{(q.timestamp ?? "").slice(0, 10)}</td>
+                  <td>
+                    <span className={q.status === "LIVE" ? "badge-b" : "badge-c"}>
+                      {q.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <Stage
         n="6"

@@ -37,7 +37,7 @@ honest result rather than something smoothed over:
 | **CPU** | Au only | **yes** — per-piece figure | usable |
 | **Connector** | Au (+ Ag, Cu, Ni, Al for gold fingers) | **yes** — per-piece figure | usable |
 | **PCB** | Au, Ag, Pd, Cu, Ni, Sn, Al | no — concentration, needs a measured mass | conditional |
-| **RAM** | **none** | — | **unavailable** |
+| **RAM** | Au, Ag, Pd, Cu | **yes** — per-module figures | usable |
 
 Subtypes exist only where a source actually distinguished them:
 
@@ -45,7 +45,7 @@ Subtypes exist only where a source actually distinguished them:
 PCB          generic_wpcb · desktop_motherboard_early_generation · server_motherboard
 CPU          bga_pga_package
 Connector    general_connector · high_grade_connector · gold_fingers
-RAM          dimm_module (mass only)
+RAM          dimm_module  (+ ddr2/ddr3/ddr4/ddr5 slots, defined and EMPTY)
 ```
 
 There is no `laptop motherboard`, no `mobile PCB`, no `ceramic CPU`, no `LGA` or
@@ -57,14 +57,19 @@ of a reviewer.
 
 | Metal | PCB | CPU | Connector | RAM |
 | --- | :-: | :-: | :-: | :-: |
-| Au gold | ✅ | ✅ | ✅ | ❌ |
-| Ag silver | ✅ | ❌ | ✅ (gold fingers) | ❌ |
-| Pd palladium | ✅ (weak) | ❌ | ❌ | ❌ |
-| Pt platinum | ❌ | ❌ | ❌ | ❌ |
-| Cu copper | ✅ | ❌ | ✅ (gold fingers) | ❌ |
+| Au gold | ✅ | ✅ | ✅ | ✅ |
+| Ag silver | ✅ | ❌ | ✅ (gold fingers) | ✅ |
+| Pd palladium | ✅ (weak) | ❌ | ❌ | ✅ |
+| Pt platinum | ❌ | ❌ | ❌ | ❌ (measured absent) |
+| Cu copper | ✅ | ❌ | ✅ (gold fingers) | ✅ |
 | Ni nickel | ✅ | ❌ | ✅ (gold fingers) | ❌ |
 | Sn tin | ✅ | ❌ | ❌ | ❌ |
 | Al aluminium | ✅ | ❌ | ✅ (gold fingers) | ❌ |
+
+RAM's platinum cell is the one ❌ in this table that means something different
+from the others. Charles et al. **looked for platinum and did not find it**:
+none detected in any of 15 modules, below 6 µg per module at their stated
+detection limit. That is a result. Every other ❌ is an absence of data.
 
 **Platinum appears nowhere.** Neither source read reports platinum in boards,
 processors or connectors; it is associated with hard-disk platters and catalysts
@@ -238,6 +243,10 @@ Every row has a real source. `Original` is the figure exactly as published.
 | `CONN-CU-001` | Connector | gold_fingers | Cu | 290447 | mg/kg | 290447 ppm | Lin et al. 2023 | measured | high |
 | `CONN-NI-001` | Connector | gold_fingers | Ni | 18092 | mg/kg | 18092 ppm | Lin et al. 2023 | measured | high |
 | `CONN-AL-001` | Connector | gold_fingers | Al | 26331 | mg/kg | 26331 ppm | Lin et al. 2023 | measured | high |
+| `RAM-AU-001` | RAM | dimm_module | Au | 18 | mg | 18.0 mg per module | Charles et al. 2017 | measured | medium |
+| `RAM-AG-001` | RAM | dimm_module | Ag | 28.4 | mg | 28.4 mg per module | Charles et al. 2017 | measured | medium |
+| `RAM-PD-001` | RAM | dimm_module | Pd | 1.2 | mg | 1.2 mg per module | Charles et al. 2017 | measured | medium |
+| `RAM-CU-001` | RAM | dimm_module | Cu | 3.4 | g | 3.4 g per module | Charles et al. 2017 | measured | medium |
 | `RAM-MASS-001` | RAM | dimm_module | — | 7.804 | g | 7.804 g | Zinkowska et al. 2024 | measured | medium |
 | `PCB-MASS-001` | PCB | server_motherboard | — | 1800 | g | 1.8 kg | Oliveira et al. 2022 | measured | low |
 

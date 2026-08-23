@@ -297,7 +297,14 @@ SPEC: dict[str, tuple] = {
         "mass_fraction_only",
         "AURUM_PRICE_UNAVAILABLE_POLICY",
     ),
-    "pricing.provider": (_one_of("unavailable", "static"), "unavailable", "AURUM_PRICE_PROVIDER"),
+    # reference: a dated snapshot of real published prices, labelled REFERENCE
+    # and never reported as current. The shipped default - see
+    # configs/pricing.yaml for why there is no live feed.
+    "pricing.provider": (
+        _one_of("reference", "unavailable", "static"),
+        "reference",
+        "AURUM_PRICE_PROVIDER",
+    ),
     "pricing.max_age_seconds": (_non_negative, 900.0, "AURUM_PRICE_MAX_AGE_SECONDS"),
     "tracking.tracker": (_text, "bytetrack.yaml", "AURUM_TRACKER"),
     "tracking.max_missing_frames": (_int, 15, "AURUM_TRACK_MAX_MISSING_FRAMES"),

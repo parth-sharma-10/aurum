@@ -87,10 +87,14 @@ class TestUnavailableProvider:
     def test_the_reason_names_the_setting_that_would_change_it(self):
         assert "AURUM_PRICE_PROVIDER" in UnavailableProvider().quote("Au", "gold").reason
 
-    def test_it_is_the_shipped_default(self):
-        """Production with no provider configured must refuse, not invent."""
-        service = PriceService.from_config(config.load(environ={}))
-        assert service.price("Au", now=NOW).status is PriceStatus.UNAVAILABLE
+    def test_it_refuses_when_it_is_the_configured_provider(self):
+        """Selecting it must refuse, not invent."""
+        service = PriceService.from_config(
+            config.load(environ={"AURUM_PRICE_PROVIDER": "unavailable"})
+        )
+        quote = service.price("Au", now=NOW)
+        assert quote.status is PriceStatus.UNAVAILABLE
+        assert quote.price_per_gram is None
 
 
 class TestStaticProvider:
@@ -121,9 +125,15 @@ class TestStaticProvider:
         prices = {"gold": {"price_per_unit": 1.0, "unit": "barrel", "currency": "USD"}}
         assert StaticProvider(prices).quote("Au", "gold").status is PriceStatus.ERROR
 
-    def test_the_shipped_price_file_prices_nothing(self):
-        """configs/price_reference.yaml ships disabled and empty, on purpose."""
-        assert StaticProvider.from_config().quote("Au", "gold").status is PriceStatus.UNAVAILABLE
+    def test_it_never_labels_a_price_as_anything_but_test(self):
+        """Whatever the file holds, this provider is for tests only.
+
+        It reads the same file the reference provider does, so the guard that
+        matters is the label: a StaticProvider quote must never claim to be a
+        REFERENCE or a LIVE price.
+        """
+        quote = StaticProvider.from_config().quote("Au", "gold")
+        assert quote.status in (PriceStatus.TEST, PriceStatus.UNAVAILABLE)
 
     def test_a_missing_file_prices_nothing(self, tmp_path):
         provider = StaticProvider.from_config(tmp_path / "absent.yaml")

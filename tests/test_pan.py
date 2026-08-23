@@ -562,11 +562,16 @@ class TestMixedAssembly:
         )
 
     def test_only_the_components_cited_per_piece_are_valued(self):
+        """RAM joined this set when Charles et al. 2017 was obtained.
+
+        The dividing line is the evidence BASIS, not the class: per-piece
+        figures need no mass and are valued; the PCB's per-kilogram figure
+        needs a mass that belongs to it alone, which an assembly's does not.
+        """
         _, record = self.routed()
         pmdi = record["valuation"]["pmdi"]
-        valued = {v["component"] for v in pmdi["valued"]}
-        assert valued == {"CPU", "Connector"}
-        assert {n["component"] for n in pmdi["not_valued"]} == {"PCB", "RAM"}
+        assert {v["component"] for v in pmdi["valued"]} == {"CPU", "Connector", "RAM"}
+        assert {n["component"] for n in pmdi["not_valued"]} == {"PCB"}
 
     def test_the_estimate_scales_with_the_count_not_with_the_mass(self):
         """Three connectors are three connectors, whatever the board weighs."""
@@ -586,16 +591,36 @@ class TestMixedAssembly:
         # connector contribution alone rather than the totals.
         assert one > 0
 
-    def test_ram_stays_insufficient_evidence_and_contributes_nothing(self):
-        """No number was invented for the modules, and none leaked in as zero."""
+    def test_the_two_modules_are_valued_on_count_not_on_assembly_mass(self):
+        """Section 8's rule, on the object it was written for.
+
+        The board weighs 842 g. The modules are valued as 2 x the per-module
+        figures and nothing else: change the board's mass and the RAM
+        contribution must not move by a milligram.
+        """
+        _, heavy = self.routed()
+
+        cell = ScriptedCell(0.0)
+        run = session(cell)
+        show(run, *self.motherboard())
+        cell.place(400.0)  # same board, half the mass
+        light = cycle(run)
+
+        assert heavy["weight_g"] != light["weight_g"]
+        for record in (heavy, light):
+            ram = next(v for v in record["valuation"]["pmdi"]["valued"] if v["component"] == "RAM")
+            assert ram["count"] == 2
+        assert (
+            heavy["valuation"]["pmdi"]["precious_mass_g"]
+            == light["valuation"]["pmdi"]["precious_mass_g"]
+        )
+
+    def test_the_ram_contribution_is_exactly_twice_one_module(self):
         _, record = self.routed()
-        pmdi = record["valuation"]["pmdi"]
-        ram = next(n for n in pmdi["not_valued"] if n["component"] == "RAM")
-        assert "no cited composition" in ram["reason"]
-        assert "RAM" not in set(pmdi["precious_metals"])
-        for group in ("precious_metals", "base_metals", "other_metals"):
-            for amount in pmdi[group].values():
-                assert "RAM" not in (amount["calculation"] or "")
+        au = record["valuation"]["pmdi"]["precious_metals"]["Au"]
+        # 2 modules x 18.0 mg + 1 CPU x 4.71 mg + 3 connectors x 0.914 mg
+        assert au["grams"] == pytest.approx((2 * 18.0 + 4.71 + 3 * 0.914) / 1000)
+        assert "2 x 18.0 mg per piece" in au["calculation"]
 
     def test_the_board_is_routed_automatically_with_nothing_pressed(self):
         transport = FakeTransport(connected=True)

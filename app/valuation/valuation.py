@@ -10,6 +10,20 @@ number stops meaning anything:
     precious_value   the concept document's PMDI figure. Au, Ag, Pd, Pt.
     base_value       Cu, Ni, Sn. A separate recycling signal, never called PMDI.
 
+And one distinction sits above both of them:
+
+    CONTAINED    what the cited evidence says is physically present.
+    RECOVERABLE  contained x a cited recovery factor for THIS component.
+
+Everything this module produces is CONTAINED. `recoverable` is a refusal
+carrying the reason, because no cited recovery factor in the database was
+measured on a component as Aurum detects it - see `recovery` in
+configs/material_reference.yaml. The two are named separately even though only
+one has a number, so that "we could not establish this" is a field a consumer
+reads rather than an absence it has to infer. A contained figure presented as
+what a recycler would pay is the single most misleading thing this repository
+could publish.
+
 PMDI measures precious-metal economics and nothing else. It does not know about
 base metals, recyclability, processing cost or environmental value, and this
 module does not teach it to. Bin B's base-metal reasoning reads `base_value`;
@@ -61,6 +75,32 @@ class Valuation:
         return self.pmdi.evidence_status
 
     @property
+    def recoverable(self) -> dict:
+        """Estimated RECOVERABLE value, or an explicit refusal.
+
+        Always a refusal today. Turning contained metal into recovered metal
+        needs a recovery factor measured on this component in a stated
+        process, and the database holds none that qualifies: the connector
+        factors were measured on a decopperized gold-finger feed, and the RAM
+        figures the literature offers are secondary citations about WEEE
+        processing in general. Multiplying by one anyway would convert a
+        measured quantity into a process assumption while leaving it looking
+        like a measurement.
+        """
+        return {
+            "available": False,
+            "value": None,
+            "currency": None,
+            "reason": (
+                "No component-specific recovery factor supported by current evidence. "
+                "Aurum reports CONTAINED material value only: how much metal the cited "
+                "assays say is present, not how much a process would get out, and not "
+                "what a recycler would pay."
+            ),
+            "basis": "would require contained x a cited recovery factor for this component",
+        }
+
+    @property
     def completeness(self) -> str:
         """COMPLETE | PARTIAL_ESTIMATE | INSUFFICIENT_EVIDENCE.
 
@@ -106,6 +146,11 @@ class Valuation:
             "precious_value": None if p.pmdi_value is None else round(p.pmdi_value, 6),
             "base_value": None if self.base_value is None else round(self.base_value, 6),
             "total_value": None if self.total_value is None else round(self.total_value, 6),
+            # The same number as total_value, named for what it actually is.
+            # `total_value` is kept for the consumers that already read it.
+            "contained_value": None if self.total_value is None else round(self.total_value, 6),
+            "value_basis": "CONTAINED",
+            "recoverable_value": self.recoverable,
             "currency": self.currency,
             "evidence_sources": list(p.evidence_sources),
             "evidence_status": str(self.evidence_status),

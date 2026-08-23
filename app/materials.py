@@ -388,18 +388,41 @@ def estimate(counts: dict[str, int], mass: dict | None = None, db: dict | None =
     a real measurement.
     """
     db = load() if db is None else db
-    detected = {c: n for c, n in counts.items() if n}
+    # A count is a tally of physical objects. Zero means "not detected" and is
+    # simply dropped; NEGATIVE means the caller is malformed, and it must not
+    # be multiplied by a composition - that would produce a negative quantity
+    # that silently nets off a real one somewhere else in the total.
+    detected = {c: n for c, n in counts.items() if isinstance(n, int | float) and n > 0}
+    invalid = [
+        {
+            "component": c,
+            "count": n,
+            "reason": (
+                f"{c} was reported with a count of {n!r}, which is not a number of "
+                "physical objects. Nothing is estimated from it."
+            ),
+        }
+        for c, n in counts.items()
+        if not (isinstance(n, int | float) and not isinstance(n, bool) and n >= 0)
+    ]
 
     if not db or not db.get("enabled"):
         return _unavailable(counts, "The material reference database is absent or disabled.")
     if not detected:
-        return _unavailable(counts, "No components were detected, so there is nothing to estimate.")
+        return _unavailable(
+            counts,
+            "No components were detected, so there is nothing to estimate."
+            if not invalid
+            else "No usable component count was supplied. "
+            + " | ".join(e["reason"] for e in invalid),
+            not_valued=invalid,
+        )
 
     index = evidence_index(db)
     sources = load_sources()
     lines: list[dict] = []
     valued: list[dict] = []
-    not_valued: list[dict] = []
+    not_valued: list[dict] = list(invalid)
     for cls, count in sorted(detected.items()):
         got, reason = _component_lines(cls, count, db, index, mass, detected, sources)
         if not got:

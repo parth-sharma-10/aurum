@@ -191,29 +191,34 @@ class TestCompositionNeverBecomesRecovery:
 
 
 class TestEstimationFailsClosed:
-    def test_a_class_with_no_cited_composition_blocks_the_estimate(self):
-        """RAM has no composition data, and that must stop the whole estimate."""
-        est = recovery_estimate({"RAM": 4})
+    def test_a_class_with_no_usable_figure_blocks_the_estimate(self):
+        """A concentration with no attributable mass stops the whole estimate.
+
+        This was RAM's case until Charles et al. 2017 was obtained. PCB now
+        carries it: its figure is per kilogram, and with no mass there is
+        nothing defensible to say.
+        """
+        est = recovery_estimate({"PCB": 4})
         assert est["available"] is False
-        assert "RAM" in est["reason"]
+        assert "PCB" in est["reason"]
         assert "components" not in est
         assert "material_estimate" not in est
 
     def test_one_unsupported_class_yields_a_partial_estimate_that_says_so(self):
-        """The CPU is valued, the RAM is not, and the gap is on the record.
+        """The CPU is valued, the PCB is not, and the gap is on the record.
 
-        The property this protects is unchanged from when the whole estimate
-        was refused: a total that silently omits RAM must never read as a
-        total for CPU + RAM. It is now met by naming the omission rather than
-        by withholding the CPU figure that IS defensible.
+        The property is unchanged from when the whole estimate was refused: a
+        total that silently omits a component must never read as a total for
+        all of them. It is met by naming the omission rather than by
+        withholding the CPU figure that IS defensible.
         """
-        est = recovery_estimate({"CPU": 2, "RAM": 1})
+        est = recovery_estimate({"CPU": 2, "PCB": 1})
 
         assert est["completeness"] == materials.PARTIAL_ESTIMATE
         assert [v["component"] for v in est["valued"]] == ["CPU"]
-        assert [n["component"] for n in est["not_valued"]] == ["RAM"]
-        assert "RAM" in est["not_valued"][0]["reason"]
-        # Nothing in the totals came from RAM.
+        assert [n["component"] for n in est["not_valued"]] == ["PCB"]
+        assert "PCB" in est["not_valued"][0]["reason"]
+        # Nothing in the totals came from PCB.
         assert {line["component"] for line in est["components"]} == {"CPU"}
         # And the record refuses to call itself a total for the whole object.
         assert "not a total for the whole object" in est["reason"]
@@ -391,19 +396,30 @@ class TestRamGenerationSlots:
         for name in ("ddr2_module", "ddr3_module", "ddr4_module", "ddr5_module"):
             assert subtypes[name]["generation"]
 
-    def test_no_slot_carries_a_composition_figure(self):
+    def test_no_generation_slot_carries_a_composition_figure(self):
+        """The DDR slots stay empty. `dimm_module` is the one that is cited."""
         for name, body in self.ram()["subtypes"].items():
+            if name == "dimm_module":
+                continue
             assert not body.get("composition"), f"{name} acquired a figure without a citation"
+
+    def test_the_generic_module_is_the_only_cited_subtype(self):
+        composed = {n for n, b in self.ram()["subtypes"].items() if b.get("composition")}
+        assert composed == {"dimm_module"}
 
     def test_a_detection_resolves_to_the_unspecified_module(self):
         """The generation is not guessed, so the general entry is what applies."""
         assert self.ram()["default_subtype"] == "dimm_module"
 
-    def test_ram_still_fails_closed_with_the_slots_in_place(self):
-        est = recovery_estimate({"RAM": 4}, {"grams": 120.0, "simulated": False})
-        assert est["available"] is False
-        assert est["completeness"] == materials.INSUFFICIENT_EVIDENCE
-        assert "material_estimate" not in est
+    def test_a_generation_is_never_selected_from_a_detection(self):
+        """A bare RAM detection resolves to the unspecified module, always.
+
+        The camera cannot read DDR3 from DDR4. If a generation subtype ever
+        became reachable without evidence of the generation, that would be a
+        composition figure chosen by appearance.
+        """
+        est = recovery_estimate({"RAM": 1})
+        assert {line["subtype"] for line in est["components"]} == {"dimm_module"}
 
     def test_the_shipped_database_still_validates(self):
         assert materials.validate(materials.load()) == []

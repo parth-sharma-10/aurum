@@ -134,14 +134,14 @@ class TestRecoveryEstimateGuard:
         """
         est = recovery_estimate({"PCB": 2, "RAM": 3, "CPU": 1})
         unvalued = {n["component"] for n in est["not_valued"]}
-        assert {"PCB", "RAM"} <= unvalued
+        assert {"PCB"} <= unvalued
         for line in est.get("components", []):
             assert line["component"] not in unvalued
         for entry in est["not_valued"]:
             assert entry["reason"]
 
-    def test_nothing_at_all_is_valued_when_no_class_has_evidence(self):
-        est = recovery_estimate({"RAM": 3})
+    def test_nothing_at_all_is_valued_when_no_class_has_a_usable_figure(self):
+        est = recovery_estimate({"PCB": 3})
         assert est["available"] is False
         assert est["completeness"] == "INSUFFICIENT_EVIDENCE"
         assert "components" not in est

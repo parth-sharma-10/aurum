@@ -6,21 +6,40 @@ every price comes back `UNAVAILABLE` and the valuation layer refuses to produce
 a figure. A spot price with no source and no timestamp is worse than no price,
 because it gets screenshotted and outlives the conversation that qualified it.
 
-Two providers exist today:
+Four providers exist today:
 
-    UnavailableProvider   the default. Prices nothing, says why.
-    StaticProvider        pinned prices from configs/price_reference.yaml,
-                          labelled TEST, never LIVE.
+    UnavailableProvider   prices nothing, says why.
+    StaticProvider        pinned prices, labelled TEST. For tests.
+    ReferenceProvider     a DATED SNAPSHOT of real published prices, labelled
+                          REFERENCE. The shipped default.
+    FallbackProvider      composes two providers: try one, fall back to the
+                          other. The LIVE -> REFERENCE chain.
 
-A live provider is added by implementing `PriceProvider` and registering it in
-`PROVIDERS`. Nothing in `app.valuation.pmdi` changes when that happens — that
-is the whole point of the abstraction.
+**REFERENCE is not a stale LIVE price, and it is not a fake one.** It is a real
+published price with a real date, being used deliberately after that date. Age
+does not degrade it the way a silent feed degrades a live quote, so
+`PriceService` does not mark it STALE - but nothing may present it as current
+either. The status travels with every quote so a dashboard can say "reference
+price, 21 Aug 2026" instead of implying a live market feed.
 
-The unit trap this module exists to close: metal is quoted per gram, per
-kilogram and per troy ounce, and a troy ounce is 31.1 grams. Multiplying grams
+A live provider is added by implementing `quote()` and registering it in
+`PROVIDERS`. Nothing in `app.valuation.pmdi` changes when that happens - that
+is the whole point of the abstraction. No live provider ships, because no
+keyless market-data source exists to point one at; `FallbackProvider` is the
+mechanism that will hold it when one is configured.
+
+Two conversion traps this module exists to close.
+
+**Units.** Metal is quoted per gram, per kilogram and per troy ounce, and a
+troy ounce is 31.1034768 g - NOT the avoirdupois 28.3495 g. Multiplying grams
 by a per-ounce price produces a plausible number that is wrong by a factor of
 31. Every quote is normalised to currency-per-gram through an explicit factor,
 and a unit nobody has a factor for is an error rather than an assumption.
+
+**Currency.** A price quoted in USD cannot be added to one quoted in INR. Each
+quote is converted to the snapshot's single reporting currency through a cited,
+dated FX rate, and a currency with no rate on file is an error rather than an
+assumed parity of 1.
 """
 
 from __future__ import annotations
@@ -49,6 +68,9 @@ class PriceStatus(StrEnum):
     """Where a price came from and whether it can be trusted as current."""
 
     LIVE = "LIVE"
+    #: A real published price, with a real date, used deliberately after it.
+    #: Never presented as current; never degraded by age either.
+    REFERENCE = "REFERENCE"
     TEST = "TEST"
     SIMULATED = "SIMULATED"
     STALE = "STALE"
@@ -59,7 +81,9 @@ class PriceStatus(StrEnum):
 #: Statuses that carry an actual number. STALE does too, but it is deliberately
 #: excluded here: a stale price is usable only if a caller decides it is, and
 #: that decision belongs to the grading policy, not to this module.
-PRICED = frozenset({PriceStatus.LIVE, PriceStatus.TEST, PriceStatus.SIMULATED})
+PRICED = frozenset(
+    {PriceStatus.LIVE, PriceStatus.REFERENCE, PriceStatus.TEST, PriceStatus.SIMULATED}
+)
 
 
 @dataclass(frozen=True)
@@ -120,6 +144,89 @@ def to_grams(price: float, unit: str) -> float:
     return price / factor
 
 
+class FxError(ValueError):
+    """No cited rate exists to convert a quote into the reporting currency."""
+
+
+def convert_currency(amount: float, source: str, target: str, rates: dict) -> float:
+    """Convert `amount` from `source` currency into `target`.
+
+    `rates` maps a currency to its rate against the TARGET, e.g. under a target
+    of INR, `{"USD": {"rate": 95.70}}` means one USD is 95.70 INR.
+
+    Raises rather than assuming. A missing rate is not parity: silently
+    treating 1331 USD as 1331 INR would understate a palladium price by a
+    factor of 95 while still looking like a number.
+    """
+    if source == target:
+        return amount
+    entry = (rates or {}).get(source)
+    rate = (entry or {}).get("rate")
+    if rate is None:
+        raise FxError(
+            f"No FX rate on file to convert {source} into {target}. Add an "
+            f"fx entry for {source} with a rate, a source and a timestamp."
+        )
+    rate = float(rate)
+    if rate <= 0:
+        raise FxError(f"The {source}/{target} rate must be positive, got {rate}.")
+    return amount * rate
+
+
+def _quote_from_entry(
+    metal: str,
+    material: str,
+    entry: dict,
+    status: PriceStatus,
+    provider: str,
+    reason: str,
+    fx: dict | None = None,
+    currency: str | None = None,
+) -> MetalPrice:
+    """One configured price entry to a normalised per-gram quote.
+
+    Shared by every file-backed provider so the unit and currency arithmetic
+    exists once. Both conversions are recorded on the quote: `quoted_price` and
+    `quoted_unit` keep the figure as published, so a stored valuation can be
+    audited back to its source without re-deriving anything.
+    """
+    unit = entry.get("unit")
+    source_currency = entry.get("currency", "USD")
+    target = currency or source_currency
+    try:
+        per_gram = to_grams(float(entry["price_per_unit"]), unit)
+        per_gram = convert_currency(per_gram, source_currency, target, fx or {})
+    except (ValueError, KeyError, TypeError) as exc:
+        return MetalPrice(
+            metal=metal,
+            material=material,
+            status=PriceStatus.ERROR,
+            provider=provider,
+            reason=str(exc),
+        )
+    detail = entry.get("source")
+    if source_currency != target:
+        rate = (fx or {}).get(source_currency, {})
+        reason = (
+            f"{reason} Converted {entry['price_per_unit']} {source_currency}/{unit} "
+            f"-> {source_currency}/g (1 ozt = {GRAMS_PER_UNIT['ozt']} g) "
+            f"-> {target}/g at {source_currency}/{target} {rate.get('rate')} "
+            f"({rate.get('source', 'unattributed rate')}, {rate.get('timestamp', 'undated')})."
+        )
+    return MetalPrice(
+        metal=metal,
+        material=material,
+        status=status,
+        price_per_gram=per_gram,
+        currency=target,
+        quoted_price=float(entry["price_per_unit"]),
+        quoted_unit=unit,
+        timestamp=entry.get("timestamp"),
+        provider=provider,
+        reason=f"{reason} Source: {detail}." if detail else reason,
+    )
+
+
 class UnavailableProvider:
     """The default. Prices nothing, and says which setting would change that."""
 
@@ -176,34 +283,134 @@ class StaticProvider:
                 provider=self.name,
                 reason=f"The pinned price source quotes no price for {material}.",
             )
-        unit = entry.get("unit")
-        try:
-            per_gram = to_grams(float(entry["price_per_unit"]), unit)
-        except (ValueError, KeyError, TypeError) as exc:
+        return _quote_from_entry(
+            metal,
+            material,
+            entry,
+            status=PriceStatus.TEST,
+            provider=self.name,
+            reason="Pinned reference price. TEST data — not a live market quote.",
+        )
+
+
+class ReferenceProvider:
+    """A dated snapshot of real published prices. The shipped default.
+
+    Every figure here was published by a named source on a named date and is
+    being used deliberately after that date. That is a different thing from a
+    live feed and a different thing from an invented number, and the REFERENCE
+    status is what keeps all three apart downstream.
+
+    The snapshot names one reporting currency and carries the FX rates needed
+    to reach it, so a palladium price published in USD per troy ounce and a
+    gold price published in INR per gram can be added into one total without
+    anybody performing that conversion in their head.
+    """
+
+    name = "reference"
+    status = PriceStatus.REFERENCE
+
+    def __init__(
+        self,
+        prices: dict | None = None,
+        currency: str = "INR",
+        fx: dict | None = None,
+        source: str | None = None,
+        as_of: str | None = None,
+    ) -> None:
+        self._prices = prices or {}
+        self.currency = currency
+        self.fx = fx or {}
+        self.source = source or str(PRICE_CONFIG)
+        self.as_of = as_of
+
+    @classmethod
+    def from_config(cls, path: Path = PRICE_CONFIG) -> ReferenceProvider:
+        """Build from the snapshot file. A disabled or absent file prices nothing."""
+        if not path.exists():
+            return cls({}, source=str(path))
+        cfg = yaml.safe_load(path.read_text()) or {}
+        if not cfg.get("enabled"):
+            return cls({}, source=str(path))
+        return cls(
+            prices=cfg.get("prices") or {},
+            currency=cfg.get("currency", "INR"),
+            fx=cfg.get("fx") or {},
+            source=cfg.get("source", str(path)),
+            as_of=cfg.get("as_of"),
+        )
+
+    def quote(self, metal: str, material: str) -> MetalPrice:
+        entry = self._prices.get(material) or self._prices.get(metal)
+        if not entry:
             return MetalPrice(
                 metal=metal,
                 material=material,
-                status=PriceStatus.ERROR,
+                status=PriceStatus.UNAVAILABLE,
                 provider=self.name,
-                reason=str(exc),
+                reason=(
+                    f"The reference snapshot quotes no price for {material}. No figure "
+                    "is substituted for one."
+                ),
             )
-        return MetalPrice(
-            metal=metal,
-            material=material,
-            status=PriceStatus.TEST,
-            price_per_gram=per_gram,
-            currency=entry.get("currency", "USD"),
-            quoted_price=float(entry["price_per_unit"]),
-            quoted_unit=unit,
-            timestamp=entry.get("timestamp"),
+        dated = entry.get("timestamp") or self.as_of or "an unstated date"
+        return _quote_from_entry(
+            metal,
+            material,
+            entry,
+            status=PriceStatus.REFERENCE,
             provider=self.name,
-            reason="Pinned reference price. TEST data — not a live market quote.",
+            reason=(
+                f"REFERENCE PRICE as of {dated} — a real published price being used "
+                "after its date, not a live market quote."
+            ),
+            fx=self.fx,
+            currency=self.currency,
+        )
+
+
+class FallbackProvider:
+    """Try one provider, fall back to another. The LIVE -> REFERENCE chain.
+
+    The fallback fires when the primary returns no usable number OR raises:
+    a market feed that times out must degrade to the dated snapshot rather
+    than taking the pipeline down with it. Which provider actually answered is
+    visible in the returned quote's `provider` and `status`, so a fallback is
+    never mistaken for a live price.
+    """
+
+    def __init__(self, primary, fallback) -> None:
+        self.primary = primary
+        self.fallback = fallback
+        self.name = f"{getattr(primary, 'name', '?')}->{getattr(fallback, 'name', '?')}"
+
+    def quote(self, metal: str, material: str) -> MetalPrice:
+        try:
+            quote = self.primary.quote(metal, material)
+        except Exception as exc:  # a market feed is external and may do anything
+            quote = MetalPrice(
+                metal=metal,
+                material=material,
+                status=PriceStatus.ERROR,
+                provider=getattr(self.primary, "name", "primary"),
+                reason=f"The primary price source failed: {exc}",
+            )
+        if quote.has_number:
+            return quote
+        second = self.fallback.quote(metal, material)
+        if not second.has_number:
+            return second
+        return replace(
+            second,
+            reason=f"{second.reason} Fell back from {getattr(self.primary, 'name', '?')}: "
+            f"{quote.reason}",
         )
 
 
 PROVIDERS = {
     "unavailable": UnavailableProvider,
     "static": StaticProvider,
+    "reference": ReferenceProvider,
 }
 
 
@@ -232,7 +439,7 @@ class PriceService:
         cfg = config_module.load() if cfg is None else cfg
         name = cfg["pricing.provider"]
         factory = PROVIDERS[name]
-        provider = factory.from_config() if name == "static" else factory()
+        provider = factory.from_config() if name in ("static", "reference") else factory()
         return cls(provider=provider, max_age_seconds=cfg["pricing.max_age_seconds"])
 
     def price(self, metal: str, now: datetime | None = None) -> MetalPrice:
@@ -246,6 +453,13 @@ class PriceService:
         age = _age_seconds(quote.timestamp, now)
         if age is None:
             return quote
+
+        # A reference price is not a live quote that went quiet. It was
+        # published on a stated date and is being used deliberately after it,
+        # so age is reported but never changes its status. STALE keeps its one
+        # meaning: a feed that should have been current and was not.
+        if quote.status is PriceStatus.REFERENCE:
+            return replace(quote, age_seconds=age)
 
         stale = self.max_age_seconds is not None and age > self.max_age_seconds
         return replace(

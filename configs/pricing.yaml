@@ -1,30 +1,41 @@
 # Aurum — metal price sourcing.
 #
 # ======================= NO LIVE PROVIDER IS CONFIGURED ====================
-# `provider: unavailable` is the shipped default and it is not a placeholder
-# awaiting a default value. No approved live market data source has been
-# chosen for this project, so Aurum reports PRICE_UNAVAILABLE rather than
-# producing a number.
+# `provider: reference` is the shipped default: a DATED SNAPSHOT of real
+# published prices, in configs/price_reference.yaml, labelled REFERENCE
+# everywhere it surfaces and never presented as a current market quote.
 #
-# A spot price with no source and no timestamp behind it is worse than no
-# price, because it gets screenshotted, quoted, and outlives the conversation
-# that qualified it.
+# No live market data feed is configured, because none is available without a
+# licence or an API key. Aurum therefore reports a reference estimate rather
+# than a live one — and says which it is, on every quote, in the API payload
+# and on the dashboard.
+#
+# A spot price with no source and no timestamp behind it is still worse than
+# no price. Every entry in the snapshot carries both.
 # ===========================================================================
 #
 # provider:
-#   unavailable  every price is PRICE_UNAVAILABLE. The default.
-#   static       read pinned prices from configs/price_reference.yaml. Every
-#                price from this provider is labelled TEST and is never
-#                reported as LIVE, SPOT, or a current market price.
+#   reference    dated snapshot from configs/price_reference.yaml, status
+#                REFERENCE. The default. Never reported as LIVE or as current.
+#   unavailable  every price is PRICE_UNAVAILABLE. Set this to run the
+#                pipeline on grams and ppm alone, with no currency figure.
+#   static       pinned prices, status TEST. For tests.
 #
-# A live provider is added by implementing the PriceProvider protocol in
-# app/valuation/prices.py and registering it here. PMDI code does not change.
+# A live provider is added by implementing `quote()` in
+# app/valuation/prices.py and registering it in PROVIDERS. Compose it with
+# the snapshot using FallbackProvider so a feed outage degrades to REFERENCE
+# instead of taking the pipeline down. PMDI code does not change.
 
 pricing:
-  provider: unavailable
+  provider: reference
 
   # ENGINEERING APPROXIMATION — not research-derived.
-  # A quote older than this is reported STALE. Fifteen minutes is a defensible
-  # prototype window for spot metals; a production deployment against a real
+  # A LIVE quote older than this is reported STALE. Fifteen minutes is a
+  # defensible prototype window for spot metals; a deployment against a real
   # feed should set this from that feed's publication interval.
+  #
+  # This does NOT apply to REFERENCE prices. A dated snapshot is not a live
+  # feed that went quiet — it was published on a stated date and is being used
+  # deliberately after it, so age is reported but never changes its status.
+  # STALE keeps one meaning: something that should have been current was not.
   max_age_seconds: 900
