@@ -182,6 +182,17 @@ SPEC: dict[str, tuple] = {
     ),
     "conveyor.weight.timeout_s": (_non_negative, 5.0, "AURUM_WEIGHT_TIMEOUT_S"),
     "conveyor.weight.filter_samples": (_int, 5, "AURUM_WEIGHT_FILTER_SAMPLES"),
+    # The pan state machine: when an object has arrived, and when it has gone.
+    # ENGINEERING APPROXIMATIONS - starting points to tune against the real
+    # cell's noise floor, not research-derived. The stability judgement itself
+    # is NOT here: app.weight.WeightSensor already owns it.
+    "conveyor.weight.pan.object_threshold_g": (_non_negative, 5.0, "AURUM_PAN_OBJECT_THRESHOLD_G"),
+    "conveyor.weight.pan.clear_threshold_g": (_non_negative, 2.0, "AURUM_PAN_CLEAR_THRESHOLD_G"),
+    "conveyor.weight.pan.clear_samples": (_int, 5, "AURUM_PAN_CLEAR_SAMPLES"),
+    "conveyor.weight.pan.poll_interval_s": (_non_negative, 0.05, "AURUM_PAN_POLL_INTERVAL_S"),
+    # The normal workflow. Off leaves POST /session/measure as the only way to
+    # weigh anything, which is the developer fallback rather than the product.
+    "conveyor.weight.pan.auto": (_bool, True, "AURUM_PAN_AUTO"),
     "conveyor.weight.calibration_factor": (
         _float,
         UNMEASURED,
@@ -286,11 +297,33 @@ SPEC: dict[str, tuple] = {
         "mass_fraction_only",
         "AURUM_PRICE_UNAVAILABLE_POLICY",
     ),
-    "pricing.provider": (_one_of("unavailable", "static"), "unavailable", "AURUM_PRICE_PROVIDER"),
+    # reference: a dated snapshot of real published prices, labelled REFERENCE
+    # and never reported as current. The shipped default - see
+    # configs/pricing.yaml for why there is no live feed.
+    "pricing.provider": (
+        _one_of("reference", "unavailable", "static"),
+        "reference",
+        "AURUM_PRICE_PROVIDER",
+    ),
     "pricing.max_age_seconds": (_non_negative, 900.0, "AURUM_PRICE_MAX_AGE_SECONDS"),
     "tracking.tracker": (_text, "bytetrack.yaml", "AURUM_TRACKER"),
     "tracking.max_missing_frames": (_int, 15, "AURUM_TRACK_MAX_MISSING_FRAMES"),
     "tracking.min_detections_to_confirm": (_int, 3, "AURUM_TRACK_MIN_DETECTIONS"),
+    # Grouping detected components into one physical object. A class becomes a
+    # container by being listed here, so laptop boards, drive housings or power
+    # supplies join later without touching app/vision/assembly.py.
+    "tracking.assembly.container_classes": (
+        _text_list,
+        ["PCB"],
+        "AURUM_ASSEMBLY_CONTAINER_CLASSES",
+    ),
+    # ENGINEERING APPROXIMATION - how much of a component's box must fall
+    # inside a container's before it counts as sitting on it.
+    "tracking.assembly.containment_ratio": (
+        _fraction,
+        0.7,
+        "AURUM_ASSEMBLY_CONTAINMENT_RATIO",
+    ),
 }
 
 

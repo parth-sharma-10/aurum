@@ -149,16 +149,20 @@ class TestTheChain:
         assert result["valuation"]["pmdi"]["precious_mass_fraction_ppm"] == 2200.0
         assert transport.movements[0][0] == "B"
 
-    def test_ram_reaches_bin_c_and_no_frame_is_written(self):
-        """The claim that matters most: C is the board doing nothing."""
+    def test_an_unknown_class_reaches_bin_c_and_no_frame_is_written(self):
+        """The claim that matters most: C is the board doing nothing.
+
+        RAM used to be this test's example. It carries cited composition now,
+        so the case is made with a class the database has never heard of.
+        """
         transport = FakeTransport(connected=True)
         run = session(grams=30.0, transport=transport)
-        present(run, "RAM")
+        present(run, "GPU")
 
         result = run.measure_and_route()
 
         assert result["decision"]["decision"] == "C"
-        assert result["decision"]["reason_code"] == "C_UNSUPPORTED_MATERIAL"
+        assert result["decision"]["reason_code"] == "C_UNKNOWN_CLASS"
         assert result["actuation"]["commanded"] is False
         assert result["actuation"]["servo"] is None
         assert transport.sent == []
@@ -318,7 +322,8 @@ class TestSnapshot:
         """The demonstration must not imply a belt it does not have."""
         conveyor = session().snapshot()["conveyor"]
         assert conveyor["present"] is False
-        assert "operator carries the component" in conveyor["note"]
+        assert "No conveyor exists" in conveyor["note"]
+        assert "not scheduled" in conveyor["note"]
 
     def test_the_snapshot_reports_calibration_verification_honestly(self):
         assert session(calibration=UNVERIFIED).snapshot()["calibration"]["verified"] is False
@@ -392,14 +397,14 @@ class TestMockMassFallback:
         assert pmdi["precious_mass_fraction_ppm"] == 2200.0
         assert pmdi["evidence_sources"]
 
-    def test_ram_still_reaches_c_because_it_has_no_composition(self):
+    def test_an_unknown_class_still_reaches_c_under_a_stand_in_mass(self):
         """A stand-in mass cannot conjure evidence that does not exist."""
         transport = FakeTransport(connected=True)
         run = self.mock_session(transport=transport)
-        present(run, "RAM")
+        present(run, "GPU")
         result = run.measure_and_route()
         assert result["decision"]["decision"] == "C"
-        assert result["decision"]["reason_code"] == "C_UNSUPPORTED_MATERIAL"
+        assert result["decision"]["reason_code"] == "C_UNKNOWN_CLASS"
         assert transport.movements == []
 
     def test_with_the_flag_off_a_pcb_still_reaches_c(self):

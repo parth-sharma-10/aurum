@@ -25,7 +25,9 @@
 #   2. Composition and recovery are separate sections and are never derived
 #      from one another. "Metal present" is not "metal recoverable".
 #   3. Where a class has no defensible figure it is ABSENT, not estimated.
-#      RAM has no composition entry for exactly this reason - see `gaps`.
+#      Platinum in RAM is the worked example: Charles et al. looked for it and
+#      did not find it, so it is recorded in `gaps` as a cited negative result
+#      rather than entered as a zero.
 #   4. Original units are preserved in `original_value`/`original_unit`.
 #      Conversions are recorded, exact, and re-checked by tests
 #      (1 mg/kg = 1 ppm = 1 g/tonne; 1 % = 10 000 mg/kg).
@@ -491,6 +493,139 @@ evidence:
     evidence_type: measured
     confidence: high
 
+  # --- RAM, whole DIMM modules, per piece ---------------------------------
+  #
+  # The basis question this project had to get right. Charles et al. report
+  # BOTH mg/module and ppm for the same samples. Aurum uses the PER-MODULE
+  # figures, because per-module is the basis its actual inputs support: the
+  # detector counts modules, and the load cell weighs the WHOLE object on the
+  # pan. On a motherboard that mass covers the board, the processor and the
+  # connectors too, so a RAM concentration applied to it would be answering a
+  # question nobody asked. Count x per-module needs no mass at all and is
+  # therefore exactly right for both a loose module and one on a board.
+  #
+  # The ppm figures are recorded in each record's notes as published, for
+  # cross-checking only. Nothing computes with them.
+  - id: RAM-AU-001
+    component: RAM
+    subtype: dimm_module
+    metal: Au
+    quantity: per_piece
+    value: 18.0
+    unit: "mg"
+    original_value: 18.0
+    original_unit: "mg/module"
+    conversion: "none; one detected module is one piece"
+    minimum: 10.5
+    maximum: 26.8
+    sample_description: >
+      Mean of the 12 DIMM samples (4-15) in Table 2: SDR, DDR, DDR2 and DDR3
+      PC DRAM modules of 32 MB to 2 GB, placed on the market 1991-2008. The
+      three SIMM samples (1-3) are excluded, as the authors themselves do in
+      their Table 4 valuation: they are early-1990s 72-pin modules and two of
+      the three carry TIN rather than gold edge contacts.
+    sample_mass: "13.13-21.69 g per module across the 12 DIMMs"
+    measurement_method: "AAS after comminution and acid digestion; triplicate analyses"
+    device_generation: "PC DRAM DIMMs, on the market 1991-2008"
+    publication_year: 2017
+    source: CHARLES2017
+    evidence_type: measured
+    confidence: medium
+    notes: >
+      Published concentration 1022 ppm, consistent with the per-module figure
+      over a mean module mass of about 17.6 g. Confidence is capped at medium:
+      one study, n = 12, and no module later than 2008 - there is no DDR4 or
+      DDR5 in this sample. The paper states the bulk of the gold is in the
+      edge contacts rather than the ICs, which is why the figure does not
+      correlate with IC count. Range is the min and max of the 12 DIMMs.
+
+  - id: RAM-AG-001
+    component: RAM
+    subtype: dimm_module
+    metal: Ag
+    quantity: per_piece
+    value: 28.4
+    unit: "mg"
+    original_value: 28.4
+    original_unit: "mg/module"
+    conversion: "none; one detected module is one piece"
+    minimum: 7.4
+    maximum: 124.0
+    sample_description: "as RAM-AU-001"
+    sample_mass: "13.13-21.69 g per module across the 12 DIMMs"
+    measurement_method: "AAS after comminution and acid digestion; triplicate analyses"
+    device_generation: "PC DRAM DIMMs, on the market 1991-2008"
+    publication_year: 2017
+    source: CHARLES2017
+    evidence_type: measured
+    confidence: medium
+    notes: >
+      Published concentration 1616 ppm. The widest spread of the four metals:
+      sample 9 alone contains 124 mg against 7.4-33 mg for every other DIMM,
+      and the authors discuss it as an outlier. It is retained in the mean
+      here because it is retained in the mean they publish and use, but it is
+      why the maximum is 17x the minimum. Silver is roughly 2% of a module's
+      contained value, so the spread moves the total very little.
+
+  - id: RAM-PD-001
+    component: RAM
+    subtype: dimm_module
+    metal: Pd
+    quantity: per_piece
+    value: 1.2
+    unit: "mg"
+    original_value: 1.2
+    original_unit: "mg/module"
+    conversion: "none; one detected module is one piece"
+    minimum: 0.399
+    maximum: 2.1
+    sample_description: "as RAM-AU-001"
+    sample_mass: "13.13-21.69 g per module across the 12 DIMMs"
+    measurement_method: "AAS after comminution and acid digestion; triplicate analyses"
+    device_generation: "PC DRAM DIMMs, on the market 1991-2008"
+    publication_year: 2017
+    source: CHARLES2017
+    evidence_type: measured
+    confidence: medium
+    notes: >
+      Published concentration 70 ppm. THE FIGURE MOST LIKELY TO BE WRONG FOR A
+      MODERN MODULE, and the paper is the reason we know it: palladium content
+      fell about 80% across 1991-2008 as MLCC inner electrodes moved from
+      100% Pd to AgPd alloys, and the authors expect the decline to continue.
+      A module manufactured after 2008 probably contains less than 1.2 mg. The
+      figure is used because it is what is measured; the direction of its
+      error is stated here rather than corrected by guesswork.
+      Note also that the authors flag Pd levels in leachate as close to the
+      AAS detection limit, giving larger sample-to-sample variation than the
+      other three metals.
+
+  - id: RAM-CU-001
+    component: RAM
+    subtype: dimm_module
+    metal: Cu
+    quantity: per_piece
+    value: 3.4
+    unit: "g"
+    original_value: 3.4
+    original_unit: "g/module"
+    conversion: "none; one detected module is one piece"
+    minimum: 2.13
+    maximum: 5.08
+    sample_description: "as RAM-AU-001"
+    sample_mass: "13.13-21.69 g per module across the 12 DIMMs"
+    measurement_method: "AAS after comminution and acid digestion; triplicate analyses"
+    device_generation: "PC DRAM DIMMs, on the market 1991-2008"
+    publication_year: 2017
+    source: CHARLES2017
+    evidence_type: measured
+    confidence: medium
+    notes: >
+      Published concentration 200 x 10^3 ppm, i.e. about 20% of module mass.
+      Copper RISES over the sampled period, by 0.23 g/module/year, so unlike
+      palladium this figure is likely to UNDERSTATE a modern module. Copper is
+      about 1.5% of a module's contained value at the shipped reference
+      prices, so the direction matters far less than it does for gold.
+
   # --- Reference masses ---------------------------------------------------
   - id: RAM-MASS-001
     component: RAM
@@ -614,14 +749,59 @@ components:
           Al: CONN-AL-001
 
   RAM:
+    # ---------------------------------------------------------------------
+    # NO COMPOSITION DATA EXISTS FOR ANY OF THESE. See `gaps.RAM`.
+    #
+    # The generation subtypes below are PREPARED SLOTS, not entries waiting to
+    # be believed. Each is empty, each therefore returns INSUFFICIENT_EVIDENCE,
+    # and adding one composition key to one of them is the whole of the work
+    # when a citable figure is found. They exist because DRAM composition is
+    # known to vary by generation - contact plating, layer count and package
+    # type all changed across DDR2 to DDR5 - so a single "RAM" figure would
+    # have to be an average nobody measured.
+    #
+    # `default_subtype` stays `dimm_module` on purpose. Aurum cannot read a
+    # module's generation from an RGB image, so the class as DETECTED is an
+    # unspecified module, and that is the entry a detection resolves to. A
+    # generation subtype may only ever be selected by evidence the system
+    # actually has - never guessed from appearance.
+    #
+    # When a figure is found, its evidence record must carry what every other
+    # record here carries: value, unit, quantity, sample_description,
+    # measurement_method, device_generation, publication_year, source,
+    # evidence_type, confidence, and minimum/maximum where the source reports
+    # a range. A figure without those is not admissible.
+    # ---------------------------------------------------------------------
     default_subtype: dimm_module
     subtypes:
       dimm_module:
         description: >
-          A DIMM / SO-DIMM / RDIMM memory module. NO COMPOSITION DATA - see
-          `gaps.RAM`. The mass reference exists but has nothing to multiply.
-        composition: {}
+          A DIMM / SO-DIMM / RDIMM memory module of unspecified generation -
+          what a bare "RAM" detection justifies. Composition is PER MODULE,
+          from the 12 DIMMs of Charles et al. (2017) Table 2, so a detected
+          count is all that is needed to estimate from it.
+        composition:
+          Au: RAM-AU-001
+          Ag: RAM-AG-001
+          Pd: RAM-PD-001
+          Cu: RAM-CU-001
         mass: RAM-MASS-001
+      ddr2_module:
+        description: "A DDR2 module. Slot prepared; no cited composition."
+        generation: DDR2
+        composition: {}
+      ddr3_module:
+        description: "A DDR3 module. Slot prepared; no cited composition."
+        generation: DDR3
+        composition: {}
+      ddr4_module:
+        description: "A DDR4 module. Slot prepared; no cited composition."
+        generation: DDR4
+        composition: {}
+      ddr5_module:
+        description: "A DDR5 module. Slot prepared; no cited composition."
+        generation: DDR5
+        composition: {}
 
 # ---------------------------------------------------------------------------
 # RECOVERY
@@ -635,12 +815,29 @@ components:
 recovery:
   available: false
   reason: >
-    No cited recovery factor applies to a whole detected component. The only
-    recovery figures in the database were measured on a liberated, stamp-sheared
-    and chemically decopperized gold-finger feed, which is a processed
-    intermediate rather than a component a camera can see. Applying them to a
-    detected connector would silently assume a full pre-treatment chain that
-    Aurum has neither performed nor observed.
+    No cited recovery factor applies to a whole detected component, for any
+    class including RAM. Two separate refusals sit behind that one sentence.
+
+    FOR CONNECTORS: the only recovery figures measured in this database's
+    sources (LIN2023, below) were obtained on a liberated, stamp-sheared and
+    chemically decopperized gold-finger feed - a processed intermediate rather
+    than a component a camera can see. Applying them to a detected connector
+    would silently assume a full pre-treatment chain Aurum has neither
+    performed nor observed.
+
+    FOR RAM: CHARLES2017 quotes bottom-line recovery figures of >95% for gold
+    at integrated pyrometallurgical/hydrometallurgical refineries and about
+    70% at intermediate pre-processing. Those are NOT recorded as factors here
+    and are NOT applied, for two reasons. They are secondary citations to
+    Hagelueken rather than measurements this study made, and they describe
+    WEEE processing in general rather than RAM specifically - the paper's own
+    argument is that recovery depends almost entirely on which pre-processing
+    route an item takes, which is precisely the thing Aurum cannot observe.
+    Multiplying a contained figure by 0.95 would convert a measured quantity
+    into a process assumption while leaving it looking like a measurement.
+
+    Aurum therefore reports CONTAINED value and reports recoverable value as
+    unavailable, with this reason attached.
 
   factors:
     - id: CONN-AU-REC-001
@@ -707,15 +904,33 @@ recovery:
 # ---------------------------------------------------------------------------
 gaps:
   RAM:
-    missing: [Au, Ag, Pd, Pt, Cu, Ni, Sn, Al]
+    missing: [Pt, Ni, Sn, Al]
     reason: >
-      No source giving whole-RAM-module composition could be read in full. The
-      closest study (CHARLES2017, AAS on DRAM modules from 1991-2008) is
-      nominally open access but its full text was unreachable, so its tables
-      were never inspected and no number was taken from it. LIN2023 measures
-      only the sheared gold-finger edge, and FIRSCHING2024 explicitly states
-      that gold-finger figures were not yet available. A detected RAM module
-      therefore returns `available: false`.
+      Au, Ag, Pd and Cu are now covered per module by CHARLES2017 - the study
+      that was previously unreachable and has since been read in full.
+
+      PLATINUM IS A CITED NEGATIVE RESULT, not an unknown. The authors looked
+      for it and did not find it: "no platinum was detected in any of the
+      samples", putting it below 6 micrograms per module (<0.5 ppm) at their
+      stated AAS detection limit of 60 ug/L in solution. They attribute this
+      to platinum being used in hard-disk platters rather than in PCBs. No
+      platinum evidence record exists because the defensible statement is
+      "below a detection limit", which is not a quantity to multiply by a
+      price. Recording it as 0 mg would turn a bound into a measurement.
+
+      Nickel, tin and aluminium were not analysed by this study at all. Their
+      absence here is ignorance, not evidence of absence, and the two must not
+      be confused: the platinum entry above is a result, these three are a gap.
+
+      GENERATION-SPECIFIC COMPOSITION IS STILL UNSUPPORTED. The DDR2/DDR3/
+      DDR4/DDR5 subtypes are defined and EMPTY under `components.RAM.subtypes`
+      and remain so. Charles et al. do contain per-generation samples, but at
+      n = 1 to n = 4 per generation, and nothing later than DDR3 (2008) exists
+      in the study at all - there is no DDR4 or DDR5 data to have. They are
+      also not selectable from an image: Aurum cannot read a generation from
+      RGB, so a detection resolves to the unspecified `dimm_module`.
+
+      NO RAM-SPECIFIC RECOVERY FACTOR EXISTS. See `recovery` below.
   CPU:
     missing: [Ag, Pd, Pt, Cu, Ni, Sn, Al]
     reason: >

@@ -218,9 +218,9 @@ def _yield_config(tmp_path, monkeypatch, **entries):
 
 
 class TestRecoveryEstimate:
-    def test_disabled_by_default_in_this_repository(self):
-        """The shipped configuration must never produce a figure."""
-        est = recovery_estimate({"PCB": 2, "RAM": 1})
+    def test_a_concentration_without_a_mass_produces_no_figure(self):
+        """The shipped configuration must never produce an unbacked figure."""
+        est = recovery_estimate({"PCB": 2})
         assert est["available"] is False
         assert "components" not in est
         assert est["reason"]
@@ -263,8 +263,10 @@ class TestRecoveryEstimate:
             PCB={"material": "gold", "value": 0.02, "unit": "g", "source": "TEST FIXTURE"},
         )
         est = recovery_estimate({"PCB": 1, "RAM": 2})
-        assert est["available"] is False
+        assert est["completeness"] == "PARTIAL_ESTIMATE"
+        assert [n["component"] for n in est["not_valued"]] == ["RAM"]
         assert "RAM" in est["reason"]
+        assert {line["component"] for line in est["components"]} == {"PCB"}
 
     def test_a_yield_missing_its_source_is_treated_as_absent(self, tmp_path, monkeypatch):
         """An uncitable figure is not a usable figure."""
@@ -307,8 +309,12 @@ def _provider(price=10.0, unit="g", currency="USD"):
 
 
 class TestValuation:
-    def test_disabled_by_default_in_this_repository(self):
-        """No price data ships, so production valuation must refuse."""
+    def test_the_legacy_provider_is_still_disabled(self):
+        """app.pricing is the superseded layer and ships no provider of its own.
+
+        Prices now live in app.valuation.prices; this older module is still
+        imported by the batch endpoints and must not quietly start pricing.
+        """
         assert pricing.get_provider() is None
 
     def test_quantity_times_price_is_the_value(self, priced_recovery):
@@ -412,8 +418,9 @@ class TestValuationEndpoint:
         rec = _record()
         ledger_mod.save(rec)
         body = client.get(f"/batches/{rec['batch_id']}/valuation").json()
+        # The legacy `valuation` key is served by app.pricing, which ships no
+        # provider; the modern figure lives under `item_valuation`.
         assert body["valuation"]["available"] is False
-        assert body["recovery_estimate"]["available"] is False
         assert "estimated_value" not in body["valuation"]
 
     def test_endpoint_separates_counts_from_estimates(self, client, ledger_db):

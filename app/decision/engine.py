@@ -33,6 +33,19 @@ A uses:
                          and a CPU reaches B.
 
 Neither mode is a claim about which component contains more precious metal.
+
+**On evidence completeness, and why it does not decide anything.** A mixed
+assembly often yields a PARTIAL_ESTIMATE: the processor is valued from cited
+per-piece data while the board's per-kilogram figure is refused, because the
+one measured mass covers every component on it. That is reported here in
+`signals.evidence_completeness`, alongside which components were and were not
+valued - and it is deliberately NOT wired to a bin.
+
+There is no existing requirement that an incomplete estimate may not reach the
+premium stream, and inventing one would put a sorting policy inside the
+evidence layer where nobody could configure it. The ladder below runs on the
+numbers the evidence does support. If a completeness rule is ever wanted, it
+belongs in configs/grading.yaml as an explicit policy, next to class_aware.
 """
 
 from __future__ import annotations
@@ -179,6 +192,11 @@ def _signals(component_class, confidence, valuation: Valuation | None, applied) 
         "mass_status": str(pmdi.mass_status) if pmdi else str(MassStatus.UNMEASURED),
         "mass_g": pmdi.mass_g if pmdi else None,
         "evidence_status": str(pmdi.evidence_status) if pmdi else str(EvidenceStatus.MISSING),
+        # Reported for the operator and for any future policy. Nothing in this
+        # module branches on it - see the module docstring.
+        "evidence_completeness": pmdi.completeness if pmdi else materials.INSUFFICIENT_EVIDENCE,
+        "components_valued": [dict(v) for v in pmdi.valued] if pmdi else [],
+        "components_not_valued": [dict(n) for n in pmdi.not_valued] if pmdi else [],
         "evidence_sources": list(pmdi.evidence_sources) if pmdi else [],
         "evidence_confidence": pmdi.confidence if pmdi else None,
     }
@@ -231,8 +249,11 @@ def decide(
             f"Detection confidence {confidence!r} is missing, non-numeric, or outside 0..1.",
         )
 
-    # 2. Material evidence.
-    if not support["has_composition"]:
+    # 2. Material evidence. An assembly may be rooted on a container whose own
+    #    class carries no composition while its children do, so a valuation
+    #    that actually produced an estimate settles the question the per-class
+    #    check was asking.
+    if not support["has_composition"] and not (valuation and valuation.pmdi.available):
         return out(
             Bin.C,
             ReasonCode.C_UNSUPPORTED_MATERIAL,

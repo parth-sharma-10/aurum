@@ -15,9 +15,83 @@ const CLASS_COLOR = {
 
 const BIN_CLASS = { A: "badge-a", B: "badge-b", C: "badge-c" };
 
+/** The automatic cycle, in the operator's words rather than the enum's. */
+const PAN_STATE = {
+  WAITING_FOR_OBJECT: ["Waiting for an object", "neutral"],
+  OBJECT_PRESENT: ["Object detected on the pan", "warn"],
+  WEIGHING: ["Measuring…", "warn"],
+  WEIGHT_STABLE: ["Weight stable", "good"],
+  PROCESSING: ["Estimating and deciding", "warn"],
+  ROUTING: ["Routing", "warn"],
+  WAITING_FOR_CLEAR: ["Remove the object", "warn"],
+};
+
+/**
+ * The state machine, front and centre.
+ *
+ * This is what replaced the "Measure & route" button. The operator reads the
+ * machine here rather than driving it: nothing on this panel is clickable.
+ */
+function PanBanner({ pan, automatic }) {
+  if (!pan) return null;
+  const [label, tone] = PAN_STATE[pan.state] ?? [pan.state, "neutral"];
+  return (
+    <div className={`glass-panel pan pan-${tone}`}>
+      <div className="pan-head">
+        <span className="field-label">System</span>
+        <span className={automatic ? "badge-b" : "badge-c"}>
+          {automatic ? "AUTOMATIC" : "MANUAL — pan machine not running"}
+        </span>
+      </div>
+      <div className="pan-state">{label}</div>
+      <div className="pan-meta mono">
+        {pan.grams == null ? "— g" : `${pan.grams.toFixed(1)} g`} ·{" "}
+        {pan.cycles_completed} handled · {pan.seconds_in_state}s in state
+      </div>
+      {pan.reason && <div className="stage-note">{pan.reason}</div>}
+    </div>
+  );
+}
+
+/** What the camera found ON this object. Absence is never shown as zero. */
+function Inventory({ components }) {
+  const entries = Object.entries(components ?? {});
+  if (!entries.length) return <span className="muted">nothing detected</span>;
+  return (
+    <span className="inventory">
+      {entries.map(([cls, n]) => (
+        <span
+          key={cls}
+          className="chip"
+          style={{ "--swatch": CLASS_COLOR[cls] }}
+        >
+          {cls} × {n}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const pct = (c) => (c == null ? "--" : `${(c * 100).toFixed(1)}%`);
 const grams = (g) => (g == null ? "--" : `${g.toFixed(1)} g`);
 const num = (v, digits = 4) => (v == null ? "--" : Number(v).toFixed(digits));
+
+/** Money, or an explicit absence. Never renders a missing figure as zero. */
+const money = (v, currency) =>
+  v == null
+    ? null
+    : `${currency === "INR" ? "₹" : `${currency ?? ""} `}${Number(v).toLocaleString(
+        undefined,
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+      )}`;
+
+/** Milligrams where that reads better than a long decimal of grams. */
+const metalMass = (grams) =>
+  grams == null
+    ? "--"
+    : grams < 1
+      ? `${(grams * 1000).toFixed(2)} mg`
+      : `${grams.toFixed(3)} g`;
 
 async function call(path, method = "GET") {
   const res = await fetch(`${API}${path}`, { method });
@@ -92,6 +166,7 @@ function ItemChain({ item }) {
   const d = item.decision;
   const act = item.actuation;
   const metals = metalRows(pmdi);
+  const priceRows = Object.entries(v?.prices ?? {});
 
   // Nothing after the camera has run until the operator presses the button.
   // Those stages are PENDING, not failed: rendering them red made a perfectly
@@ -118,9 +193,8 @@ function ItemChain({ item }) {
 
       {!graded && (
         <div className="notice">
-          <strong>Detected and confirmed.</strong> Place it on the pan, then
-          press <strong>Measure &amp; route</strong> to weigh it, grade it and
-          fire the paddle.
+          <strong>Detected and confirmed.</strong> Place it on the pan. The load
+          cell starts the measurement by itself — there is nothing to press.
         </div>
       )}
 
@@ -138,8 +212,20 @@ function ItemChain({ item }) {
             <span className="mono"> {pct(item.confidence)}</span>
           </>
         }
-        note={`${item.detection_count} observations · confidence is the mean over all of them`}
+        note={`${item.detection_count} observations · confidence is the weakest member's mean`}
         state={item.class_name ? "good" : "bad"}
+      />
+
+      <Stage
+        n="1b"
+        title={item.is_assembly ? "Assembly — components on this object" : "Single component"}
+        value={<Inventory components={item.components} />}
+        note={
+          item.is_assembly
+            ? "One physical object, one id, one mass. Only components actually detected are listed — nothing is recorded as absent."
+            : "Not sitting on a board, so it is its own object."
+        }
+        state="neutral"
       />
 
       <Stage
@@ -189,25 +275,81 @@ function ItemChain({ item }) {
         state={pmdi?.available ? "good" : graded ? "bad" : "neutral"}
       />
 
+      {pmdi?.completeness && pmdi.completeness !== "COMPLETE" && (
+        <div className="notice">
+          <strong>
+            {pmdi.completeness === "PARTIAL_ESTIMATE"
+              ? "PARTIAL ESTIMATE"
+              : "INSUFFICIENT EVIDENCE"}
+          </strong>{" "}
+          — the figures below cover only part of this object.
+          <table className="metals">
+            <tbody>
+              {(pmdi.valued ?? []).map((v) => (
+                <tr key={`v-${v.component}`}>
+                  <td className="mono">
+                    {v.component} × {v.count}
+                  </td>
+                  <td>
+                    <span className="badge-b">VALUED</span>
+                  </td>
+                  <td className="muted small">{v.metals.join(", ")}</td>
+                </tr>
+              ))}
+              {(pmdi.not_valued ?? []).map((n) => (
+                <tr key={`n-${n.component}`}>
+                  <td className="mono">
+                    {n.component} × {n.count}
+                  </td>
+                  <td>
+                    <span className="badge-c">NOT VALUED</span>
+                  </td>
+                  <td className="muted small">{n.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {metals.length > 0 && (
         <table className="metals">
           <thead>
             <tr>
               <th>Metal</th>
               <th>Contained</th>
+              <th>Price</th>
+              <th>Value</th>
               <th>Basis</th>
               <th>Evidence</th>
             </tr>
           </thead>
           <tbody>
-            {metals.map(([metal, amount, kind]) => (
-              <tr key={metal} className={kind === "precious" ? "precious" : ""}>
-                <td className="mono">{metal}</td>
-                <td className="mono">{num(amount.grams, 6)} g</td>
-                <td className="muted small">{amount.calculation}</td>
-                <td className="mono small">{amount.evidence.join(", ")}</td>
-              </tr>
-            ))}
+            {metals.map(([metal, amount, kind]) => {
+              const price = v?.prices?.[metal];
+              const cash =
+                price?.price_per_gram == null
+                  ? null
+                  : money(amount.grams * price.price_per_gram, price.currency);
+              return (
+                <tr key={metal} className={kind === "precious" ? "precious" : ""}>
+                  <td className="mono">{metal}</td>
+                  <td className="mono">{metalMass(amount.grams)}</td>
+                  <td className="mono small">
+                    {price?.price_per_gram == null ? (
+                      <span className="badge-c">NO PRICE</span>
+                    ) : (
+                      `${money(price.price_per_gram, price.currency)}/g`
+                    )}
+                  </td>
+                  <td className="mono">
+                    {cash ?? <span className="muted">not priced</span>}
+                  </td>
+                  <td className="muted small">{amount.calculation}</td>
+                  <td className="mono small">{amount.evidence.join(", ")}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -239,12 +381,15 @@ function ItemChain({ item }) {
 
       <Stage
         n="5"
-        title="Estimated value"
+        title="Estimated CONTAINED value"
         value={
-          pmdi?.pmdi_value != null ? (
-            <span className="mono big">
-              {num(pmdi.pmdi_value, 2)} {pmdi.currency}
-            </span>
+          v?.contained_value != null ? (
+            <>
+              <span className="mono big">
+                {money(v.contained_value, v.currency)}
+              </span>
+              <span className="muted"> contained</span>
+            </>
           ) : graded ? (
             <span className="badge-c">NO PRICE SOURCE</span>
           ) : (
@@ -253,12 +398,65 @@ function ItemChain({ item }) {
         }
         note={
           graded
-            ? (pmdi?.reason ??
-              "Aurum ships no market data feed; a price with no source is worse than none.")
+            ? (v?.reason ??
+              "What the cited assays say is PRESENT — not what a process would recover, and not what a recycler would pay.")
             : null
         }
-        state={pmdi?.pmdi_value != null ? "good" : graded ? "warn" : "neutral"}
+        state={v?.contained_value != null ? "good" : graded ? "warn" : "neutral"}
       />
+
+      {graded && v?.recoverable_value && (
+        <Stage
+          n="5b"
+          title="Estimated RECOVERABLE value"
+          value={
+            v.recoverable_value.available ? (
+              <span className="mono big">
+                {money(v.recoverable_value.value, v.recoverable_value.currency)}
+              </span>
+            ) : (
+              <span className="badge-c">NOT SUPPORTED BY CURRENT EVIDENCE</span>
+            )
+          }
+          note={v.recoverable_value.reason}
+          state={v.recoverable_value.available ? "good" : "warn"}
+        />
+      )}
+
+      {graded && priceRows.length > 0 && (
+        <div className="notice">
+          <strong>
+            {priceRows[0][1].status === "REFERENCE"
+              ? "REFERENCE PRICES"
+              : `${priceRows[0][1].status} PRICES`}
+          </strong>{" "}
+          — dated published figures used after their date, not a live market
+          feed.
+          <table className="metals">
+            <tbody>
+              {priceRows.map(([metal, q]) => (
+                <tr key={`p-${metal}`}>
+                  <td className="mono">{metal}</td>
+                  <td className="mono">
+                    {q.price_per_gram == null
+                      ? "--"
+                      : `${money(q.price_per_gram, q.currency)}/g`}
+                  </td>
+                  <td className="mono small">
+                    {q.quoted_price} {q.quoted_unit}
+                  </td>
+                  <td className="mono small">{(q.timestamp ?? "").slice(0, 10)}</td>
+                  <td>
+                    <span className={q.status === "LIVE" ? "badge-b" : "badge-c"}>
+                      {q.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <Stage
         n="6"
@@ -410,22 +608,30 @@ export default function App() {
         >
           {busy === "board" ? "Connecting…" : "Connect board"}
         </button>
-        <button
-          className="primary"
-          disabled={busy}
-          onClick={() => act("measure", "/session/measure")}
-        >
-          {busy === "measure" ? "Measuring…" : "Measure & route"}
-        </button>
         <button disabled={busy} onClick={() => act("stop", "/session/stop")}>
           Stop
         </button>
         <span className="controls-note">
-          The operator carries the component between stages and says{" "}
-          <em>when</em>. The class comes from the model, the mass from the cell,
-          the bin from the decision engine.
+          Place the object on the pan and wait. The load cell starts the
+          measurement, the model gives the classes, the decision engine gives
+          the bin. Nobody here says which bin.
         </span>
       </div>
+
+      <details className="glass-panel controls">
+        <summary>Developer controls</summary>
+        <p className="controls-note">
+          Not the normal path. The load cell triggers a measurement on its own;
+          these exist for a bench with no working cell or a mass that will not
+          settle.
+        </p>
+        <button
+          disabled={busy}
+          onClick={() => act("measure", "/session/measure")}
+        >
+          {busy === "measure" ? "Measuring…" : "Measure & route now (manual)"}
+        </button>
+      </details>
 
       {state?.mock_mass?.enabled && (
         <div className="notice">
@@ -444,6 +650,8 @@ export default function App() {
           )}
         </div>
       )}
+      <PanBanner pan={state?.pan} automatic={state?.automatic} />
+
       {error && <div className="notice bad">{error}</div>}
       {state?.camera?.error && (
         <div className="notice bad">Camera: {state.camera.error}</div>

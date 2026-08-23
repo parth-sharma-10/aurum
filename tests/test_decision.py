@@ -96,10 +96,11 @@ class TestClassSupport:
     def test_pcb_needs_a_mass_because_its_evidence_is_a_concentration(self):
         assert class_support("PCB")["requires_mass"] is True
 
-    def test_ram_is_known_but_has_no_composition(self):
+    def test_ram_is_known_and_now_carries_composition(self):
+        """Charles et al. 2017, per module - so no scale is required."""
         assert class_support("RAM") == {
             "known": True,
-            "has_composition": False,
+            "has_composition": True,
             "requires_mass": False,
         }
 
@@ -186,10 +187,16 @@ class TestBinB:
 
 
 class TestBinC:
-    def test_ram_is_unsupported(self):
-        result = judge("RAM", 0.95, measured(7.8))
+    def test_a_class_with_no_cited_composition_is_unsupported(self):
+        """C_UNSUPPORTED_MATERIAL still exists and still fires.
+
+        RAM used to be the example. It is supported now, so the case is made
+        with a class the database has never heard of - the same ladder rung,
+        reached without pretending an evidence gap that has been closed.
+        """
+        result = judge("GPU", 0.95, measured(220.0))
         assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_UNSUPPORTED_MATERIAL
+        assert result.reason_code is ReasonCode.C_UNKNOWN_CLASS
 
     def test_an_unknown_class_is_refused(self):
         result = judge("GPU", 0.99, measured(100.0))
@@ -351,8 +358,58 @@ class TestEvidenceIsNotManipulated:
         assert cpu.decision is Bin.B
 
 
-class TestRamRegression:
-    """RAM must not become routable by moving a threshold."""
+class TestRamRoutesOnEvidenceOnly:
+    """RAM is now supported, and must be routed by its evidence and nothing else.
+
+    This class used to assert that no threshold change could route RAM,
+    because RAM had no composition at all. That gap closed when Charles et al.
+    (2017) was obtained. The property worth protecting is the same one from
+    the other side: RAM reaches a bin because cited evidence puts it there,
+    and if the evidence is removed no threshold may rescue it.
+    """
+
+    def test_a_module_reaches_a_routed_bin_on_its_cited_content(self):
+        result = judge("RAM", 1.0, measured(17.6))
+        assert result.decision is not Bin.C
+        assert result.signals["evidence_status"] == "SUPPORTED"
+        assert result.signals["precious_mass_g"] > 0
+
+    def test_the_decision_names_the_evidence_it_used(self):
+        result = judge("RAM", 1.0, measured(17.6))
+        assert set(result.signals["evidence_sources"]) == {
+            "RAM-AU-001",
+            "RAM-AG-001",
+            "RAM-PD-001",
+            "RAM-CU-001",
+        }
+
+    def test_a_weak_detection_is_still_refused(self):
+        """Evidence does not excuse the safety ladder."""
+        result = judge("RAM", 0.2, measured(17.6))
+        assert result.decision is Bin.C
+        assert result.reason_code is ReasonCode.C_LOW_CONFIDENCE
+
+    def test_no_mass_is_required_for_a_per_module_class(self):
+        """Per-piece evidence needs no scale, so an unweighed module still routes."""
+        result = judge("RAM", 1.0, mass=None)
+        assert result.reason_code is not ReasonCode.C_UNMEASURED_WEIGHT
+
+
+class TestRamFailsClosedWithoutEvidence:
+    """Strip the composition and no threshold may route RAM. The old guard, kept."""
+
+    @pytest.fixture
+    def stripped(self, tmp_path, monkeypatch):
+        import yaml
+
+        from app import materials
+
+        db = yaml.safe_load(materials.REFERENCE.read_text())
+        db["components"]["RAM"]["subtypes"]["dimm_module"]["composition"] = {}
+        path = tmp_path / "no_ram_composition.yaml"
+        path.write_text(yaml.safe_dump(db))
+        monkeypatch.setattr(materials, "REFERENCE", path)
+        return path
 
     @pytest.mark.parametrize(
         "env",
@@ -363,16 +420,15 @@ class TestRamRegression:
             {"grading_class_aware": "false", "bin_a_min_precious_ppm": 0},
         ],
     )
-    def test_no_threshold_change_can_route_ram(self, env):
+    def test_no_threshold_change_can_route_ram(self, stripped, env):
         result = judge("RAM", 1.0, measured(7.8), configuration=cfg(**env))
         assert result.decision is Bin.C
         assert result.reason_code is ReasonCode.C_UNSUPPORTED_MATERIAL
 
-    def test_even_with_prices_available(self):
-        result = judge("RAM", 1.0, measured(7.8), prices=priced())
-        assert result.decision is Bin.C
+    def test_even_with_prices_available(self, stripped):
+        assert judge("RAM", 1.0, measured(7.8), prices=priced()).decision is Bin.C
 
-    def test_the_reason_names_the_database_gap(self):
+    def test_the_reason_names_the_database_gap(self, stripped):
         assert "no cited composition" in judge("RAM", 1.0, measured(7.8)).reason
 
 
@@ -421,16 +477,16 @@ class TestExplainability:
 
     def test_bin_c_has_no_servo(self):
         """The fail-safe is reached by the machine doing nothing."""
-        assert judge("RAM", 0.95, measured(7.8)).servo is None
+        assert judge("GPU", 0.95, measured(220.0)).servo is None
 
     def test_a_and_b_name_their_paddle(self):
         assert judge("CPU", 0.95, measured(42.7)).servo == "A"
         assert judge("PCB", 0.95, measured(1800.0)).servo == "B"
 
     def test_the_reason_codes_are_machine_readable(self):
-        code = judge("RAM", 0.95, measured(7.8)).reason_code
+        code = judge("GPU", 0.95, measured(220.0)).reason_code
         assert isinstance(code, ReasonCode)
-        assert str(code) == "C_UNSUPPORTED_MATERIAL"
+        assert str(code) == "C_UNKNOWN_CLASS"
 
 
 class TestStatusPropagation:
@@ -458,3 +514,68 @@ class TestStatusPropagation:
         result = judge("CPU", 0.95, measured(42.7), prices=stale)
         assert result.status is OverallStatus.STALE
         assert result.signals["price_status"] == "STALE"
+
+
+class TestEvidenceCompletenessIsReportedNotEnforced:
+    """Completeness is a fact about the database, not a routing rule.
+
+    A mixed object often yields a PARTIAL_ESTIMATE: the processor is valued
+    from cited per-piece data while the board's per-kilogram figure is refused
+    because one mass covers every component. That is reported in the signals so
+    an operator can see it and a future policy can read it.
+
+    It is deliberately NOT wired to a bin. No existing grading requirement says
+    an incomplete estimate may not reach the premium stream, and inventing one
+    here would bury a sorting policy inside the evidence layer where nobody
+    could configure it. These tests pin that decision down so it cannot be
+    added by accident.
+    """
+
+    @staticmethod
+    def mixed(mass=None, configuration=None):
+        # PCB is cited per kilogram, so a mass covering both classes cannot be
+        # attributed to it and its line is refused. The CPU's per-piece gold
+        # still stands, which is what makes the result partial rather than
+        # absent.
+        valuation = valuation_module.value(
+            {"CPU": 1, "PCB": 1}, mass=mass, prices=unpriced(), now=NOW
+        )
+        return valuation, decide("CPU", 0.94, valuation, cfg=configuration or cfg())
+
+    def test_the_signals_carry_the_completeness_and_what_was_missed(self):
+        valuation, decision = self.mixed()
+        assert valuation.completeness == "PARTIAL_ESTIMATE"
+        signals = decision.as_dict()["signals"]
+        assert signals["evidence_completeness"] == "PARTIAL_ESTIMATE"
+        assert [v["component"] for v in signals["components_valued"]] == ["CPU"]
+        assert [n["component"] for n in signals["components_not_valued"]] == ["PCB"]
+        assert signals["components_not_valued"][0]["reason"]
+
+    def test_a_partial_estimate_is_not_by_itself_a_reason_to_refuse_a_bin(self):
+        """The same class, the same confidence, one extra unvalued component."""
+        complete = judge("CPU", 0.94)
+        _, partial = self.mixed()
+        assert complete.decision is partial.decision
+        assert complete.reason_code is partial.reason_code
+
+    def test_no_reason_code_mentions_completeness(self):
+        """If a completeness rule ever lands, it must announce itself."""
+        _, decision = self.mixed()
+        assert "PARTIAL" not in str(decision.reason_code)
+
+    def test_completeness_never_overrides_the_safety_ladder(self):
+        """Being partial does not excuse a weak detection either."""
+        valuation = valuation_module.value(
+            {"CPU": 1, "PCB": 1}, mass=None, prices=unpriced(), now=NOW
+        )
+        decision = decide("CPU", 0.2, valuation, cfg=cfg())
+        assert decision.decision is Bin.C
+        assert decision.reason_code is ReasonCode.C_LOW_CONFIDENCE
+
+    def test_an_object_whose_every_class_lacks_evidence_still_fails_closed(self):
+        """INSUFFICIENT_EVIDENCE is unchanged: nothing valued, nothing routed."""
+        valuation = valuation_module.value({"PCB": 1}, mass=None, prices=unpriced())
+        decision = decide("PCB", 0.94, valuation, cfg=cfg())
+        assert valuation.completeness == "INSUFFICIENT_EVIDENCE"
+        assert decision.decision is Bin.C
+        assert decision.reason_code is ReasonCode.C_UNMEASURED_WEIGHT

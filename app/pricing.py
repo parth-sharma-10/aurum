@@ -93,13 +93,23 @@ class StaticPriceProvider:
 
     @classmethod
     def from_config(cls, path: Path = PRICE_CONFIG) -> StaticPriceProvider | None:
-        """Build from YAML, or None when pricing is not configured."""
+        """Build from YAML, or None when pricing is not configured here.
+
+        **Refuses a multi-currency snapshot.** This module predates
+        `app.valuation.prices` and cannot convert between currencies: it
+        matches on an exact unit string and drops anything it cannot quote,
+        which would turn a four-metal snapshot into a gold-only figure still
+        labelled `estimated_value`. The modern layer handles that file; this
+        one steps aside rather than half-pricing it.
+        """
         if not path.exists():
             return None
         import yaml
 
         cfg = yaml.safe_load(path.read_text()) or {}
         if not cfg.get("enabled"):
+            return None
+        if cfg.get("fx") or cfg.get("currency"):
             return None
         prices = cfg.get("prices") or {}
         if not prices:

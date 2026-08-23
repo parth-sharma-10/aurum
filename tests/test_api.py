@@ -195,13 +195,22 @@ class TestBatchLifecycle:
     def test_unknown_batch_id_lookup_is_404(self, client):
         assert client.get("/batches/AUR-NOPE").status_code == 404
 
-    def test_record_never_reports_an_available_recovery_estimate(self, client):
-        """Guard against a metal-content number appearing over the wire."""
+    def test_a_record_never_reports_more_than_the_evidence_covers(self, client):
+        """Guard against an unbacked metal-content number appearing over the wire.
+
+        The stub detects one PCB and one RAM module. RAM is cited per module,
+        so it is valued; PCB is cited per kilogram against a mass covering both
+        classes, so it is refused. The wire format must show that split rather
+        than a single number that looks like it covers the batch.
+        """
         bid = client.post("/batch/start").json()["batch_id"]
         client.post(f"/batch/{bid}/frame", files={"file": ("x.png", png_bytes(), "image/png")})
-        rec = client.post(f"/batch/{bid}/close").json()
-        assert rec["recovery_estimate"]["available"] is False
-        assert "ESTIMATE ONLY" in rec["recovery_estimate"]["disclaimer"]
+        est = client.post(f"/batch/{bid}/close").json()["recovery_estimate"]
+
+        assert est["completeness"] == "PARTIAL_ESTIMATE"
+        assert [v["component"] for v in est["valued"]] == ["RAM"]
+        assert [n["component"] for n in est["not_valued"]] == ["PCB"]
+        assert "ESTIMATE ONLY" in est["disclaimer"]
 
     def test_simulated_weight_is_flagged_over_the_wire(self, client):
         bid = client.post("/batch/start").json()["batch_id"]
@@ -388,12 +397,24 @@ class TestPmdiIsExposedWithItsProvenance:
         body = client.get(f"/batches/{batch_id}/valuation").json()
         assert body["item_valuation"]["weight_status"] in ("SIMULATED", "UNMEASURED")
 
-    def test_no_value_appears_without_a_price_provider(self, client):
-        """The shipped configuration prices nothing, so no figure may appear."""
+    def test_a_simulated_mass_never_contributes_to_a_figure(self, client):
+        """A fabricated mass must not become money — and here it does not.
+
+        The value that appears comes from RAM's PER-MODULE evidence, which
+        needs no scale at all, so the simulated mass never enters the
+        arithmetic. The PCB line, which WOULD have consumed that mass, is
+        refused. What the invented mass does reach is the status: the whole
+        record is stamped SIMULATED so nothing can be quoted as measured.
+        """
         batch_id = _closed_batch(client, weight_mode="simulated")
         body = client.get(f"/batches/{batch_id}/valuation").json()
-        assert body["pmdi"]["pmdi_value"] is None
-        assert body["item_valuation"]["total_value"] is None
+
+        assert body["item_valuation"]["weight_status"] == "SIMULATED"
+        assert body["item_valuation"]["overall_status"] == "SIMULATED"
+        # Nothing whose arithmetic used the mass was valued.
+        assert [n["component"] for n in body["pmdi"]["not_valued"]] == ["PCB"]
+        for amounts in body["pmdi"]["precious_metals"].values():
+            assert "per piece" in amounts["calculation"]
 
     def test_the_legacy_valuation_key_still_works(self, client):
         """Existing consumers of this endpoint must not break."""
@@ -406,17 +427,34 @@ class TestPmdiIsExposedWithItsProvenance:
 class TestPricesEndpoint:
     def test_it_reports_the_configured_provider(self, client):
         body = client.get("/prices").json()
-        assert body["provider"] == "unavailable"
+        assert body["provider"] == "reference"
 
-    def test_no_price_is_fabricated(self, client):
+    def test_every_price_is_labelled_reference_and_never_live(self, client):
+        """A dated snapshot may be shown. It may never be called current."""
         body = client.get("/prices").json()
         for metal, quote in body["prices"].items():
-            assert quote["status"] == "UNAVAILABLE", metal
-            assert quote["price_per_gram"] is None
+            assert quote["status"] != "LIVE", metal
+            if quote["price_per_gram"] is not None:
+                assert quote["status"] == "REFERENCE", metal
+                assert quote["currency"] == "INR", metal
+                assert quote["timestamp"], f"{metal} has a price with no date"
+                assert "not a live market quote" in quote["reason"], metal
 
-    def test_the_refusal_names_the_setting_that_would_change_it(self, client):
+    def test_every_quoted_price_names_its_source(self, client):
         body = client.get("/prices").json()
-        assert "AURUM_PRICE_PROVIDER" in body["prices"]["Au"]["reason"]
+        for metal, quote in body["prices"].items():
+            if quote["price_per_gram"] is not None:
+                assert "Source:" in quote["reason"], f"{metal} has a price with no source"
+
+    def test_turning_the_provider_off_names_the_setting_that_would_change_it(
+        self, client, monkeypatch
+    ):
+        """The refusal path still exists and still explains itself."""
+        from app.valuation.prices import PriceService, UnavailableProvider
+
+        quote = PriceService(provider=UnavailableProvider()).price("Au")
+        assert quote.status.value == "UNAVAILABLE"
+        assert "AURUM_PRICE_PROVIDER" in quote.reason
 
     def test_it_says_no_live_source_is_approved(self, client):
         assert "No live market data source" in client.get("/prices").json()["note"]

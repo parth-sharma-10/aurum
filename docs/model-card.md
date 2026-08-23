@@ -114,7 +114,7 @@ Read the test figures accordingly: they measure generalization across photograph
 
 ## Material estimation
 
-**Composition: ENABLED** — `configs/material_reference.yaml` holds 22 cited evidence records, each resolving to a paper in `docs/sources/material_sources.yaml`.
+**Composition: ENABLED** — `configs/material_reference.yaml` holds 26 cited evidence records, each resolving to a paper in `docs/sources/material_sources.yaml`.
 
 **Recovery: UNAVAILABLE** — a recovery factor is applied only where a source measured recovery from a feed matching what Aurum detected.
 
@@ -130,8 +130,6 @@ the whole estimate rather than contributing a silent zero, and
 figures are additionally refused unless the batch carries a *measured*
 mass, because multiplying a simulated weight by a real concentration
 would produce an invented quantity that reads as measured.
-
-**No composition data at all:** RAM. A batch containing one of these produces no estimate.
 
 **Partial metal coverage:** CPU, Connector, PCB, RAM — per-class detail in `docs/material-reference.md`. Missing figures are stated, not estimated.
 

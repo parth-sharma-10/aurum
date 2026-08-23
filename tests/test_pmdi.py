@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app import materials
 from app.valuation import pmdi as pmdi_module
 from app.valuation import valuation as valuation_module
 from app.valuation.pmdi import (
@@ -165,27 +166,143 @@ class TestPcb:
 
 
 class TestRam:
-    def test_ram_has_no_cited_composition_and_is_unavailable(self):
+    """RAM is a supported class: Charles et al. 2017, per module.
+
+    This class used to assert the opposite. The evidence gap it protected was
+    real until the paper was obtained; these tests now pin the arithmetic that
+    replaced it, and `TestRamFailsClosedWithoutEvidence` below keeps the
+    fail-closed behaviour under test by removing the evidence rather than by
+    relying on its absence.
+    """
+
+    #: Charles et al. 2017, Table 2, "DIMMs (4-15)" row. Per MODULE.
+    AU_MG, AG_MG, PD_MG, CU_G = 18.0, 28.4, 1.2, 3.4
+
+    def test_one_module_carries_the_cited_per_module_quantities(self):
+        result = pmdi_module.compute({"RAM": 1}, now=NOW)
+
+        assert result.available
+        assert result.completeness == materials.COMPLETE
+        assert result.precious["Au"].grams == pytest.approx(self.AU_MG / 1000)
+        assert result.precious["Ag"].grams == pytest.approx(self.AG_MG / 1000)
+        assert result.precious["Pd"].grams == pytest.approx(self.PD_MG / 1000)
+        assert result.base["Cu"].grams == pytest.approx(self.CU_G)
+
+    def test_the_quantities_scale_on_count_alone(self):
+        for count in (1, 2, 4, 9):
+            result = pmdi_module.compute({"RAM": count}, now=NOW)
+            assert result.precious["Au"].grams == pytest.approx(count * self.AU_MG / 1000)
+            assert result.precious["Ag"].grams == pytest.approx(count * self.AG_MG / 1000)
+            assert result.precious["Pd"].grams == pytest.approx(count * self.PD_MG / 1000)
+            assert result.base["Cu"].grams == pytest.approx(count * self.CU_G)
+
+    def test_no_mass_is_needed_at_all(self):
+        """Per-piece evidence owes nothing to a scale.
+
+        The property that makes a module on a motherboard valuable without
+        anyone deciding how much of the board's mass is 'the RAM'.
+        """
+        weightless = pmdi_module.compute({"RAM": 2}, mass=None, now=NOW)
+        weighed = pmdi_module.compute({"RAM": 2}, mass=MEASURED_PCB, now=NOW)
+        assert weightless.available
+        assert weightless.precious["Au"].grams == weighed.precious["Au"].grams
+        assert weightless.base["Cu"].grams == weighed.base["Cu"].grams
+
+    def test_a_bigger_assembly_mass_does_not_change_the_ram_estimate(self):
+        """Section 8's rule, asserted directly: 842 g is not RAM mass."""
+        light = pmdi_module.compute({"RAM": 2}, mass={"grams": 15.6, "simulated": False}, now=NOW)
+        heavy = pmdi_module.compute({"RAM": 2}, mass={"grams": 842.0, "simulated": False}, now=NOW)
+        assert light.precious["Au"].grams == heavy.precious["Au"].grams
+        assert light.base["Cu"].grams == heavy.base["Cu"].grams
+
+    def test_platinum_is_absent_because_it_was_looked_for(self):
+        """A measured absence must not arrive as a quantity of zero."""
+        result = pmdi_module.compute({"RAM": 1}, now=NOW)
+        assert "Pt" not in result.precious
+        assert all(a.grams > 0 for a in result.precious.values())
+
+    def test_every_amount_carries_its_citation(self):
+        result = pmdi_module.compute({"RAM": 1}, now=NOW)
+        assert set(result.evidence_sources) == {
+            "RAM-AU-001",
+            "RAM-AG-001",
+            "RAM-PD-001",
+            "RAM-CU-001",
+        }
+        for metal, amount in {**result.precious, **result.base}.items():
+            assert amount.evidence, f"{metal} lost its evidence id"
+            assert amount.calculation, f"{metal} lost its arithmetic"
+            assert amount.basis == "contained"
+
+    def test_confidence_is_capped_at_medium(self):
+        """One study, n=12, nothing later than 2008."""
+        assert pmdi_module.compute({"RAM": 1}, now=NOW).confidence == "medium"
+
+
+class TestRamFailsClosedWithoutEvidence:
+    """Remove the composition and RAM must refuse again, exactly as before.
+
+    The guard that matters most in this file. It does not assert that the
+    database happens to lack RAM data - it removes the data and checks the
+    refusal, so it keeps working now that the data exists and would catch a
+    regression in the fail-closed path itself.
+    """
+
+    @pytest.fixture
+    def stripped(self, tmp_path, monkeypatch):
+        import yaml
+
+        db = yaml.safe_load(materials.REFERENCE.read_text())
+        db["components"]["RAM"]["subtypes"]["dimm_module"]["composition"] = {}
+        path = tmp_path / "no_ram_composition.yaml"
+        path.write_text(yaml.safe_dump(db))
+        monkeypatch.setattr(materials, "REFERENCE", path)
+        return path
+
+    def test_it_is_unavailable_not_zero(self, stripped):
         result = pmdi_module.compute({"RAM": 1}, mass={"grams": 7.8, "simulated": False}, now=NOW)
         assert not result.available
+        assert result.completeness == materials.INSUFFICIENT_EVIDENCE
         assert result.evidence_status is EvidenceStatus.MISSING
         assert result.overall_status is OverallStatus.UNAVAILABLE
+        assert result.precious == {} and result.base == {}
 
-    def test_the_refusal_says_why(self):
+    def test_the_refusal_says_why(self, stripped):
         result = pmdi_module.compute({"RAM": 1}, prices=unpriced(), now=NOW)
         assert "RAM" in result.reason
 
-    def test_ram_never_acquires_a_value_regression_guard(self):
+    def test_it_never_acquires_a_value(self, stripped):
         """If this fails, someone invented RAM composition data."""
         result = valuation_module.value({"RAM": 4}, mass=MEASURED_PCB, prices=priced(), now=NOW)
         assert result.pmdi.pmdi_value is None
         assert result.total_value is None
         assert result.as_dict()["precious_value"] is None
 
-    def test_one_blocked_class_blocks_a_mixed_batch(self):
-        """A total that quietly drops a component still reads as a total."""
-        result = pmdi_module.compute({"CPU": 1, "RAM": 1}, mass=MEASURED_CPU, now=NOW)
-        assert not result.available
+
+class TestMixedEvidence:
+    def test_one_blocked_class_makes_the_whole_result_partial(self):
+        """A total that quietly drops a component still reads as a total.
+
+        So it is not quiet. The CPU's cited gold is reported, the RAM gap is
+        reported alongside it, and the result declares itself PARTIAL so no
+        consumer can read the figure as covering both.
+        """
+        # PCB is cited as a concentration, so a mass covering both classes
+        # cannot be attributed to it. The CPU's per-piece gold still stands.
+        result = pmdi_module.compute({"CPU": 1, "PCB": 1}, mass=MEASURED_CPU, now=NOW)
+
+        assert result.available
+        assert result.completeness == materials.PARTIAL_ESTIMATE
+        assert result.evidence_status is EvidenceStatus.PARTIAL
+        assert [v["component"] for v in result.valued] == ["CPU"]
+        assert [n["component"] for n in result.not_valued] == ["PCB"]
+        assert "PARTIAL ESTIMATE" in result.reason
+
+    def test_a_partial_result_carries_no_contribution_from_the_blocked_class(self):
+        """Whatever else is true, no gram came from the class that was refused."""
+        alone = pmdi_module.compute({"CPU": 1}, mass=MEASURED_CPU, now=NOW)
+        mixed = pmdi_module.compute({"CPU": 1, "PCB": 1}, mass=MEASURED_CPU, now=NOW)
+        assert mixed.precious_mass_g == alone.precious_mass_g
 
 
 class TestPricing:
@@ -302,7 +419,8 @@ class TestStatusPropagation:
         assert result.weight_status is MassStatus.UNMEASURED
 
     def test_missing_evidence_makes_the_whole_result_unavailable(self):
-        result = valuation_module.value({"RAM": 1}, mass=MEASURED_PCB, prices=priced(), now=NOW)
+        """Nothing valued at all - a PCB with no mass to drive its concentration."""
+        result = valuation_module.value({"PCB": 1}, mass=None, prices=priced(), now=NOW)
         assert result.overall_status is OverallStatus.UNAVAILABLE
         assert result.evidence_status is EvidenceStatus.MISSING
 

@@ -206,14 +206,18 @@ def routing_status() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# The demonstration session.
+# The session.
 #
-#   camera -> item identity -> [operator moves it] -> load cell -> PMDI ->
-#   A/B/C -> Servo A / Servo B / nothing
+#   camera -> assembly identity -> [operator puts it on the pan] -> load cell
+#   -> PMDI -> A/B/C -> Servo A / Servo B / nothing -> [object removed]
 #
-# There is no conveyor, so there is no scheduling here: the decision is taken
-# and the paddle moves. The operator carries the component between stages and
-# says when; the operator never says which bin.
+# THE LOAD CELL DRIVES THIS. There is no endpoint in the normal path: the pan
+# state machine detects the object, waits for the mass to settle, grades it and
+# routes it on its own. `POST /session/measure` is a developer fallback and is
+# documented as one.
+#
+# There is no conveyor, so there is no scheduling here either: the decision is
+# taken and the paddle moves. The operator never says which bin.
 # ---------------------------------------------------------------------------
 
 
@@ -237,14 +241,23 @@ def session_state() -> dict:
 
 @app.post("/session/measure")
 def session_measure(item_id: str | None = None) -> dict:
-    """Weigh the item on the pan, grade it, and move the paddle it earns.
+    """DEVELOPER FALLBACK. Weigh the object on the pan now, grade it, route it.
 
-    Defaults to the confirmed item most recently seen, which is the one the
-    operator just carried over. The class comes from the model, the mass from
-    the cell and the bin from the decision engine: no route can be requested
-    through this endpoint.
+    Not the normal path. The load cell triggers a measurement by itself and no
+    call is required to sort an object; this exists for a bench with no working
+    cell, a mass that will not settle, and driving the chain from a terminal.
+
+    Defaults to the assembly most recently confirmed. The classes come from the
+    model, the mass from the cell and the bin from the decision engine: no
+    route can be requested through this endpoint.
     """
     return demo_session().measure_and_route(item_id)
+
+
+@app.get("/session/pan")
+def session_pan() -> dict:
+    """The automatic weighing cycle: where it is, and why it is there."""
+    return demo_session().pan.snapshot()
 
 
 @app.post("/session/stop")

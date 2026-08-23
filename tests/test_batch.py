@@ -115,9 +115,9 @@ class TestRecord:
 
 
 class TestRecoveryEstimateGuard:
-    def test_unavailable_without_reference_data(self):
+    def test_partial_without_reference_data_for_every_class(self):
         est = recovery_estimate({"PCB": 2, "RAM": 1})
-        assert est["available"] is False
+        assert est["completeness"] != "COMPLETE"
         assert est["reason"]
 
     def test_disclaimer_is_present_even_when_unavailable(self):
@@ -125,8 +125,24 @@ class TestRecoveryEstimateGuard:
         assert "ESTIMATE ONLY" in est["disclaimer"]
         assert "does not measure precious-metal content" in est["disclaimer"]
 
-    def test_no_numeric_value_leaks_when_unavailable(self):
-        """Nothing a UI could mistake for a real figure."""
+    def test_no_numeric_value_leaks_for_a_class_with_no_evidence(self):
+        """Nothing a UI could mistake for a real figure.
+
+        A partial estimate may carry numbers - for the components it could
+        actually value. What it must never carry is a line, a total or a zero
+        for a class the database says nothing about.
+        """
         est = recovery_estimate({"PCB": 2, "RAM": 3, "CPU": 1})
+        unvalued = {n["component"] for n in est["not_valued"]}
+        assert {"PCB"} <= unvalued
+        for line in est.get("components", []):
+            assert line["component"] not in unvalued
+        for entry in est["not_valued"]:
+            assert entry["reason"]
+
+    def test_nothing_at_all_is_valued_when_no_class_has_a_usable_figure(self):
+        est = recovery_estimate({"PCB": 3})
+        assert est["available"] is False
+        assert est["completeness"] == "INSUFFICIENT_EVIDENCE"
         assert "components" not in est
         assert est.get("basis") is None

@@ -1,46 +1,137 @@
-# Aurum — material price reference
+# Aurum — metal price reference snapshot
 #
-# ============================ NOT POPULATED ================================
-# This file is intentionally empty of figures and `enabled` is false.
+# =========================== REFERENCE, NOT LIVE ===========================
+# Every price here was PUBLISHED BY A NAMED SOURCE ON A NAMED DATE and is
+# being used deliberately after that date. That is a different thing from a
+# live market feed and a different thing from an invented number, and the
+# REFERENCE status exists to keep all three apart everywhere they surface.
 #
-# Valuation in Aurum is: estimated material quantity × price per unit. The
-# quantity comes from configs/material_reference.yaml, and the price comes from
-# here. No prices were invented to fill this file, so valuation reports itself
-# unavailable and the API returns an explicit refusal rather than a number.
+# Nothing that reads this file may present these as current market prices.
+# The dashboard renders "REFERENCE PRICE — <date>", never "live".
 #
-# This file is read only when configs/pricing.yaml sets `provider: static`, and
-# every price it yields is labelled TEST. It is never a live market quote.
-#
-# A spot price with no source and no timestamp is worse than no price: it gets
-# screenshotted, quoted, and outlives the conversation that qualified it.
+# No live provider ships: no keyless market-data source exists to point one
+# at (LBMA's tabulated data moved behind an ICE Benchmark Administration
+# licence, and Metals.dev / GoldAPI / MetalpriceAPI all require a key).
+# app.valuation.prices.FallbackProvider is the mechanism that will hold one
+# when a key is configured — LIVE first, this file when it cannot answer.
 # ===========================================================================
 #
-# To enable valuation:
-#   1. Add an entry per material with price_per_unit, unit, currency,
-#      timestamp and a real source.
-#   2. Set `enabled: true`.
+# UNITS AND CURRENCY — the two ways this file can silently be wrong.
 #
-# The unit must match the unit the recovery estimate is expressed in.
-# app/pricing.py refuses to quote across mismatched units rather than
-# converting, because multiplying grams by a per-ounce price produces a
-# plausible-looking number that is wrong by a factor of 31.
+# Each entry keeps its price EXACTLY as published, in the unit and currency it
+# was published in. app/valuation/prices.py does both conversions explicitly:
 #
-# Prices are a snapshot, not a feed. If you need live pricing, implement the
-# PriceProvider protocol in app/pricing.py against a real market data source;
-# this file is the pinned-snapshot implementation.
+#     price_per_unit / GRAMS_PER_UNIT[unit]   ->  currency per gram
+#     x fx[currency].rate                     ->  reporting currency per gram
+#
+# A troy ounce is 31.1034768 g. The avoirdupois ounce (28.3495 g) appears
+# nowhere in this project and must never be used for metal.
+#
+# A currency with no fx entry is an ERROR, not an assumed parity of 1.
+#
+# VERIFICATION, 2026-08-23. Every figure below was read from its source page
+# rather than from a search summary. The gold entry is the one that needed it:
+# ibjarates.com displays a per-gram headline of "16062 (1 Gram)" ALONGSIDE a
+# table reading 160620 under the footnote "*Gold rates per 10gm & Silver rate
+# per 1kg". Both resolve to 16,062 INR/g. The tabulated figure and its
+# footnote are what is recorded here, and the two readings were cross-checked
+# against MCX gold at 160,700 INR/10g on the same day.
 
-enabled: false
+enabled: true
+
+# The single currency every quote is normalised into before anything is added.
+currency: INR
+
+as_of: "2026-08-21"
 
 source: >
-  Unset. Name the price source here — an exchange, a refiner's published buy
-  price, or a dated market snapshot — so a stored valuation stays auditable.
+  Dated snapshot compiled 2026-08-23 from IBJA (gold, silver), MCX (copper),
+  Kitco (palladium) and the ECB via Frankfurter (USD/INR). Each entry names
+  its own source and date below; this line is a summary, not the citation.
 
-prices: {}
-  # Example of the required shape — replace with cited values:
-  #
-  # gold:
-  #   price_per_unit: 0.0
-  #   unit: "g"
-  #   currency: "USD"
-  #   timestamp: "YYYY-MM-DDTHH:MM:SSZ"
-  #   source: "<exchange or publication, with a URL or document reference>"
+# Rates against the reporting currency above. One USD is `rate` INR.
+fx:
+  USD:
+    rate: 95.70
+    quote: "USD/INR"
+    timestamp: "2026-08-21"
+    source: >
+      European Central Bank reference rate, retrieved via the Frankfurter API
+      (api.frankfurter.dev/v1/2026-08-21?from=USD&to=INR) on 2026-08-23.
+    notes: >
+      The ECB publishes on TARGET business days only. 2026-08-23 is a Sunday,
+      so the 2026-08-21 rate is the most recent published figure and is the one
+      applied to the palladium quote below.
+
+prices:
+  gold:
+    price_per_unit: 16062.0
+    unit: "g"
+    currency: "INR"
+    timestamp: "2026-08-21T00:00:00Z"
+    price_type: reference
+    provenance: benchmark
+    source: >
+      India Bullion and Jewellers Association (IBJA) Gold 999 PM rate,
+      21 August 2026, published as 160620 per 10 g at ibjarates.com. IBJA
+      rates are the benchmark for Sovereign Gold Bond issuance and for lending
+      against jewellery under RBI notification. Excludes GST and making
+      charges. Read from the source page 2026-08-23.
+    notes: >
+      PUBLISHED PER 10 g, RECORDED PER 1 g: 160620 / 10 = 16062 INR/g. The
+      division is done here, once, in the open, because this file has no unit
+      for "10 g" and inventing one would put the factor somewhere less
+      visible. Cross-checked against MCX gold at 160700 INR/10 g on the same
+      day (0.05% apart) and against the ibjarates.com per-gram headline, which
+      reads 16062 directly.
+
+  silver:
+    price_per_unit: 246630.0
+    unit: "kg"
+    currency: "INR"
+    timestamp: "2026-08-21T00:00:00Z"
+    price_type: reference
+    provenance: benchmark
+    source: >
+      India Bullion and Jewellers Association (IBJA) Silver 999 PM rate,
+      21 August 2026, published as 246630 per 1 kg at ibjarates.com. Excludes
+      GST. Read from the source page 2026-08-23.
+
+  copper:
+    price_per_unit: 1385.80
+    unit: "kg"
+    currency: "INR"
+    timestamp: "2026-08-21T18:00:00Z"
+    price_type: reference
+    provenance: exchange
+    source: >
+      MCX copper futures, 1385.80 INR/kg, 21 August 2026 23:29 IST (31 August
+      2026 contract), read from upstox.com/commodity-market-trading/
+      mcx-copper-price on 2026-08-23.
+    notes: >
+      A near-month futures price, not a physical cathode spot price. For a
+      metal contributing about 1.5% of a RAM module's contained value the
+      distinction does not move the total, but it is recorded rather than
+      glossed.
+
+  palladium:
+    price_per_unit: 1331.00
+    unit: "ozt"
+    currency: "USD"
+    timestamp: "2026-08-23T14:23:00Z"
+    price_type: reference
+    provenance: spot_quote
+    source: >
+      Kitco palladium spot bid, USD 1331.00 per troy ounce, 23 August 2026
+      10:23 ET, read from kitco.com/charts/palladium on 2026-08-23.
+    notes: >
+      WEAKEST PROVENANCE OF THE FOUR. A dealer spot quote, not a benchmark
+      auction print: the LBMA palladium benchmark is the authoritative figure
+      and its tabulated data now requires an ICE Benchmark Administration
+      licence. Recorded here because app.valuation.pmdi produces NO value at
+      all unless every precious metal in the estimate is priced, and palladium
+      is roughly 1.6% of a RAM module's contained value. Bid, not mid: the
+      same page showed an ask of 1371.00, so this is the conservative end of a
+      3% spread. Replace with an LBMA print if a licence becomes available.
+      This is also the only entry needing an FX conversion, and therefore the
+      only one exercising the USD/ozt -> USD/g -> INR/g path.

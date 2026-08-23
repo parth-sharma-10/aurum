@@ -195,22 +195,60 @@ sources:
     pages: "505-520"
     doi: "10.1016/j.wasman.2016.11.018"
     url: "https://doi.org/10.1016/j.wasman.2016.11.018"
-    accessed: "2026-08-22"
+    accessed: "2026-08-23"
+    retrieved_from: >
+      https://web.archive.org/web/2019/https://core.ac.uk/download/pdf/82319983.pdf
+      - the Internet Archive's capture of the CORE deposit of this CC-BY
+      article. Recorded because the obvious routes do NOT work and the next
+      person will otherwise repeat the search: ScienceDirect returns 403 to
+      non-browser clients, and the Swansea institutional repository (cronfa)
+      times out. Open access was confirmed independently via Unpaywall and
+      OpenAlex (oa_status hybrid, licence CC-BY) before the copy was used.
     source_type: peer_reviewed_experimental
     open_access: true
-    full_text_read: false
+    full_text_read: true
     used_for:
-      - Documented limitation only - no numeric value is taken from this source
-    evidence_ids: []
+      - RAM (DIMM) gold content per module
+      - RAM (DIMM) silver content per module
+      - RAM (DIMM) palladium content per module
+      - RAM (DIMM) copper content per module
+      - Documented absence of platinum in RAM modules
+    evidence_ids: [RAM-AU-001, RAM-AG-001, RAM-PD-001, RAM-CU-001]
     notes: >
-      This is the most directly relevant study found for whole RAM modules:
-      Au, Ag, Pd and Cu in DRAM modules placed on the market 1991-2008,
-      measured by AAS after comminution and acid digestion. It is nominally
-      CC-BY, but every route to the full text was blocked during this work
-      (publisher bot-protection and an unavailable institutional mirror), so
-      its composition TABLES WERE NEVER READ. Its abstract was read and
-      verified via Semantic Scholar and supports only qualitative statements:
-      stable gold and silver over time, an 80% fall in palladium across
-      1991-2008, and a 0.23 g/module/year rise in copper. Aurum therefore
-      cites it as evidence that RAM composition VARIES BY GENERATION, and
-      takes no number from it. This is the single largest gap in the database.
+      The most directly relevant study for whole RAM modules, and the one this
+      database recorded as unreachable until 2026-08-23. Au, Ag, Pd and Cu in
+      15 PC DRAM modules placed on the market 1991-2008, by AAS after
+      comminution and acid digestion, triplicate analyses.
+
+      VALUES TAKEN: the "DIMMs (4-15)" row of Table 2 - Au 18.0 mg, Ag 28.4
+      mg, Pd 1.2 mg, Cu 3.4 g per module - which is also the row the authors
+      themselves use for the valuation in their Table 4. Each of the four
+      averages was RECOMPUTED from the twelve per-sample rows before being
+      accepted (Au 216.4/12 = 18.03; Pd 14.449/12 = 1.204; Ag 340.8/12 = 28.4;
+      Cu 40.35/12 = 3.36), and each agrees with the published mean.
+
+      SIMMs EXCLUDED: samples 1-3 are early-1990s 72-pin modules, two of the
+      three with tin rather than gold edge contacts. Including them would
+      lower gold to 16.5 mg and raise silver to 39 mg while describing a
+      module type that no longer enters the waste stream.
+
+      PLATINUM: the paper reports a negative result - none detected in any
+      sample, <6 ug per module (<0.5 ppm) at a stated detection limit of
+      60 ug/L in solution. Recorded in `gaps.RAM` as a cited absence, not as
+      a zero-valued evidence record.
+
+      MODULE MASS DISAGREES WITH ZINKOWSKA2024 AND THAT IS LEFT STANDING. The
+      12 DIMMs here run 13.13-21.69 g (mean about 17.6 g, consistent with the
+      paper's own mg/module and ppm figures); ZINKOWSKA2024 weighs one module
+      at 7.804 g. Neither is corrected against the other - different modules,
+      different eras, n = 12 against n = 1. Aurum's per-module basis means the
+      disagreement never enters an estimate, which is part of why that basis
+      was chosen over the concentration one.
+
+      RECOVERY FIGURES NOT TAKEN: the paper quotes >95% gold recovery at
+      integrated refineries and ~70% at pre-processing, but as secondary
+      citations to Hagelueken about WEEE generally. See `recovery` in the
+      reference database for why neither is applied.
+
+      LIMITS: one study, n = 12, nothing later than 2008. There is no DDR4 or
+      DDR5 in it. Every figure derived from it is capped at medium confidence.

@@ -84,7 +84,8 @@ Phase 0 checkpoint · 1 config · 2 PMDI/pricing/valuation · 3 A/B/C decision �
   as the other. Single-threaded; whoever waits also pumps.
 - `app/pipeline/session.py` — `DemoSession`: the join. Camera thread → identity
   → mass → PMDI → decision → servo, every failure recorded on the item.
-- API: `POST /session/start`, `/session/board/connect`, `/session/measure`,
+- API: `POST /session/start`, `/session/board/connect`, `GET /session/pan`,
+  `/session/measure` (developer fallback - the load cell drives the normal path),
   `/session/stop`; `GET /session`, `/session/stream`, `/session/frame`,
   `/arduino`.
 - Frontend: the chain stage by stage, live feed with the item id drawn on the
@@ -337,7 +338,9 @@ figure travels with its evidence ids and status. The test's docstring now
 records that reasoning, and `TestPmdiIsExposedWithItsProvenance` asserts the
 other half.
 
-**Dependencies:** Phase 1. **Known risks:** no price provider is chosen yet;
+**Dependencies:** Phase 1. **Status 2026-08-23:** a dated REFERENCE snapshot now
+ships (IBJA / MCX / Kitco / ECB) and valuation produces INR. No live feed is
+configured. **Known risks:** no live price provider is chosen yet;
 until one is, `pmdi_value` is permanently `UNAVAILABLE` and only the
 price-independent path works. This does not block sorting.
 

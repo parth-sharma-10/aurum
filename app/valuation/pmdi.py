@@ -67,7 +67,15 @@ class MassStatus(StrEnum):
 
 
 class EvidenceStatus(StrEnum):
+    """How much of what was detected the cited evidence actually covers.
+
+    A fact about the database, not a verdict about the object. PARTIAL means
+    some detected components were valued and others were not, and which is
+    which is in `valued` / `not_valued`. Nothing here decides a bin.
+    """
+
     SUPPORTED = "SUPPORTED"
+    PARTIAL = "PARTIAL"
     MISSING = "MISSING"
 
 
@@ -150,6 +158,12 @@ class PmdiResult:
     evidence_sources: list[str] = field(default_factory=list)
     confidence: str | None = None
     reason: str | None = None
+    #: COMPLETE | PARTIAL_ESTIMATE | INSUFFICIENT_EVIDENCE, from app.materials.
+    completeness: str = materials.INSUFFICIENT_EVIDENCE
+    #: Detected components the estimate covers, and the ones it does not with
+    #: the reason. A partial total is only meaningful alongside these.
+    valued: list[dict] = field(default_factory=list)
+    not_valued: list[dict] = field(default_factory=list)
 
     @property
     def precious_mass_g(self) -> float:
@@ -195,6 +209,9 @@ class PmdiResult:
             "currency": self.currency,
             "price_status": str(self.price_status),
             "evidence_status": str(self.evidence_status),
+            "completeness": self.completeness,
+            "valued": [dict(v) for v in self.valued],
+            "not_valued": [dict(n) for n in self.not_valued],
             "evidence_sources": list(self.evidence_sources),
             "confidence": self.confidence,
             "overall_status": str(self.overall_status),
@@ -204,7 +221,9 @@ class PmdiResult:
         }
 
 
-def _unavailable(counts: dict[str, int], mass: dict | None, reason: str) -> PmdiResult:
+def _unavailable(
+    counts: dict[str, int], mass: dict | None, reason: str, not_valued: list[dict] | None = None
+) -> PmdiResult:
     return PmdiResult(
         available=False,
         counts=dict(counts),
@@ -213,6 +232,8 @@ def _unavailable(counts: dict[str, int], mass: dict | None, reason: str) -> Pmdi
         mass_g=(mass or {}).get("grams"),
         mass_status=mass_status(mass),
         reason=reason,
+        completeness=materials.INSUFFICIENT_EVIDENCE,
+        not_valued=list(not_valued or []),
     )
 
 
@@ -252,13 +273,25 @@ def compute(
     """Component counts plus an optional measured mass to a PMDI signal.
 
     Fails closed the whole way down. A detected class with no cited composition
-    blocks the estimate rather than contributing a silent zero, and no price
-    means no `pmdi_value` rather than a placeholder figure.
+    contributes nothing rather than a silent zero, and no price means no
+    `pmdi_value` rather than a placeholder figure.
+
+    When only some detected classes could be valued the result is still
+    produced, with `completeness` PARTIAL_ESTIMATE and `not_valued` naming what
+    is missing and why. The totals then cover the valued components only. That
+    is a fact about the evidence and nothing more: no bin follows from it here,
+    and `app.decision` holds any policy that might.
     """
     now = datetime.now(UTC) if now is None else now
     estimate = materials.estimate(counts, mass)
     if not estimate.get("available"):
-        return _unavailable(counts, mass, estimate.get("reason", "No material estimate."))
+        return _unavailable(
+            counts,
+            mass,
+            estimate.get("reason", "No material estimate."),
+            not_valued=estimate.get("not_valued"),
+        )
+    completeness = estimate.get("completeness", materials.COMPLETE)
 
     amounts = _amounts_by_metal(estimate)
     precious = {m: a for m, a in amounts.items() if m in PRECIOUS_METALS}
@@ -297,7 +330,14 @@ def compute(
     return PmdiResult(
         available=True,
         counts=dict(counts),
-        evidence_status=EvidenceStatus.SUPPORTED,
+        evidence_status=(
+            EvidenceStatus.SUPPORTED
+            if completeness == materials.COMPLETE
+            else EvidenceStatus.PARTIAL
+        ),
+        completeness=completeness,
+        valued=list(estimate.get("valued") or []),
+        not_valued=list(estimate.get("not_valued") or []),
         overall_status=_worst(statuses),
         mass_g=(mass or {}).get("grams"),
         mass_status=mass_status(mass),
@@ -310,11 +350,17 @@ def compute(
         price_status=price_status,
         evidence_sources=list(estimate.get("evidence", [])),
         confidence=estimate.get("confidence"),
-        reason=(
-            None
-            if value is not None
-            else "No PMDI value: " + _price_gap_reason(precious, quotes, price_status)
-        ),
+        reason=" ".join(
+            r
+            for r in (
+                estimate.get("reason"),
+                None
+                if value is not None
+                else "No PMDI value: " + _price_gap_reason(precious, quotes, price_status),
+            )
+            if r
+        )
+        or None,
     )
 
 

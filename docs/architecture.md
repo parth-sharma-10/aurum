@@ -18,7 +18,7 @@ flowchart LR
     API[FastAPI] --> LED
     LED --> DB[(SQLite ledger)]
     DB --> WEB[React dashboard]
-    DB -.-> VAL[PMDI -> Valuation<br/>value UNAVAILABLE: no price provider]
+    DB -.-> VAL[PMDI -> Valuation<br/>CONTAINED value, INR, REFERENCE prices]
 ```
 
 **Both save paths meet at `app/ledger.py`.** The demo's `S` key and
@@ -27,10 +27,23 @@ appears in `/batches`, `/stats` and the React dashboard. There is one `INSERT`
 in the codebase and a test fails if a second appears.
 
 The dotted branch computes what it can and refuses the rest. `app/valuation/`
-produces PMDI and the price-independent `precious_mass_fraction_ppm` from cited
-evidence, but `pmdi_value` stays `UNAVAILABLE` because no live price provider is
-approved for this project. `configs/pricing.yaml` ships `provider: unavailable`
-as a decision, not a placeholder.
+produces PMDI, the price-independent `precious_mass_fraction_ppm`, and a
+CONTAINED value in rupees, all from cited evidence.
+
+`configs/pricing.yaml` ships `provider: reference`: a dated snapshot of real
+published prices (IBJA, MCX, Kitco, with ECB for the FX), every quote stamped
+`REFERENCE`. That status means one thing — a real price, published on a stated
+date, being read as such. It is never `LIVE`, and it is never downgraded to
+`STALE` either, because age is not a defect in a snapshot; `STALE` keeps its one
+meaning of a live feed that went quiet. No live provider ships because no
+keyless market-data source exists; `FallbackProvider` composes LIVE → REFERENCE
+for the day one is configured.
+
+What the valuation will **not** produce is a recoverable value. No cited
+recovery factor was measured on a component as Aurum detects it, so
+`recoverable_value` is a refusal carrying that reason rather than a number or a
+zero. Contained, recoverable and scrap value are three different quantities and
+the code names all three even though only one has a figure.
 
 PMDI is an **input to** the A/B/C decision policy, never the same thing as it.
 `app/valuation/` contains no grading logic and a test fails if it ever does.
@@ -54,7 +67,7 @@ It is never presented as a measurement.
 
 | File | Role |
 |---|---|
-| `app/valuation/prices.py` | Provider abstraction, price status model, staleness, unit conversion |
+| `app/valuation/prices.py` | Providers (reference / unavailable / static / fallback), status model, staleness, unit **and currency** conversion |
 | `app/valuation/pmdi.py` | The PMDI calculation; precious / base / other split |
 | `app/valuation/valuation.py` | PMDI plus the separate base-metal signal, packaged for audit |
 | `app/config.py` | Every threshold and physical constant, `defaults -> YAML -> environment` |
@@ -84,19 +97,73 @@ Full wiring, protocol and validation status: [hardware.md](hardware.md).
 ## Item identity and lifecycle
 
 ```
-frame -> detector -> ByteTrack -> TrackedItem (stable item_id) -> weight -> PMDI -> decision -> routing
+frame -> detector -> ByteTrack -> TrackedItem -> ASSEMBLY (stable item_id)
+      -> weight -> PMDI -> decision -> routing
 ```
 
-A camera pointed at the conveyor produces a CPU in frame 1, a CPU in frame 2
-and a CPU in frame 3. That is **one** physical object, and everything
-downstream -- one weighing, one decision, one servo firing, one ledger row --
-depends on saying so.
+A camera pointed at the bench produces a CPU in frame 1, a CPU in frame 2 and a
+CPU in frame 3. That is **one** physical object, and everything downstream --
+one weighing, one decision, one servo firing, one ledger row -- depends on
+saying so.
+
+It also produces, for a motherboard, a PCB *and* two RAM modules *and* a CPU
+*and* five connectors, all in the same frame. That too is **one** physical
+object: one thing a hand picks up, one thing the pan weighs, one mass.
+`app/vision/assembly.py` decides which detected components are one object, by
+spatial containment -- a component whose box lies inside a container's box is
+on it. No rule anywhere describes a motherboard; a board with four modules, one
+or none groups by exactly the same test, and a class becomes a container by
+being listed in `tracking.assembly.container_classes`.
+
+The assembly id **is** the physical item id. A standalone component is an
+assembly of one and keeps its own `AUR-ITEM-`, so nothing downstream has to
+know whether it is holding a board or a bare chip.
 
 | File | Role |
 |---|---|
 | `app/vision/tracker.py` | `ItemTracker`, the lifecycle state machine; `DetectorTracker`, the ByteTrack adapter |
+| `app/vision/assembly.py` | `Assembly`, and `group()` -- tracked items to physical objects by containment |
 | `app/pipeline/item_pipeline.py` | Composes detector, tracker and lifecycle; the seam later phases hang off |
-| `configs/tracking.yaml` | Track-loss tolerance and confirmation threshold |
+| `app/pipeline/association.py` | `SingleObjectZone` -- which object is on the pan, and the latch that keeps its identity once it leaves the camera |
+| `app/pipeline/pan.py` | `PanMachine` -- the automatic weighing cycle |
+| `configs/tracking.yaml` | Track-loss tolerance, confirmation threshold, assembly containment |
+
+### The automatic cycle
+
+```
+WAITING_FOR_OBJECT -> OBJECT_PRESENT -> WEIGHING -> WEIGHT_STABLE
+    -> PROCESSING -> ROUTING -> WAITING_FOR_CLEAR -> WAITING_FOR_OBJECT
+```
+
+The load cell drives it; there is no button in the normal path. `pan.py` adds
+only the two things `WeightSensor` has no opinion about -- has something
+arrived, and has it gone -- and delegates every stability judgement to the
+existing sensor. Arrival and clearance thresholds are
+`conveyor.weight.pan.*`; stability stays `conveyor.weight.stability_*`.
+
+Two rules keep it honest. Crossing the arrival threshold **opens** a cycle and
+never ends one, so the first non-zero reading is never what gets recorded. And
+every failure -- a mass that will not settle, a pulled USB cable, a mass with no
+confirmed identity -- completes the cycle and returns the machine to waiting,
+because a machine that needs rescuing after a wobble is not automatic.
+
+It runs on its own thread. `WeightSensor.read()` blocks until the mass settles
+and `ArduinoController.move()` blocks until the board acknowledges a *completed*
+stroke, and neither may run on the camera thread or hold the session lock while
+it waits.
+
+### Assembly mass and double counting
+
+An assembly has one mass covering every component on it. A per-kilogram figure
+for the board therefore may **not** be multiplied by it -- that would count the
+processor's and the modules' mass as board material. `app/materials.py` refuses
+the concentration line instead and reports the refusal, which is why a
+motherboard yields `completeness: PARTIAL_ESTIMATE` with `valued` and
+`not_valued` naming exactly what the figure does and does not cover.
+
+Completeness is reported, never acted on: no bin follows from it. How much of
+an object the evidence covers and which bin it belongs in are different
+questions, and any policy joining them belongs in `configs/grading.yaml`.
 
 ### A `track_id` is not an `item_id`
 
@@ -304,8 +371,11 @@ app/
   batch.py       Batch composition + the recovery-estimate guard.
   weight.py      HX711 backend, or a clearly-labelled simulation.
   ledger.py      Every read and write of the SQLite store. One INSERT.
-  pricing.py     Price providers and estimated_quantity x price. Disabled by
-                 default; no price data ships.
+  pricing.py     SUPERSEDED by app/valuation/prices.py; still serving the batch
+                 endpoints. Declines a multi-currency snapshot rather than
+                 half-pricing it - it matches units exactly and cannot convert
+                 currencies, so it would emit a gold-only figure labelled as a
+                 total.
   api.py         FastAPI endpoints. Holds no SQL of its own.
 
 frontend/
