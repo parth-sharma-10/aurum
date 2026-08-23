@@ -228,3 +228,70 @@ class TestSnapshot:
         blob = str(pipeline.snapshot()).lower()
         assert "bin_a" not in blob
         assert "servo" not in blob
+
+
+class TestCurrentItemSurvivesAFlicker:
+    """A class the model detects intermittently must still be measurable.
+
+    RAM sits at 0.51 recall on the held-out test split, so a real module drops
+    in and out between frames. It would reach CONFIRMED, fall to LEAVING while
+    the operator reached for the button, and `current_item` would go None -
+    "no confirmed item", with the module sitting on the bench in plain view.
+
+    The bar it has to clear is unchanged: enough observations to have been
+    confirmed. A flicker that never earned that is still refused.
+    """
+
+    def flickering(self, seen, then_missing, class_name="RAM"):
+        pipeline = ItemPipeline(cfg=config.load(environ={}))
+        frame = 0
+        for _ in range(seen):
+            pipeline.process_detections(
+                [TrackedDetection(1, class_name, 0.5, (10, 10, 90, 90))], frame_id=frame
+            )
+            frame += 1
+        for _ in range(then_missing):
+            pipeline.process_detections([], frame_id=frame)
+            frame += 1
+        return pipeline
+
+    def test_a_confirmed_item_that_blinks_is_still_current(self):
+        pipeline = self.flickering(seen=5, then_missing=3)
+        item = pipeline.current_item
+        assert item is not None
+        assert item.state is ItemState.LEAVING
+        assert item.class_name == "RAM"
+
+    def test_an_item_seen_once_is_still_refused(self):
+        """The guarantee that made this gate exist in the first place."""
+        pipeline = self.flickering(seen=1, then_missing=2)
+        assert pipeline.current_item is None
+
+    def test_an_item_below_the_confirm_threshold_is_refused(self):
+        pipeline = ItemPipeline(cfg=config.load(environ={"AURUM_TRACK_MIN_DETECTIONS": "4"}))
+        for frame in range(3):
+            pipeline.process_detections(
+                [TrackedDetection(1, "RAM", 0.5, (10, 10, 90, 90))], frame_id=frame
+            )
+        pipeline.process_detections([], frame_id=3)
+        assert pipeline.current_item is None
+
+    def test_something_in_view_beats_something_leaving(self):
+        pipeline = ItemPipeline(cfg=config.load(environ={}))
+        frame = 0
+        for _ in range(4):
+            pipeline.process_detections(
+                [TrackedDetection(1, "RAM", 0.5, (10, 10, 90, 90))], frame_id=frame
+            )
+            frame += 1
+        # The RAM leaves; a CPU arrives and is confirmed.
+        for _ in range(4):
+            pipeline.process_detections(
+                [TrackedDetection(2, "CPU", 0.9, (20, 20, 99, 99))], frame_id=frame
+            )
+            frame += 1
+        assert pipeline.current_item.class_name == "CPU"
+
+    def test_an_item_gone_past_tolerance_is_not_current(self):
+        pipeline = self.flickering(seen=5, then_missing=40)
+        assert pipeline.current_item is None
