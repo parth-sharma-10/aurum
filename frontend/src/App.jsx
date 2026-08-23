@@ -15,6 +15,63 @@ const CLASS_COLOR = {
 
 const BIN_CLASS = { A: "badge-a", B: "badge-b", C: "badge-c" };
 
+/** The automatic cycle, in the operator's words rather than the enum's. */
+const PAN_STATE = {
+  WAITING_FOR_OBJECT: ["Waiting for an object", "neutral"],
+  OBJECT_PRESENT: ["Object detected on the pan", "warn"],
+  WEIGHING: ["Measuring…", "warn"],
+  WEIGHT_STABLE: ["Weight stable", "good"],
+  PROCESSING: ["Estimating and deciding", "warn"],
+  ROUTING: ["Routing", "warn"],
+  WAITING_FOR_CLEAR: ["Remove the object", "warn"],
+};
+
+/**
+ * The state machine, front and centre.
+ *
+ * This is what replaced the "Measure & route" button. The operator reads the
+ * machine here rather than driving it: nothing on this panel is clickable.
+ */
+function PanBanner({ pan, automatic }) {
+  if (!pan) return null;
+  const [label, tone] = PAN_STATE[pan.state] ?? [pan.state, "neutral"];
+  return (
+    <div className={`glass-panel pan pan-${tone}`}>
+      <div className="pan-head">
+        <span className="field-label">System</span>
+        <span className={automatic ? "badge-b" : "badge-c"}>
+          {automatic ? "AUTOMATIC" : "MANUAL — pan machine not running"}
+        </span>
+      </div>
+      <div className="pan-state">{label}</div>
+      <div className="pan-meta mono">
+        {pan.grams == null ? "— g" : `${pan.grams.toFixed(1)} g`} ·{" "}
+        {pan.cycles_completed} handled · {pan.seconds_in_state}s in state
+      </div>
+      {pan.reason && <div className="stage-note">{pan.reason}</div>}
+    </div>
+  );
+}
+
+/** What the camera found ON this object. Absence is never shown as zero. */
+function Inventory({ components }) {
+  const entries = Object.entries(components ?? {});
+  if (!entries.length) return <span className="muted">nothing detected</span>;
+  return (
+    <span className="inventory">
+      {entries.map(([cls, n]) => (
+        <span
+          key={cls}
+          className="chip"
+          style={{ "--swatch": CLASS_COLOR[cls] }}
+        >
+          {cls} × {n}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const pct = (c) => (c == null ? "--" : `${(c * 100).toFixed(1)}%`);
 const grams = (g) => (g == null ? "--" : `${g.toFixed(1)} g`);
 const num = (v, digits = 4) => (v == null ? "--" : Number(v).toFixed(digits));
@@ -118,9 +175,8 @@ function ItemChain({ item }) {
 
       {!graded && (
         <div className="notice">
-          <strong>Detected and confirmed.</strong> Place it on the pan, then
-          press <strong>Measure &amp; route</strong> to weigh it, grade it and
-          fire the paddle.
+          <strong>Detected and confirmed.</strong> Place it on the pan. The load
+          cell starts the measurement by itself — there is nothing to press.
         </div>
       )}
 
@@ -138,8 +194,20 @@ function ItemChain({ item }) {
             <span className="mono"> {pct(item.confidence)}</span>
           </>
         }
-        note={`${item.detection_count} observations · confidence is the mean over all of them`}
+        note={`${item.detection_count} observations · confidence is the weakest member's mean`}
         state={item.class_name ? "good" : "bad"}
+      />
+
+      <Stage
+        n="1b"
+        title={item.is_assembly ? "Assembly — components on this object" : "Single component"}
+        value={<Inventory components={item.components} />}
+        note={
+          item.is_assembly
+            ? "One physical object, one id, one mass. Only components actually detected are listed — nothing is recorded as absent."
+            : "Not sitting on a board, so it is its own object."
+        }
+        state="neutral"
       />
 
       <Stage
@@ -188,6 +256,43 @@ function ItemChain({ item }) {
         }
         state={pmdi?.available ? "good" : graded ? "bad" : "neutral"}
       />
+
+      {pmdi?.completeness && pmdi.completeness !== "COMPLETE" && (
+        <div className="notice">
+          <strong>
+            {pmdi.completeness === "PARTIAL_ESTIMATE"
+              ? "PARTIAL ESTIMATE"
+              : "INSUFFICIENT EVIDENCE"}
+          </strong>{" "}
+          — the figures below cover only part of this object.
+          <table className="metals">
+            <tbody>
+              {(pmdi.valued ?? []).map((v) => (
+                <tr key={`v-${v.component}`}>
+                  <td className="mono">
+                    {v.component} × {v.count}
+                  </td>
+                  <td>
+                    <span className="badge-b">VALUED</span>
+                  </td>
+                  <td className="muted small">{v.metals.join(", ")}</td>
+                </tr>
+              ))}
+              {(pmdi.not_valued ?? []).map((n) => (
+                <tr key={`n-${n.component}`}>
+                  <td className="mono">
+                    {n.component} × {n.count}
+                  </td>
+                  <td>
+                    <span className="badge-c">NOT VALUED</span>
+                  </td>
+                  <td className="muted small">{n.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {metals.length > 0 && (
         <table className="metals">
@@ -410,22 +515,30 @@ export default function App() {
         >
           {busy === "board" ? "Connecting…" : "Connect board"}
         </button>
-        <button
-          className="primary"
-          disabled={busy}
-          onClick={() => act("measure", "/session/measure")}
-        >
-          {busy === "measure" ? "Measuring…" : "Measure & route"}
-        </button>
         <button disabled={busy} onClick={() => act("stop", "/session/stop")}>
           Stop
         </button>
         <span className="controls-note">
-          The operator carries the component between stages and says{" "}
-          <em>when</em>. The class comes from the model, the mass from the cell,
-          the bin from the decision engine.
+          Place the object on the pan and wait. The load cell starts the
+          measurement, the model gives the classes, the decision engine gives
+          the bin. Nobody here says which bin.
         </span>
       </div>
+
+      <details className="glass-panel controls">
+        <summary>Developer controls</summary>
+        <p className="controls-note">
+          Not the normal path. The load cell triggers a measurement on its own;
+          these exist for a bench with no working cell or a mass that will not
+          settle.
+        </p>
+        <button
+          disabled={busy}
+          onClick={() => act("measure", "/session/measure")}
+        >
+          {busy === "measure" ? "Measuring…" : "Measure & route now (manual)"}
+        </button>
+      </details>
 
       {state?.mock_mass?.enabled && (
         <div className="notice">
@@ -444,6 +557,8 @@ export default function App() {
           )}
         </div>
       )}
+      <PanBanner pan={state?.pan} automatic={state?.automatic} />
+
       {error && <div className="notice bad">{error}</div>}
       {state?.camera?.error && (
         <div className="notice bad">Camera: {state.camera.error}</div>

@@ -20,9 +20,14 @@ one.** The operator moves the component between the camera, the load cell and
 the bins. That is the honest scope: hopper, singulator, belt and physical
 positioning are the next hardware stage.
 
-What the operator does: carry the object, and press *Measure & route*.
-What the operator never does: type a class, a mass, or a bin. There is no code
-path that accepts any of the three.
+What the operator does: carry the object from the camera to the pan, and take it
+away again afterwards.
+What the operator never does: press anything to make the machine work, or type a
+class, a mass, or a bin. There is no code path that accepts any of the three,
+and since the load cell drives the cycle there is no button in the normal path
+either. *Measure & route now* still exists under **Developer controls** for a
+bench with no working cell; it is labelled as a fallback because that is what it
+is.
 
 ---
 
@@ -178,17 +183,21 @@ Then, in the dashboard:
 | 2 | **Connect board** | `BOARD LINKED` and `ACTUATION ON` green. `NOT CALIBRATED` stays amber while the cell is broken |
 | 3 | Hold the component to the camera | Box appears labelled `AUR-ITEM-xxxxxxxx CPU 0.94` |
 | 4 | Wait for CONFIRMED | Three observations; "current item" fills in |
-| 5 | Place it on the load cell | — |
-| 6 | **Measure & route** | Mass lands on the same item id, then PMDI, bin, servo |
+| 5 | Place it on the load cell | `Object detected on the pan` → `Measuring…` |
+| 6 | **Do nothing** | `842.3 g stable`; the same item id gains a mass, a PMDI, a bin |
 | 7 | Watch the paddle | Servo A or Servo B strokes; Bin C moves nothing |
+| 8 | Take the object off | `Remove the object` → `Waiting for an object` |
 
 `CAMERA LIVE`, `BOARD LINKED` and `ACTUATION ON` must be green before step 6. A
 red or amber pill is the system telling you something is genuinely not ready —
 it is not cosmetic. `NOT CALIBRATED` and `MOCK MASS` are expected while the load
 cell is bypassed, and are exactly what you should be narrating.
 
-Stages after the camera read "not weighed yet" / "waiting" until you press
-**Measure & route**. That is pending, not failed.
+Stages after the camera read "not weighed yet" / "waiting" until the object is
+on the pan. That is pending, not failed. The banner at the top of the dashboard
+is the machine's own account of where it is: if it says `Waiting for an object`
+while something is sitting on the cell, read the reason underneath — an
+uncalibrated cell and an unidentified mass both say so in plain words.
 
 ---
 

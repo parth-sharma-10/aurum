@@ -614,14 +614,54 @@ components:
           Al: CONN-AL-001
 
   RAM:
+    # ---------------------------------------------------------------------
+    # NO COMPOSITION DATA EXISTS FOR ANY OF THESE. See `gaps.RAM`.
+    #
+    # The generation subtypes below are PREPARED SLOTS, not entries waiting to
+    # be believed. Each is empty, each therefore returns INSUFFICIENT_EVIDENCE,
+    # and adding one composition key to one of them is the whole of the work
+    # when a citable figure is found. They exist because DRAM composition is
+    # known to vary by generation - contact plating, layer count and package
+    # type all changed across DDR2 to DDR5 - so a single "RAM" figure would
+    # have to be an average nobody measured.
+    #
+    # `default_subtype` stays `dimm_module` on purpose. Aurum cannot read a
+    # module's generation from an RGB image, so the class as DETECTED is an
+    # unspecified module, and that is the entry a detection resolves to. A
+    # generation subtype may only ever be selected by evidence the system
+    # actually has - never guessed from appearance.
+    #
+    # When a figure is found, its evidence record must carry what every other
+    # record here carries: value, unit, quantity, sample_description,
+    # measurement_method, device_generation, publication_year, source,
+    # evidence_type, confidence, and minimum/maximum where the source reports
+    # a range. A figure without those is not admissible.
+    # ---------------------------------------------------------------------
     default_subtype: dimm_module
     subtypes:
       dimm_module:
         description: >
-          A DIMM / SO-DIMM / RDIMM memory module. NO COMPOSITION DATA - see
+          A DIMM / SO-DIMM / RDIMM memory module of unspecified generation -
+          what a bare "RAM" detection justifies. NO COMPOSITION DATA - see
           `gaps.RAM`. The mass reference exists but has nothing to multiply.
         composition: {}
         mass: RAM-MASS-001
+      ddr2_module:
+        description: "A DDR2 module. Slot prepared; no cited composition."
+        generation: DDR2
+        composition: {}
+      ddr3_module:
+        description: "A DDR3 module. Slot prepared; no cited composition."
+        generation: DDR3
+        composition: {}
+      ddr4_module:
+        description: "A DDR4 module. Slot prepared; no cited composition."
+        generation: DDR4
+        composition: {}
+      ddr5_module:
+        description: "A DDR5 module. Slot prepared; no cited composition."
+        generation: DDR5
+        composition: {}
 
 # ---------------------------------------------------------------------------
 # RECOVERY
@@ -716,6 +756,13 @@ gaps:
       only the sheared gold-finger edge, and FIRSCHING2024 explicitly states
       that gold-finger figures were not yet available. A detected RAM module
       therefore returns `available: false`.
+
+      Generation subtypes (DDR2/DDR3/DDR4/DDR5) are defined and EMPTY under
+      `components.RAM.subtypes`, ready to receive a cited figure each. They are
+      not selectable from an image: Aurum cannot read a module's generation
+      from RGB, so a detection resolves to the unspecified `dimm_module`. Until
+      a subtype carries evidence, every RAM detection is INSUFFICIENT_EVIDENCE
+      and routes to Bin C. That is the intended behaviour, not a defect.
   CPU:
     missing: [Ag, Pd, Pt, Cu, Ni, Sn, Al]
     reason: >

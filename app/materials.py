@@ -14,17 +14,30 @@ recycling estimate turns into a false claim:
     recovery      how much of it a cited process actually got out
     measurement   what Aurum measured about this batch: nothing but counts
 
-`estimate()` fails closed. A detected class with no cited figure blocks the
-whole estimate rather than contributing a silent zero, because a total that
-quietly omits a component still reads as a total.
+`estimate()` fails closed. A detected class with no cited figure never
+contributes a silent zero, because a total that quietly omits a component
+still reads as a total. What it reports instead is how complete the answer is:
+
+    COMPLETE              every detected class was valued from cited data
+    PARTIAL_ESTIMATE      some were; the rest are listed with the reason why
+    INSUFFICIENT_EVIDENCE nothing could be valued
+
+A partial estimate is not a degraded total. It is a total *of the components
+named in `valued`*, and `not_valued` says exactly what is missing from it. That
+is more useful than refusing outright - a motherboard whose CPU can be valued
+and whose board cannot is a real, defensible, incomplete answer - and it is
+honest in a way that a silently short total is not.
 
 Two evidence shapes exist and they are not interchangeable:
 
     per_piece      mg of metal in one component -> multiply by the count
     concentration  mg of metal per kg of material -> needs a mass first
 
-Only a *measured* batch mass may drive a concentration, and only when one class
-is present, since a mixed batch's mass cannot be attributed to one of them.
+Only a *measured* mass may drive a concentration, and only when that mass
+belongs to the class alone. An assembly's mass covers every component on it, so
+applying a board's mg/kg figure to it would count the processor's and the
+modules' mass as board material - the double count of section 10. The
+concentration line is refused instead, and the refusal is reported.
 """
 
 from __future__ import annotations
@@ -34,6 +47,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 REFERENCE = ROOT / "configs" / "material_reference.yaml"
 SOURCES = ROOT / "docs" / "sources" / "material_sources.yaml"
+
+#: How much of what was detected the estimate actually covers. Reported as a
+#: fact about the evidence; it carries no routing consequence of its own, and
+#: `app.decision` is where any policy about it would live.
+COMPLETE = "COMPLETE"
+PARTIAL_ESTIMATE = "PARTIAL_ESTIMATE"
+INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
 
 VALID_CONFIDENCE = ("high", "medium", "low")
 VALID_QUANTITY = ("per_piece", "concentration", "mass")
@@ -208,14 +228,17 @@ def _usable_mass_g(mass: dict | None, counts: dict[str, int]) -> tuple[float | N
     A simulated reading is refused outright: `app.weight.SimulatedLoadCell`
     exists so the dashboard has something to render, and multiplying an
     invented mass by a real concentration produces an invented quantity that
-    looks measured. A mixed batch is refused too, because its mass cannot be
-    attributed to one component class.
+    looks measured. A mass covering more than one class is refused too, and
+    that refusal is what prevents double counting: one physical mass may drive
+    at most one concentration line, and only when it is entirely that class's.
     """
     classes_present = [c for c, n in counts.items() if n]
     if len(classes_present) > 1:
         return None, (
-            "a concentration needs a mass, and this batch mixes "
-            f"{sorted(classes_present)}; its total mass cannot be attributed to one class"
+            "a concentration needs a mass that belongs to this class alone, and this "
+            f"object's mass covers {', '.join(sorted(classes_present))}. Applying a "
+            "per-kilogram figure to it would count the other components' mass as this "
+            "one's material - the same physical grams valued twice"
         )
     if not mass:
         return None, "a concentration needs a mass, and this batch carries no weight reading"
@@ -375,18 +398,28 @@ def estimate(counts: dict[str, int], mass: dict | None = None, db: dict | None =
     index = evidence_index(db)
     sources = load_sources()
     lines: list[dict] = []
-    blocked: list[str] = []
+    valued: list[dict] = []
+    not_valued: list[dict] = []
     for cls, count in sorted(detected.items()):
         got, reason = _component_lines(cls, count, db, index, mass, detected, sources)
         if not got:
-            blocked.append(reason)
+            not_valued.append({"component": cls, "count": count, "reason": reason})
+            continue
+        valued.append(
+            {
+                "component": cls,
+                "count": count,
+                "metals": sorted({line["metal"] for line in got}),
+            }
+        )
         lines.extend(got)
 
-    if blocked:
+    if not lines:
         return _unavailable(
             counts,
-            "Estimation is blocked because not every detected component has usable cited "
-            "data. " + " | ".join(blocked),
+            "No detected component has usable cited data. "
+            + " | ".join(entry["reason"] for entry in not_valued),
+            not_valued=not_valued,
         )
 
     # A bound only means something when every contributing line has one. Summing
@@ -416,9 +449,23 @@ def estimate(counts: dict[str, int], mass: dict | None = None, db: dict | None =
             else "A bound is null where at least one contributing component has no cited bound."
         )
 
+    completeness = COMPLETE if not not_valued else PARTIAL_ESTIMATE
     return {
         "available": True,
         "kind": "ESTIMATE",
+        "completeness": completeness,
+        "valued": valued,
+        "not_valued": not_valued,
+        "reason": None
+        if completeness == COMPLETE
+        else (
+            "PARTIAL ESTIMATE. Valued: "
+            + ", ".join(f"{v['component']} x{v['count']}" for v in valued)
+            + ". Not valued: "
+            + " | ".join(f"{n['component']} x{n['count']} - {n['reason']}" for n in not_valued)
+            + ". The totals below cover the valued components ONLY and are not a total "
+            "for the whole object."
+        ),
         "basis": db.get("basis"),
         "detected_components": dict(counts),
         "components": lines,
@@ -482,11 +529,14 @@ NOT_MEASURED = {
 }
 
 
-def _unavailable(counts: dict[str, int], reason: str) -> dict:
+def _unavailable(counts: dict[str, int], reason: str, not_valued: list[dict] | None = None) -> dict:
     """A refusal carrying no numeric field a UI could mistake for a figure."""
     return {
         "available": False,
         "kind": "ESTIMATE",
+        "completeness": INSUFFICIENT_EVIDENCE,
+        "valued": [],
+        "not_valued": not_valued or [],
         "basis": None,
         "detected_components": dict(counts),
         "measured_material": NOT_MEASURED,

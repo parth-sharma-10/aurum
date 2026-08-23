@@ -84,19 +84,73 @@ Full wiring, protocol and validation status: [hardware.md](hardware.md).
 ## Item identity and lifecycle
 
 ```
-frame -> detector -> ByteTrack -> TrackedItem (stable item_id) -> weight -> PMDI -> decision -> routing
+frame -> detector -> ByteTrack -> TrackedItem -> ASSEMBLY (stable item_id)
+      -> weight -> PMDI -> decision -> routing
 ```
 
-A camera pointed at the conveyor produces a CPU in frame 1, a CPU in frame 2
-and a CPU in frame 3. That is **one** physical object, and everything
-downstream -- one weighing, one decision, one servo firing, one ledger row --
-depends on saying so.
+A camera pointed at the bench produces a CPU in frame 1, a CPU in frame 2 and a
+CPU in frame 3. That is **one** physical object, and everything downstream --
+one weighing, one decision, one servo firing, one ledger row -- depends on
+saying so.
+
+It also produces, for a motherboard, a PCB *and* two RAM modules *and* a CPU
+*and* five connectors, all in the same frame. That too is **one** physical
+object: one thing a hand picks up, one thing the pan weighs, one mass.
+`app/vision/assembly.py` decides which detected components are one object, by
+spatial containment -- a component whose box lies inside a container's box is
+on it. No rule anywhere describes a motherboard; a board with four modules, one
+or none groups by exactly the same test, and a class becomes a container by
+being listed in `tracking.assembly.container_classes`.
+
+The assembly id **is** the physical item id. A standalone component is an
+assembly of one and keeps its own `AUR-ITEM-`, so nothing downstream has to
+know whether it is holding a board or a bare chip.
 
 | File | Role |
 |---|---|
 | `app/vision/tracker.py` | `ItemTracker`, the lifecycle state machine; `DetectorTracker`, the ByteTrack adapter |
+| `app/vision/assembly.py` | `Assembly`, and `group()` -- tracked items to physical objects by containment |
 | `app/pipeline/item_pipeline.py` | Composes detector, tracker and lifecycle; the seam later phases hang off |
-| `configs/tracking.yaml` | Track-loss tolerance and confirmation threshold |
+| `app/pipeline/association.py` | `SingleObjectZone` -- which object is on the pan, and the latch that keeps its identity once it leaves the camera |
+| `app/pipeline/pan.py` | `PanMachine` -- the automatic weighing cycle |
+| `configs/tracking.yaml` | Track-loss tolerance, confirmation threshold, assembly containment |
+
+### The automatic cycle
+
+```
+WAITING_FOR_OBJECT -> OBJECT_PRESENT -> WEIGHING -> WEIGHT_STABLE
+    -> PROCESSING -> ROUTING -> WAITING_FOR_CLEAR -> WAITING_FOR_OBJECT
+```
+
+The load cell drives it; there is no button in the normal path. `pan.py` adds
+only the two things `WeightSensor` has no opinion about -- has something
+arrived, and has it gone -- and delegates every stability judgement to the
+existing sensor. Arrival and clearance thresholds are
+`conveyor.weight.pan.*`; stability stays `conveyor.weight.stability_*`.
+
+Two rules keep it honest. Crossing the arrival threshold **opens** a cycle and
+never ends one, so the first non-zero reading is never what gets recorded. And
+every failure -- a mass that will not settle, a pulled USB cable, a mass with no
+confirmed identity -- completes the cycle and returns the machine to waiting,
+because a machine that needs rescuing after a wobble is not automatic.
+
+It runs on its own thread. `WeightSensor.read()` blocks until the mass settles
+and `ArduinoController.move()` blocks until the board acknowledges a *completed*
+stroke, and neither may run on the camera thread or hold the session lock while
+it waits.
+
+### Assembly mass and double counting
+
+An assembly has one mass covering every component on it. A per-kilogram figure
+for the board therefore may **not** be multiplied by it -- that would count the
+processor's and the modules' mass as board material. `app/materials.py` refuses
+the concentration line instead and reports the refusal, which is why a
+motherboard yields `completeness: PARTIAL_ESTIMATE` with `valued` and
+`not_valued` naming exactly what the figure does and does not cover.
+
+Completeness is reported, never acted on: no bin follows from it. How much of
+an object the evidence covers and which bin it belongs in are different
+questions, and any policy joining them belongs in `configs/grading.yaml`.
 
 ### A `track_id` is not an `item_id`
 

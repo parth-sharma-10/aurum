@@ -60,6 +60,32 @@ conveyor:
     # noisy sample should not move the answer, and a spike is exactly what a
     # mean would smear in.
     filter_samples: 5
+
+    # The pan state machine — when an object has ARRIVED and when it has GONE.
+    #
+    # ENGINEERING APPROXIMATIONS — not research-derived. Tune against the real
+    # cell's noise floor once it is mounted and calibrated.
+    #
+    # Note what is NOT here: stability. Deciding that a reading has settled is
+    # already owned by weight.stability_window_ms / stability_tolerance_g above
+    # and implemented in app/weight.py. These two thresholds answer a different
+    # and much cruder question — is there something on the pan at all.
+    pan:
+      # Above this, an object is present. Well clear of drift on a settled pan.
+      object_threshold_g: 5.0
+      # Below this for clear_samples consecutive readings, the pan is empty
+      # again and the next object may be accepted. Deliberately lower than
+      # object_threshold_g: the gap is hysteresis, so an object hovering near
+      # one threshold cannot rattle between arriving and leaving.
+      clear_threshold_g: 2.0
+      clear_samples: 5
+      # How often the machine looks at the cell while idle.
+      poll_interval_s: 0.05
+      # The normal workflow: the load cell drives the measurement, no button.
+      # Turning this off leaves POST /session/measure as the only path, which
+      # is the developer fallback rather than the product.
+      auto: true
+
     # MEASURE THIS: raw HX711 counts per gram, from a known reference mass.
     calibration_factor: UNMEASURED
     # Serial port of the board publishing load-cell readings. Null until wired.

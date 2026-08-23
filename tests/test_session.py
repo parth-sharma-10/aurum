@@ -318,7 +318,8 @@ class TestSnapshot:
         """The demonstration must not imply a belt it does not have."""
         conveyor = session().snapshot()["conveyor"]
         assert conveyor["present"] is False
-        assert "operator carries the component" in conveyor["note"]
+        assert "No conveyor exists" in conveyor["note"]
+        assert "not scheduled" in conveyor["note"]
 
     def test_the_snapshot_reports_calibration_verification_honestly(self):
         assert session(calibration=UNVERIFIED).snapshot()["calibration"]["verified"] is False

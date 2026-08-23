@@ -61,6 +61,17 @@ class Valuation:
         return self.pmdi.evidence_status
 
     @property
+    def completeness(self) -> str:
+        """COMPLETE | PARTIAL_ESTIMATE | INSUFFICIENT_EVIDENCE.
+
+        Reported, never acted on here. How much of a detected object the cited
+        evidence covers is a different question from which bin it belongs in,
+        and collapsing the two would bury a sorting policy inside the
+        evidence layer where nobody could configure it.
+        """
+        return self.pmdi.completeness
+
+    @property
     def weight_status(self) -> MassStatus:
         return self.pmdi.mass_status
 
@@ -98,6 +109,9 @@ class Valuation:
             "currency": self.currency,
             "evidence_sources": list(p.evidence_sources),
             "evidence_status": str(self.evidence_status),
+            "completeness": self.completeness,
+            "valued": [dict(v) for v in p.valued],
+            "not_valued": [dict(n) for n in p.not_valued],
             "confidence": p.confidence,
             "overall_status": str(self.overall_status),
             "reason": self.reason,

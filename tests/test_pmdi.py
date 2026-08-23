@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app import materials
 from app.valuation import pmdi as pmdi_module
 from app.valuation import valuation as valuation_module
 from app.valuation.pmdi import (
@@ -182,10 +183,27 @@ class TestRam:
         assert result.total_value is None
         assert result.as_dict()["precious_value"] is None
 
-    def test_one_blocked_class_blocks_a_mixed_batch(self):
-        """A total that quietly drops a component still reads as a total."""
+    def test_one_blocked_class_makes_the_whole_result_partial(self):
+        """A total that quietly drops a component still reads as a total.
+
+        So it is not quiet. The CPU's cited gold is reported, the RAM gap is
+        reported alongside it, and the result declares itself PARTIAL so no
+        consumer can read the figure as covering both.
+        """
         result = pmdi_module.compute({"CPU": 1, "RAM": 1}, mass=MEASURED_CPU, now=NOW)
-        assert not result.available
+
+        assert result.available
+        assert result.completeness == materials.PARTIAL_ESTIMATE
+        assert result.evidence_status is EvidenceStatus.PARTIAL
+        assert [v["component"] for v in result.valued] == ["CPU"]
+        assert [n["component"] for n in result.not_valued] == ["RAM"]
+        assert "PARTIAL ESTIMATE" in result.reason
+
+    def test_a_partial_result_carries_no_ram_contribution(self):
+        """Whatever else is true, no gram in the total came from the module."""
+        alone = pmdi_module.compute({"CPU": 1}, mass=MEASURED_CPU, now=NOW)
+        mixed = pmdi_module.compute({"CPU": 1, "RAM": 9}, mass=MEASURED_CPU, now=NOW)
+        assert mixed.precious_mass_g == alone.precious_mass_g
 
 
 class TestPricing:

@@ -22,3 +22,31 @@ tracking:
   # weighed, decided and routed. One frame is a flicker; three is a decision
   # you can defend to a servo.
   min_detections_to_confirm: 3
+
+  # ------------------------------------------------------------------------
+  # ASSEMBLIES — which detected components are ONE physical object.
+  #
+  # A motherboard is not a class the model recognises. It is a PCB with other
+  # components on it, and the only general way to say so from an image is
+  # geometry. No motherboard-specific rule exists anywhere: a board with four
+  # RAM modules, one, or none groups by exactly the same test.
+  #
+  # This matters for valuation, not just display. An assembly has ONE mass
+  # covering every child, so a per-kilogram figure for the board may not be
+  # multiplied by it — that would count the CPU's and the modules' mass as
+  # board material. See app/materials.py.
+  # ------------------------------------------------------------------------
+  assembly:
+    # A class becomes a container by being listed here. Add laptop boards,
+    # drive housings or power supplies without touching any Python.
+    container_classes:
+      - PCB
+
+    # ENGINEERING APPROXIMATION — not research-derived.
+    # How much of a component's box must fall inside a container's box before
+    # it counts as sitting on it. Asymmetric on purpose: the question is what
+    # fraction of the COMPONENT is on the board, so a small chip on a large
+    # motherboard scores near 1.0. Lower it if components on a board edge are
+    # being split off into their own objects; raise it if components merely
+    # lying beside a board are being absorbed into it.
+    containment_ratio: 0.7

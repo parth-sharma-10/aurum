@@ -458,3 +458,64 @@ class TestStatusPropagation:
         result = judge("CPU", 0.95, measured(42.7), prices=stale)
         assert result.status is OverallStatus.STALE
         assert result.signals["price_status"] == "STALE"
+
+
+class TestEvidenceCompletenessIsReportedNotEnforced:
+    """Completeness is a fact about the database, not a routing rule.
+
+    A mixed object often yields a PARTIAL_ESTIMATE: the processor is valued
+    from cited per-piece data while the board's per-kilogram figure is refused
+    because one mass covers every component. That is reported in the signals so
+    an operator can see it and a future policy can read it.
+
+    It is deliberately NOT wired to a bin. No existing grading requirement says
+    an incomplete estimate may not reach the premium stream, and inventing one
+    here would bury a sorting policy inside the evidence layer where nobody
+    could configure it. These tests pin that decision down so it cannot be
+    added by accident.
+    """
+
+    @staticmethod
+    def mixed(mass=None, configuration=None):
+        valuation = valuation_module.value(
+            {"CPU": 1, "RAM": 2}, mass=mass, prices=unpriced(), now=NOW
+        )
+        return valuation, decide("CPU", 0.94, valuation, cfg=configuration or cfg())
+
+    def test_the_signals_carry_the_completeness_and_what_was_missed(self):
+        valuation, decision = self.mixed()
+        assert valuation.completeness == "PARTIAL_ESTIMATE"
+        signals = decision.as_dict()["signals"]
+        assert signals["evidence_completeness"] == "PARTIAL_ESTIMATE"
+        assert [v["component"] for v in signals["components_valued"]] == ["CPU"]
+        assert [n["component"] for n in signals["components_not_valued"]] == ["RAM"]
+        assert signals["components_not_valued"][0]["reason"]
+
+    def test_a_partial_estimate_is_not_by_itself_a_reason_to_refuse_a_bin(self):
+        """The same class, the same confidence, one extra unvalued component."""
+        complete = judge("CPU", 0.94)
+        _, partial = self.mixed()
+        assert complete.decision is partial.decision
+        assert complete.reason_code is partial.reason_code
+
+    def test_no_reason_code_mentions_completeness(self):
+        """If a completeness rule ever lands, it must announce itself."""
+        _, decision = self.mixed()
+        assert "PARTIAL" not in str(decision.reason_code)
+
+    def test_completeness_never_overrides_the_safety_ladder(self):
+        """Being partial does not excuse a weak detection either."""
+        valuation = valuation_module.value(
+            {"CPU": 1, "RAM": 2}, mass=None, prices=unpriced(), now=NOW
+        )
+        decision = decide("CPU", 0.2, valuation, cfg=cfg())
+        assert decision.decision is Bin.C
+        assert decision.reason_code is ReasonCode.C_LOW_CONFIDENCE
+
+    def test_an_object_whose_every_class_lacks_evidence_still_fails_closed(self):
+        """INSUFFICIENT_EVIDENCE is unchanged: nothing valued, nothing routed."""
+        valuation = valuation_module.value({"RAM": 2}, mass=measured(60.0), prices=unpriced())
+        decision = decide("RAM", 0.94, valuation, cfg=cfg())
+        assert valuation.completeness == "INSUFFICIENT_EVIDENCE"
+        assert decision.decision is Bin.C
+        assert decision.reason_code is ReasonCode.C_UNSUPPORTED_MATERIAL

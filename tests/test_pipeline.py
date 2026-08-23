@@ -263,8 +263,10 @@ class TestRecoveryEstimate:
             PCB={"material": "gold", "value": 0.02, "unit": "g", "source": "TEST FIXTURE"},
         )
         est = recovery_estimate({"PCB": 1, "RAM": 2})
-        assert est["available"] is False
+        assert est["completeness"] == "PARTIAL_ESTIMATE"
+        assert [n["component"] for n in est["not_valued"]] == ["RAM"]
         assert "RAM" in est["reason"]
+        assert {line["component"] for line in est["components"]} == {"PCB"}
 
     def test_a_yield_missing_its_source_is_treated_as_absent(self, tmp_path, monkeypatch):
         """An uncitable figure is not a usable figure."""
@@ -413,7 +415,7 @@ class TestValuationEndpoint:
         ledger_mod.save(rec)
         body = client.get(f"/batches/{rec['batch_id']}/valuation").json()
         assert body["valuation"]["available"] is False
-        assert body["recovery_estimate"]["available"] is False
+        assert body["recovery_estimate"]["completeness"] != "COMPLETE"
         assert "estimated_value" not in body["valuation"]
 
     def test_endpoint_separates_counts_from_estimates(self, client, ledger_db):

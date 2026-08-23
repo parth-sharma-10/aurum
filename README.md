@@ -72,7 +72,9 @@ uvicorn app.api:app --port 8000
 cd frontend && npm install && npm run dev       # http://localhost:5173
 ```
 
-Start camera → connect board → hold a component up → **Measure & route**. Full
+Start camera → connect board → hold the object up until it is CONFIRMED → put it
+on the pan. Nothing else. The load cell detects the object, waits for the mass
+to settle, grades it, moves the paddle and waits for you to take it away. Full
 runbook, including what to say and what to do when something fails, in
 [docs/demo.md](docs/demo.md).
 
