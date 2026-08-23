@@ -213,55 +213,111 @@ and that is a real reading — never confused with an absent one.
 Software being complete is not the same as hardware being proven, and this
 table tracks the second. **Update it only after watching the thing happen.**
 
+Bench session of **2026-08-22**, on an Arduino Uno at `/dev/cu.usbmodem101`.
+
 | Item | Status |
 |---|---|
-| HX711 hardware response | **VERIFIED** — 180 g moved the reading by ~65 000 counts |
-| Initial calibration experiment | **VERIFIED** — factor ≈ 361.9 counts/g derived |
-| **Final calibration validation** | **NOT VERIFIED** — no independent second-mass check |
-| Servo A movement (D9) | **BENCH VERIFIED**, independently, outside this software |
-| Servo B movement (D10) | **BENCH VERIFIED**, independently, outside this software |
+| Board identity | **VERIFIED** — Uno, VID `0x2341` / PID `0x0043` |
+| Weight sketch on the board | **VERIFIED** — flashed; 10/10 valid `W,1,…,OK` frames at 115200 |
+| Sorter sketch on the board | **VERIFIED** — flashed; weight frames survive it |
+| HX711 converting | **VERIFIED** — `board_millis` advancing, 64–157 count noise floor |
+| **Python ↔ Arduino communication** | **VERIFIED** — `PING`→`PONG` over the real port |
+| **Servo A moved by Aurum code** | **PHYSICALLY VERIFIED** — `ACK` in 709 ms, movement watched |
+| **Servo B moved by Aurum code** | **PHYSICALLY VERIFIED** — `ACK`, movement watched |
+| Duplicate suppression on the board | **VERIFIED** — replayed id answered `ACK … DUP`, no second stroke |
+| Bin C writes nothing | **VERIFIED** — no bytes reached the board |
 | Corrected power wiring | **WORKING** after the earlier short |
-| Weight sketch on the board | **NOT tested** — never uploaded |
-| Sorter sketch on the board | **NOT tested** — written, never uploaded |
-| **Python ↔ Arduino communication** | **NOT VERIFIED** — never run against a board |
-| Servo moved by Aurum code | **NEVER** |
-| Calibration workflow end to end | **NOT run** on hardware |
+| **Load cell under load** | **FAILED** — see below. The cell converts; it sees no strain |
+| **Calibration** | **NOT VERIFIED** — blocked by the above |
 | Physical conveyor | **DOES NOT EXIST** |
+
+The 709 ms matters: the sketch blocks for `holdMs` during a stroke, so the
+round-trip time is evidence the movement routine actually ran rather than an
+ACK being echoed back.
+
+### The load cell is mechanically bypassed
+
+Measured on the bench, with the cell wired and converting normally:
+
+| Load | Mean counts | Shift from tare | Expected shift |
+|---|---|---|---|
+| empty (tare) | −261 278.8 | — | — |
+| **180 g** | −261 276.6 | **+2.2** | ~**+65 100** |
+| **400 g** | −261 289.3 | **−10.5** | ~**+144 800** |
+
+The noise floor is 64–104 counts, so a 2.2-count shift is thirty times smaller
+than the noise, and 400 g moved it in the **opposite** direction. That is not a
+weak signal, it is no signal: the mass is not reaching the cell.
+
+**This is a mounting fault, not a wiring or software fault.** A bar cell must be
+a cantilever — one end bolted rigidly to a base, the other carrying the pan,
+with an air gap beneath the free end so it can bend. Check whether the pan rests
+on the frame or table, whether both ends are screwed down, and whether the mass
+lands on the pan or beside it.
+
+Until it is fixed, no reading can reach `MEASURED`, so a PCB routes to Bin C on
+`C_UNMEASURED_WEIGHT`. That is the fail-closed design working. The demonstration
+fallback in `demo.mock_mass` exists to work around it, and is labelled
+SIMULATED throughout — see the README.
 
 Software status, which is a different claim:
 
 | Item | Status |
 |---|---|
-| Camera → detection → tracking → item id | **RUNNING** — exercised over HTTP on the test images |
-| Item id → mass → PMDI → decision → command | **RUNNING** — `app/pipeline/session.py`, covered end to end |
-| Command layer, link layer, session | **TESTED** — `tests/test_arduino.py`, `test_link.py`, `test_session.py` |
-| Serial link against a real board | **UNTESTED** — a fake serial stands in |
+| Camera → detection → tracking → item id | **RUNNING** — real webcam, real model |
+| Item id → mass → PMDI → decision → command | **RUNNING** — `app/pipeline/session.py` |
+| Command layer, link layer, session | **TESTED** — 836 tests, hardware layer covered |
+| Serial link against a real board | **VERIFIED** — no longer a fake |
 
 ### The five levels, kept apart
 
 `SOFTWARE-TESTED` · `SIMULATION-VERIFIED` · `HARDWARE-BENCH-VERIFIED` ·
 `PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
 
-Aurum reaches level 3 for the servos and the HX711 — bench-verified outside
-this software — and **level 4 and 5 for nothing at all.** Level 4 needs the
-calibration workflow run on the machine; level 5 needs a conveyor that does not
-exist and is not in the demonstration's scope.
+The actuation path reaches **level 3**: both paddles have been moved by Aurum's
+own command, over a real serial link, and watched doing it. **Level 4 is not
+reached** — the load cell is mechanically bypassed, so nothing has been
+physically calibrated. Level 5 needs a conveyor that does not exist and is out
+of the demonstration's scope.
 
-Everything in the "NOT" rows is software-tested against a fake serial port and
-nothing more. A passing test suite says the software is right about what it
-would send, never that a paddle moved.
+A passing test suite says the software is right about what it would send, never
+that a paddle moved. Those are now separate claims with separate evidence, and
+the tables above keep them apart.
 
-### The first bench session, in order
+### Flashing, without the IDE
 
-1. Flash `aurum_weight`. Confirm `W,1,…,OK` lines in the Serial Monitor at 115200.
+`arduino-cli` avoids the Serial Monitor problem below:
+
+```bash
+arduino-cli compile --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
+arduino-cli upload -p /dev/cu.usbmodem101 --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
+```
+
+`arduino-cli lib install Servo` once, if the sorter sketch will not compile.
+
+### The Arduino IDE will fight you for the port
+
+**Close the Serial Monitor before doing anything else.** The IDE reopens it
+automatically the instant the board enumerates, and it holds the port
+exclusively. That caused two upload failures and one apparent "board vanished
+from USB" during the first bench session, and it will silently break
+calibration the same way.
+
+```bash
+lsof /dev/cu.usbmodem101      # anything listed here owns the port, not you
+pkill -f serial-monitor       # releases it; the IDE reopens it on demand
+```
+
+### Bench session order
+
+1. Flash `aurum_weight`. Confirm `W,1,…,OK` at 115200. **Calibrate on this
+   sketch** — it has no servo code, so nothing can move near your hands.
 2. Run `python -m app.calibrate` to `verified: true`.
 3. Flash `aurum_sorter`. Confirm weight frames still stream.
-4. `POST /session/board/connect`, then check `GET /arduino` reports `CONNECTED`.
-5. Present a CPU, weigh it, and watch **Servo A**.
-6. Present a PCB, weigh it, and watch **Servo B**.
-7. Present a RAM module and confirm **nothing moves**.
+4. `POST /session/board/connect`, then check `GET /arduino`.
+5. CPU → watch **Servo A**. PCB → watch **Servo B**. RAM → watch **nothing**.
 
-Only after 5, 6 and 7 have been watched may the rows above change.
+Steps 1, 3, 4 and 5 are done. Step 2 is blocked on the mounting fault.
 
 
 ## Routing geometry — future work, not the demonstration

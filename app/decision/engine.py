@@ -245,7 +245,14 @@ def decide(
     # 3. Required measurement. Concentration evidence is meaningless without a
     #    real mass, and a simulated reading is not one.
     mass_status = valuation.weight_status
-    if support["requires_mass"] and mass_status is not MassStatus.MEASURED:
+    # The demonstration fallback lets a SIMULATED mass through this gate, and
+    # only this gate. Everything it produces still carries overall_status
+    # SIMULATED, so a bin reached this way is visibly reached on a stand-in
+    # number rather than a measurement.
+    accepted = {MassStatus.MEASURED}
+    if cfg["demo.mock_mass.enabled"]:
+        accepted.add(MassStatus.SIMULATED)
+    if support["requires_mass"] and mass_status not in accepted:
         return out(
             Bin.C,
             ReasonCode.C_UNMEASURED_WEIGHT,

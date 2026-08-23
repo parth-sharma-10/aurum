@@ -139,6 +139,9 @@ class DemoSession:
         #: Item ids handled by `measure_and_route`, so one physical object
         #: cannot be weighed and routed twice by an impatient second click.
         self._handled: set[str] = set()
+        #: Finished records, newest last. The run's ledger, kept here because
+        #: the tracker deliberately forgets an item once it has been drained.
+        self._routed: dict[str, dict] = {}
 
     # -- hardware ----------------------------------------------------------
     def connect_board(self) -> dict:
@@ -276,21 +279,35 @@ class DemoSession:
                 )
             self._handled.add(item.item_id)
 
-            reading = self._read_mass()
+            component_class = item.class_name
+            reading = self._read_mass(component_class)
             item.attach_weight(reading.grams, str(reading.status), reading.timestamp)
             item.weight_reading = reading.as_dict()
-
-            component_class = item.class_name
+            # A mass is forwarded when it carries a real quantity - a settled
+            # measurement, or a labelled stand-in. An UNAVAILABLE reading is
+            # withheld entirely: its grams field is 0.0, and 0.0 with no
+            # simulated flag would classify as MEASURED downstream.
+            has_quantity = reading.status in (WeightStatus.MEASURED, WeightStatus.SIMULATED)
             valuation = valuation_module.value(
                 {component_class: 1} if component_class else {},
-                mass=reading.as_dict() if reading.usable else None,
+                mass=reading.as_dict() if has_quantity else None,
                 item_id=item.item_id,
             )
-            decision = decision_engine.decide(component_class, item.confidence, valuation)
+            decision = decision_engine.decide(
+                component_class, item.confidence, valuation, cfg=self.cfg
+            )
             item.valuation = valuation.as_dict()
             item.decision = decision.as_dict()
             item.actuation = self._actuate(item.item_id, decision)
-            return item.as_dict()
+
+            # Keep the finished record here rather than relying on the tracker.
+            # `drain_finalized()` empties its list by design - that is what stops
+            # one item reaching the ledger twice - so an item that leaves the
+            # frame would otherwise vanish from the run's history a few seconds
+            # after its paddle fired.
+            record = item.as_dict()
+            self._routed[item.item_id] = record
+            return record
 
     def _resolve(self, item_id: str | None):
         """The item to act on, or a refusal explaining why there is none."""
@@ -313,19 +330,68 @@ class DemoSession:
             }
         return item
 
-    def _read_mass(self) -> WeightReading:
+    def mock_mass_for(self, component_class: str | None) -> float:
+        """The stand-in mass for a class, in grams.
+
+        Per class, because a precious fraction is metal over TOTAL mass: give a
+        CPU a board's mass and its ppm drops sevenfold, which is a number a
+        judge can check against the class and find wrong. Falls back to
+        `demo.mock_mass.grams` for anything unlisted.
+        """
+        key = f"demo.mock_mass.{(component_class or '').lower()}_g"
+        if key in config_module.SPEC:
+            return float(self.cfg[key])
+        return float(self.cfg["demo.mock_mass.grams"])
+
+    def _mock_mass(self, why: str, component_class: str | None = None) -> WeightReading:
+        """A labelled stand-in mass, for a demonstration with no usable cell.
+
+        `simulated` is true and the status is SIMULATED, which is what carries
+        the fabrication forward: PMDI, the valuation and the decision all end
+        up stamped SIMULATED, and the dashboard shows it as such. Nothing here
+        can reach MEASURED.
+        """
+        grams = self.mock_mass_for(component_class)
+        return WeightReading(
+            grams=grams,
+            simulated=True,
+            source="demo mock mass",
+            status=WeightStatus.SIMULATED,
+            usable=False,
+            mock=True,
+            reason=(
+                f"MOCK MASS - {grams:g} g was assumed, not measured. {why} "
+                "Every figure derived from it is an illustration of the pipeline, "
+                "not a measurement of this object."
+            ),
+            timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
+        )
+
+    def _read_mass(self, component_class: str | None = None) -> WeightReading:
+        mock = bool(self.cfg["demo.mock_mass.enabled"])
         sensor = self.weight_sensor
         if sensor is None:
-            return _unavailable_reading(
-                "No load cell is connected, so this item has no mass. Nothing is "
-                "estimated in place of one."
+            why = "No load cell is connected."
+            return (
+                self._mock_mass(why, component_class)
+                if mock
+                else _unavailable_reading(f"{why} Nothing is estimated in place of one.")
             )
         if not self.calibration.present:
-            return _unavailable_reading(
-                "The load cell is not calibrated. Run `python -m app.calibrate` and "
-                "verify against a second known mass."
+            why = "The load cell is not calibrated."
+            return (
+                self._mock_mass(why, component_class)
+                if mock
+                else _unavailable_reading(
+                    f"{why} Run `python -m app.calibrate` and verify against a second known mass."
+                )
             )
-        return sensor.read()
+        reading = sensor.read()
+        # A cell that is connected and calibrated but could not settle still
+        # falls back, so a flaky reading does not stall a demonstration.
+        if mock and not reading.usable:
+            return self._mock_mass(f"The cell returned {reading.status}.", component_class)
+        return reading
 
     def _actuate(self, item_id: str, decision) -> dict:
         """Turn a decision into a paddle movement, or record why it is not one."""
@@ -367,11 +433,17 @@ class DemoSession:
         """Everything the dashboard renders, in one read."""
         with self._lock:
             current = self.pipeline.current_item
-            items = sorted(
-                list(self.pipeline.tracker.active) + list(self.pipeline.tracker.finalized),
-                key=lambda i: i.first_frame,
-                reverse=True,
-            )
+            # Everything routed this run, plus anything currently in view that
+            # has not been routed yet. Routed records win: they carry the mass,
+            # the decision and the actuation.
+            live = [
+                i.as_dict()
+                for i in sorted(
+                    self.pipeline.tracker.active, key=lambda i: i.first_frame, reverse=True
+                )
+                if i.item_id not in self._routed
+            ]
+            items = list(reversed(list(self._routed.values()))) + live
             return {
                 "running": self._thread is not None and self._thread.is_alive(),
                 "started_at": self.started_at,
@@ -381,7 +453,7 @@ class DemoSession:
                     "error": self.camera_error,
                 },
                 "current_item": current.as_dict() if current else None,
-                "items": [i.as_dict() for i in items[:25]],
+                "items": items[:25],
                 "confirmed_count": sum(
                     1 for i in self.pipeline.tracker.active if i.state is ItemState.CONFIRMED
                 ),
@@ -392,6 +464,18 @@ class DemoSession:
                     if self.controller
                     else {"connected": False, "actuation_enabled": False}
                 ),
+                "mock_mass": {
+                    "enabled": bool(self.cfg["demo.mock_mass.enabled"]),
+                    "grams": float(self.cfg["demo.mock_mass.grams"]),
+                    "per_class": {
+                        cls: self.mock_mass_for(cls) for cls in ("CPU", "PCB", "RAM", "Connector")
+                    },
+                    "note": (
+                        "A stand-in mass is being used because the load cell cannot "
+                        "supply one. Every figure derived from it is SIMULATED and "
+                        "none of it is a measurement of the object on screen."
+                    ),
+                },
                 "conveyor": {
                     "present": False,
                     "note": (

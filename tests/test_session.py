@@ -326,3 +326,161 @@ class TestSnapshot:
 
     def test_a_session_with_no_board_says_so(self):
         assert session(board=False).snapshot()["board"] == {"connected": False}
+
+
+class TestMockMassFallback:
+    """The demonstration stand-in mass.
+
+    It exists so a dead load cell does not cost the whole demonstration, and it
+    is dangerous for exactly that reason: it makes a fabricated number flow
+    through a pipeline whose entire value is that it refuses fabricated numbers.
+    So the tests below pin both halves - that it works, and that it stays
+    labelled and stays off by default.
+    """
+
+    def mock_session(self, grams=180.0, transport=None):
+        cfg = config.load(
+            environ={
+                "AURUM_ARDUINO_ENABLED": "true",
+                "AURUM_DEMO_MOCK_MASS": "true",
+                "AURUM_DEMO_MOCK_MASS_G": str(grams),
+                "AURUM_WEIGHT_TIMEOUT_S": "0.2",
+                "AURUM_WEIGHT_STABILITY_WINDOW_MS": "10",
+            }
+        )
+        transport = FakeTransport(connected=True) if transport is None else transport
+        run = DemoSession(cfg=cfg, controller=ArduinoController(transport=transport, cfg=cfg))
+        run.calibration = Calibration()  # uncalibrated, as the real rig is
+        return run
+
+    def test_it_is_off_by_default(self):
+        """A fabricated mass must never be something you get by accident."""
+        assert config.load(environ={})["demo.mock_mass.enabled"] is False
+
+    def test_a_pcb_reaches_bin_b_on_the_stand_in_mass(self):
+        transport = FakeTransport(connected=True)
+        run = self.mock_session(transport=transport)
+        present(run, "PCB")
+        result = run.measure_and_route()
+        assert result["weight_g"] == 180.0
+        assert result["decision"]["decision"] == "B"
+        assert transport.movements[0][0] == "B"
+
+    def test_the_mass_is_labelled_simulated_not_measured(self):
+        run = self.mock_session()
+        present(run, "PCB")
+        result = run.measure_and_route()
+        assert result["weight_status"] == "SIMULATED"
+        assert result["weight_reading"]["mock"] is True
+        assert result["weight_reading"]["usable"] is False
+        assert "not measured" in result["weight_reading"]["reason"]
+
+    def test_everything_derived_from_it_is_stamped_simulated(self):
+        """The fabrication must not wash out somewhere downstream."""
+        run = self.mock_session()
+        present(run, "PCB")
+        result = run.measure_and_route()
+        assert result["valuation"]["pmdi"]["overall_status"] == "SIMULATED"
+        assert result["valuation"]["pmdi"]["mass_status"] == "SIMULATED"
+
+    def test_the_ppm_still_comes_from_cited_evidence(self):
+        """Only the mass is invented. The composition behind it is not."""
+        run = self.mock_session()
+        present(run, "PCB")
+        result = run.measure_and_route()
+        pmdi = result["valuation"]["pmdi"]
+        assert pmdi["precious_mass_fraction_ppm"] == 2200.0
+        assert pmdi["evidence_sources"]
+
+    def test_ram_still_reaches_c_because_it_has_no_composition(self):
+        """A stand-in mass cannot conjure evidence that does not exist."""
+        transport = FakeTransport(connected=True)
+        run = self.mock_session(transport=transport)
+        present(run, "RAM")
+        result = run.measure_and_route()
+        assert result["decision"]["decision"] == "C"
+        assert result["decision"]["reason_code"] == "C_UNSUPPORTED_MATERIAL"
+        assert transport.movements == []
+
+    def test_with_the_flag_off_a_pcb_still_reaches_c(self):
+        """The guarantee that matters when the flag is not set."""
+        run = session(board=False)
+        present(run, "PCB")
+        result = run.measure_and_route()
+        assert result["decision"]["decision"] == "C"
+        assert result["decision"]["reason_code"] == "C_UNMEASURED_WEIGHT"
+
+    def test_an_unmarked_simulated_mass_is_still_refused(self):
+        """The permission rides on the reading, so it cannot be forged by config."""
+        from app import materials
+
+        unmarked = {"grams": 180.0, "simulated": True, "status": "SIMULATED"}
+        assert materials.estimate({"PCB": 1}, mass=unmarked)["available"] is False
+
+    def test_the_snapshot_announces_the_stand_in(self):
+        snapshot = self.mock_session().snapshot()["mock_mass"]
+        assert snapshot["enabled"] is True
+        assert snapshot["grams"] == 180.0
+        assert "none of it is a measurement" in snapshot["note"]
+
+
+class TestPerClassMockMass:
+    """A stand-in mass is per class, because ppm is metal over TOTAL mass.
+
+    One flat value made a CPU read 26 ppm instead of 188 - a number a judge can
+    check against the class and find wrong, which is worse than showing nothing.
+    """
+
+    def mock_cfg(self):
+        return config.load(
+            environ={
+                "AURUM_ARDUINO_ENABLED": "true",
+                "AURUM_DEMO_MOCK_MASS": "true",
+                "AURUM_WEIGHT_TIMEOUT_S": "0.2",
+                "AURUM_WEIGHT_STABILITY_WINDOW_MS": "10",
+            }
+        )
+
+    def run_for(self, component_class, transport=None):
+        cfg = self.mock_cfg()
+        transport = FakeTransport(connected=True) if transport is None else transport
+        run = DemoSession(cfg=cfg, controller=ArduinoController(transport=transport, cfg=cfg))
+        run.calibration = Calibration()
+        present(run, component_class)
+        return run.measure_and_route()
+
+    def test_each_class_gets_its_own_stand_in(self):
+        masses = {c: self.run_for(c)["weight_g"] for c in ("CPU", "PCB", "RAM", "Connector")}
+        assert masses["CPU"] == 25.0
+        assert masses["PCB"] == 180.0
+        assert masses["RAM"] == 30.0
+        assert masses["Connector"] == 5.0
+
+    def test_a_cpu_reaches_bin_a_and_fires_servo_a(self):
+        transport = FakeTransport(connected=True)
+        result = self.run_for("CPU", transport)
+        assert result["decision"]["decision"] == "A"
+        assert result["actuation"]["servo"] == "SERVO_A"
+        assert transport.movements[0][0] == "A"
+
+    def test_a_connector_reaches_bin_a_and_fires_servo_a(self):
+        transport = FakeTransport(connected=True)
+        result = self.run_for("Connector", transport)
+        assert result["decision"]["decision"] == "A"
+        assert transport.movements[0][0] == "A"
+
+    def test_the_cpu_fraction_is_computed_against_a_cpu_sized_mass(self):
+        """4.71 mg of gold in 25 g is 188 ppm. In 180 g it would read 26."""
+        pmdi = self.run_for("CPU")["valuation"]["pmdi"]
+        assert pmdi["precious_mass_fraction_ppm"] == pytest.approx(188.4, abs=0.5)
+
+    def test_an_unknown_class_falls_back_to_the_default(self):
+        cfg = self.mock_cfg()
+        run = DemoSession(cfg=cfg)
+        assert run.mock_mass_for("Widget") == cfg["demo.mock_mass.grams"]
+        assert run.mock_mass_for(None) == cfg["demo.mock_mass.grams"]
+
+    def test_the_snapshot_publishes_the_per_class_table(self):
+        cfg = self.mock_cfg()
+        per_class = DemoSession(cfg=cfg).snapshot()["mock_mass"]["per_class"]
+        assert per_class == {"CPU": 25.0, "PCB": 180.0, "RAM": 30.0, "Connector": 5.0}

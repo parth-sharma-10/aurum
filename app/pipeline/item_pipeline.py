@@ -74,11 +74,33 @@ class ItemPipeline:
         Confirmed rather than merely present: an object seen once is not yet
         something to weigh or route, and showing it as "current" would invite a
         downstream stage to act on a flicker.
+
+        An item that HAS been confirmed and is now briefly missing still counts.
+        A class the model detects intermittently - RAM sits at 0.51 recall - drops
+        to LEAVING between detections while the operator is reaching for the
+        button, and refusing it there means the object on the bench cannot be
+        measured at all. The bar stays the same one it already cleared: enough
+        observations to confirm. A single flicker that was never confirmed is
+        still refused, because `detection_count` is what is checked, not merely
+        having been seen.
         """
-        confirmed = [i for i in self.tracker.active if i.state is ItemState.CONFIRMED]
-        if not confirmed:
+        eligible = [
+            item
+            for item in self.tracker.active
+            if item.state is ItemState.CONFIRMED
+            or (
+                item.state is ItemState.LEAVING
+                and item.detection_count >= self.tracker.min_detections_to_confirm
+            )
+        ]
+        if not eligible:
             return None
-        return max(confirmed, key=lambda i: (i.last_frame, i.detection_count))
+        # CONFIRMED wins over LEAVING: something in view now beats something on
+        # its way out, however recently the latter was seen.
+        return max(
+            eligible,
+            key=lambda i: (i.state is ItemState.CONFIRMED, i.last_frame, i.detection_count),
+        )
 
     def process_detections(
         self,

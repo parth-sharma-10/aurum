@@ -9,7 +9,7 @@ invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-236%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-836%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
 
 > **The weights are a release asset, not a tracked file.** `models/*.pt` is
 > gitignored, so a fresh clone has no model until you download one. One command
@@ -21,25 +21,60 @@ there and how much of it*, as JSON the rest of a recycling workflow can use.
 ## What it does
 
 ```
-webcam / image folder / video
+webcam                                    real camera, real components
         ↓
 YOLO11n detector          fine-tuned, 512 px inference, conf 0.35, IoU 0.5
         ↓
-detections                class + confidence + bounding box
+ByteTrack + item lifecycle    one physical object -> one AUR-ITEM-xxxxxxxx
         ↓
-BatchSession              median per-class count over a 45-frame window
+   [ the operator carries it to the pan ]
+        ↓
+HX711 load cell           raw counts -> median filter -> stability -> MEASURED
         ↓
 material reference        cited composition per component, or an explicit refusal
         ↓
-batch record (JSON)  →  OpenCV dashboard
-                     →  FastAPI  →  SQLite ledger  →  React dashboard
+PMDI                      precious mass, and precious fraction in ppm
+        ↓
+A / B / C decision        configurable policy over that evidence
+        ↓
+Arduino over USB serial   AURUM/1 MOVE -> ACK
+        ↓
+Servo A / Servo B         Bin C has no servo, and needs none
 ```
 
-It identifies **four** component classes, counts them, maps them onto an
-**evidence-backed material composition reference**, and emits a batch record. It
-does **not** measure precious-metal content, estimate material *recovery*, price
-anything, track objects across frames, or actuate any hardware. See
+It identifies **four** component classes, gives each physical object a stable
+identity, attaches a measured mass to it, maps it onto an **evidence-backed
+material composition reference**, computes a precious-metal fraction, decides a
+recovery bin, and drives a real servo.
+
+It does **not** measure precious-metal content directly, estimate material
+*recovery*, price anything, or move objects between stages — **there is no
+conveyor**, and the operator carries each component from the camera to the load
+cell to the bins. See
 [What is and is not implemented](#what-is-and-is-not-implemented).
+
+**The honest one-line claim:**
+
+> Aurum demonstrates an intelligent e-waste identification, material estimation
+> and automated routing prototype. It validates the perception, measurement,
+> material-intelligence and actuator-control pipeline. Mechanical conveying and
+> singulation are the next hardware stage.
+
+Not "a fully automated conveyor sorting system". There is no conveyor.
+
+## Running the sorting console
+
+```bash
+export AURUM_ARDUINO_PORT=/dev/cu.usbmodem101   # ls /dev/cu.usbmodem*
+export AURUM_ARDUINO_ENABLED=true               # actuation ships OFF
+uvicorn app.api:app --port 8000
+
+cd frontend && npm install && npm run dev       # http://localhost:5173
+```
+
+Start camera → connect board → hold a component up → **Measure & route**. Full
+runbook, including what to say and what to do when something fails, in
+[docs/demo.md](docs/demo.md).
 
 ## Supported components
 
@@ -476,9 +511,32 @@ Mass is optional and always labelled. With no load cell attached,
 measurement"`, renders as **SIMULATED SENSOR** in the OpenCV dashboard, badges
 `SIMULATED` in the React dashboard, and lands in `simulated_grams` in `/stats`.
 
-`HX711LoadCell` exists and reads calibrated grams from a serial line, but
-**it has never been run against physical hardware**, and no Arduino sketch is
-included in this repository. A class existing is not a working load cell.
+The measurement path (`WeightSensor`) has been run against real hardware: an
+Arduino streams raw HX711 counts, Python owns the calibration, and a reading
+only becomes `MEASURED` on a factor verified against a *second* known mass.
+
+**The load cell is currently mechanically bypassed.** 180 g moves it 2.2 counts
+against a 64-count noise floor; 400 g moves it backwards. The cell converts
+correctly and sees no strain, so `configs/calibration.yaml` stays `UNMEASURED`
+and no reading can reach `MEASURED`. Measurements and the mounting fix are in
+[docs/hardware.md](docs/hardware.md).
+
+### The mock-mass fallback
+
+`demo.mock_mass.enabled` ships **off**. With it on, an item that cannot be
+weighed is given a per-class stand-in — **CPU 25 g · PCB 180 g · RAM 30 g ·
+Connector 5 g** — so the pipeline can still be demonstrated. Per class, because
+a precious fraction is metal over *total* mass, and one flat value made a CPU
+read 26 ppm where 188 is right.
+
+The number is fabricated and everything says so: the reading is `SIMULATED` and
+never `usable`, PMDI and valuation carry `overall_status: SIMULATED`, the metals
+table says *assumed* rather than *measured* batch mass, and the console shows a
+`MOCK MASS` pill and a banner listing the assumed values. The permission rides
+on the reading itself, so an unmarked simulated mass is still refused.
+
+It does not conjure evidence: RAM still reaches Bin C, because no cited
+composition exists for a DRAM module and a stand-in mass cannot invent one.
 
 ## Material Reference Database
 
@@ -820,8 +878,10 @@ Aurum
 
 ## Project status
 
-**Aurum is a working software pipeline attached to partially-built hardware.
-It has never sorted anything.** There is no conveyor.
+**Aurum is a working software pipeline driving real hardware.** Both servos have
+been moved by Aurum's own command over a real serial link, and watched doing it.
+The load cell is mechanically bypassed, so no mass has ever been measured. There
+is no conveyor, and the operator carries components between stages.
 
 | Phase | Status | Software | Hardware | Validation |
 |---|---|---|---|---|
@@ -832,18 +892,20 @@ It has never sorted anything.** There is no conveyor.
 | 4 Tracking | COMPLETE | `app/vision/`, `app/pipeline/` | camera | software-tested + real model |
 | 5 HX711 | COMPLETE (software) | `app/weight.py`, `app/calibrate.py` | HX711 responds | **calibration NOT verified** |
 | 6 Routing | COMPLETE (software) | `app/routing/` | none | simulation-verified only |
-| 7 Arduino/servo | COMPLETE (software) | transport, command layer, actuator, sketch | servos bench-tested | **Arduino-Python NOT verified — bench test pending** |
-| 8 API/frontend | PENDING | — | — | — |
-| 9 End-to-end | PENDING | — | — | — |
-| 10 Validation | PENDING | — | — | — |
+| 7 Arduino/servo | COMPLETE | transport, command layer, both sketches | **both servos moved by Aurum code** | **PHYSICALLY VERIFIED** |
+| 8 API/frontend | COMPLETE | session API + sorting console | real webcam | verified in the browser |
+| 9 End-to-end | COMPLETE | `app/pipeline/session.py` | camera + board | camera→item→PMDI→bin→servo, on hardware |
+| 10 Validation | PARTIAL | 836 tests, ruff clean | — | **calibration blocked on the mounting fault** |
 
 ### What the five levels mean
 
 `SOFTWARE-TESTED` · `SIMULATION-VERIFIED` · `HARDWARE-BENCH-VERIFIED` ·
 `PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
 
-Aurum reaches level 3 for the servos and HX711, level 2 for routing, and
-**nothing at all reaches level 4 or 5.**
+The actuation path reaches **level 3** — both paddles moved by Aurum's command
+and watched. **Level 4 is not reached**: the load cell is mechanically bypassed,
+so nothing has been physically calibrated. Level 5 needs a conveyor, which does
+not exist and is out of scope for this demonstration.
 
 ### Hardware, as built
 
@@ -852,10 +914,16 @@ Servo A and B: REST 0 deg, PUSH 90 deg, 700 ms hold (bench values) ·
 AKSHA 5 V / 3 A external servo supply, common ground, **external +5 V NOT tied
 to Arduino +5 V** · **no physical conveyor**.
 
-HX711 responds and a 180 g experiment gives about 361.9 counts/g. That is an
-initial experiment, **not a validated calibration** — the independent
-second-mass check has not been done, so `configs/calibration.yaml` stays
-UNMEASURED and no reading can reach `MEASURED`.
+Verified on the bench 2026-08-22: both sketches flashed, `W,1,…,OK` frames
+streaming, `PING`→`PONG` over the real port, Servo A acknowledged in 709 ms and
+Servo B acknowledged, a replayed command id answered `ACK … DUP` without moving
+anything twice, and Bin C wrote no bytes at all.
+
+**Not verified: the load cell under load.** It is mechanically bypassed, so
+`configs/calibration.yaml` stays UNMEASURED and no reading can reach `MEASURED`.
+
+**Close the Arduino IDE Serial Monitor before flashing or running.** It
+reopens itself whenever the board enumerates and holds the port exclusively.
 
 Full detail: [docs/hardware.md](docs/hardware.md) ·
 [docs/COMPLETION_PLAN.md](docs/COMPLETION_PLAN.md)
@@ -875,12 +943,12 @@ Full detail: [docs/hardware.md](docs/hardware.md) ·
 | Leakage-safe dataset split + independent validator | **implemented** |
 | External-image evaluation (no ground truth) | **implemented** |
 | Simulated load cell | **implemented, labelled** |
-| HX711 measurement path (filter, stability, states) | **implemented** — software-tested only |
-| Two-mass calibration workflow (`python -m app.calibrate`) | **implemented** — never run on hardware |
-| Weight-only Arduino sketch | **implemented** — never uploaded to a board |
+| HX711 measurement path (filter, stability, states) | **implemented** — run against the real board |
+| Two-mass calibration workflow (`python -m app.calibrate`) | **implemented** — run on hardware; fails on the mounting fault |
+| Weight-only Arduino sketch | **implemented** — flashed and verified at 115200 |
 | HX711 calibration factor | **UNMEASURED** — bench evidence exists, calibration does not |
-| Arduino integration / sketch | **not implemented** |
-| Servo sorting, physical routing, bin actuation | **not implemented** |
+| Combined weight + servo sketch (`aurum_sorter`) | **implemented** — flashed and verified |
+| Servo actuation from a decision | **implemented — PHYSICALLY VERIFIED**, both paddles |
 | Material composition reference (22 cited records, 6 papers) | **implemented** |
 | Material estimation — CPU, Connector | **implemented** — per-piece figures, no scale needed |
 | Material estimation — PCB | **implemented, conditional** — needs a *measured* batch mass |
@@ -896,8 +964,12 @@ Full detail: [docs/hardware.md](docs/hardware.md) ·
 | A/B/C decision engine (`app/decision/engine.py`) | **implemented** — auditable, fail-closed |
 | Grading thresholds | **implemented as engineering approximations**, configurable, not scientific cutoffs |
 | Routing geometry + scheduler (`app/routing/`) | **implemented** — software-tested against TEST geometry |
-| Mock conveyor demonstration mode | **implemented** — every result stamped SIMULATED |
-| Routing geometry measurements | **UNMEASURED** — all six; see docs/hardware.md |
+| Mock conveyor demonstration mode | **implemented, unused** — the demo has no conveyor and routes immediately |
+| Routing geometry measurements | **UNMEASURED** — all six; not needed without a conveyor |
+| Demonstration session (`app/pipeline/session.py`) | **implemented** — the one object joining every stage |
+| Sorting console (live feed, chain, hardware pills) | **implemented** — verified in the browser |
+| Mock-mass fallback | **implemented, off by default** — labelled SIMULATED throughout |
+| Physical conveyor, singulation, hopper | **not implemented** — next hardware stage |
 | Physical servo actuation | **not implemented** — Phase 7 |
 | Carbon figures | **not implemented** |
 | Cyber-physical state machine | **not implemented** |

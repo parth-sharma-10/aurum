@@ -219,7 +219,14 @@ def _usable_mass_g(mass: dict | None, counts: dict[str, int]) -> tuple[float | N
         )
     if not mass:
         return None, "a concentration needs a mass, and this batch carries no weight reading"
-    if mass.get("simulated"):
+
+    # The demonstration fallback. A reading marks itself `mock` only when the
+    # session deliberately fabricated it under demo.mock_mass.enabled, and what
+    # it produces stays labelled SIMULATED everywhere it surfaces. Any other
+    # simulated mass is refused outright, because multiplying an invented mass
+    # by a real concentration yields an invented quantity that looks measured.
+    demo_mass = bool(mass.get("mock"))
+    if mass.get("simulated") and not demo_mass:
         return None, (
             "a concentration needs a mass, and this batch's weight is SIMULATED; "
             "refusing to multiply an invented mass by a real concentration"
@@ -229,7 +236,8 @@ def _usable_mass_g(mass: dict | None, counts: dict[str, int]) -> tuple[float | N
     # a second known mass. Readings that predate the measurement path carry no
     # status and keep their previous behaviour.
     status = mass.get("status")
-    if status is not None and status != "MEASURED":
+    allowed = {"MEASURED", "SIMULATED"} if demo_mass else {"MEASURED"}
+    if status is not None and status not in allowed:
         return None, (
             "a concentration needs a measured mass, and this batch's weight is "
             f"{status}; refusing to multiply an unverified mass by a real concentration"
@@ -289,7 +297,11 @@ def _component_lines(
             hi = ref.get("maximum")
             low = grams * float(lo) / 1_000_000.0 if lo is not None else None
             high = grams * float(hi) / 1_000_000.0 if hi is not None else None
-            basis = f"measured batch mass {grams:g} g x {ref['value']} {ref['unit']}"
+            # Name the mass for what it is. Calling a stand-in "measured" would
+            # contradict the SIMULATED badge sitting directly above it, and the
+            # contradiction would be on screen during a demonstration.
+            mass_word = "assumed" if mass.get("mock") else "measured"
+            basis = f"{mass_word} batch mass {grams:g} g x {ref['value']} {ref['unit']}"
             evidence_ids = [eid]
         else:
             typical = count * per_piece
