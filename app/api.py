@@ -24,6 +24,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
+from app import config as config_module
 from app import ledger, pricing
 from app.batch import BatchSession
 from app.dashboard import draw_detections
@@ -442,21 +443,29 @@ def get_batch(batch_id: str) -> dict:
 
 @app.get("/prices")
 def metal_prices() -> dict:
-    """What each metal costs, and whether that figure can be trusted.
+    """What each metal costs, whether that figure is current, and where it came from.
 
-    Aurum ships no market data source. With `pricing.provider: unavailable`
-    every entry comes back UNAVAILABLE with the setting that would change it,
-    rather than a number nobody can attribute.
+    Every quote carries its own status. LIVE is a market feed answering now;
+    REFERENCE is a real published price being used deliberately after its date;
+    STALE is a feed that should have been current and was not; UNAVAILABLE is
+    an explicit absence. No path here produces a number without a source, and
+    none produces a zero for a price that could not be fetched.
+
+    The API key is never in this payload. See app/valuation/metalprice.py.
     """
-    service = prices_module.PriceService.from_config()
+    cfg = config_module.load()
+    service = prices_module.PriceService.from_config(cfg)
     quotes = service.prices(prices_module.materials.METAL_NAMES)
     return {
         "provider": getattr(service.provider, "name", "unknown"),
+        "configured_provider": cfg["pricing.provider"],
+        "currency": cfg["pricing.currency"],
         "max_age_seconds": service.max_age_seconds,
         "prices": {metal: quote.as_dict() for metal, quote in sorted(quotes.items())},
         "note": (
-            "No live market data source is approved for this project. A price "
-            "labelled TEST is fixture data and is not a market quote."
+            "A price labelled TEST is fixture data. A price labelled REFERENCE is "
+            "a real published figure being used after its date, never a live quote. "
+            "Only LIVE is a current market price."
         ),
     }
 

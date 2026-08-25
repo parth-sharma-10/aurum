@@ -22,11 +22,16 @@ does not degrade it the way a silent feed degrades a live quote, so
 either. The status travels with every quote so a dashboard can say "reference
 price, 21 Aug 2026" instead of implying a live market feed.
 
-A live provider is added by implementing `quote()` and registering it in
+    MetalpriceProvider   LIVE spot prices from MetalpriceAPI, in
+                         app/valuation/metalprice.py. Needs an API key, so it
+                         is not the shipped default; with `pricing.provider:
+                         metalprice` it is composed over ReferenceProvider by
+                         `FallbackProvider`, and an outage degrades to the
+                         dated snapshot instead of stopping the pipeline.
+
+A further provider is added by implementing `quote()` and registering it in
 `PROVIDERS`. Nothing in `app.valuation.pmdi` changes when that happens - that
-is the whole point of the abstraction. No live provider ships, because no
-keyless market-data source exists to point one at; `FallbackProvider` is the
-mechanism that will hold it when one is configured.
+is the whole point of the abstraction.
 
 Two conversion traps this module exists to close.
 
@@ -407,11 +412,44 @@ class FallbackProvider:
         )
 
 
+def _metalprice(cfg: config_module.Config):
+    """The live feed, composed over the dated snapshot.
+
+    Imported here rather than at module scope: `app.valuation.metalprice`
+    reuses this module's quote construction, so a top-level import would be a
+    cycle. It is also the only provider that needs a network, a key and a
+    cache, and nothing that runs without one should pay to import it.
+    """
+    from app.valuation.metalprice import MetalpriceProvider
+
+    live = MetalpriceProvider.from_config(cfg)
+    if not cfg["pricing.fallback_to_reference"]:
+        return live
+    return FallbackProvider(live, ReferenceProvider.from_config())
+
+
+#: Every provider that `pricing.provider` may name, keyed to a factory taking
+#: the resolved config. One registry, so adding a feed is one entry here and
+#: one value in the `_one_of` in app/config.py.
 PROVIDERS = {
-    "unavailable": UnavailableProvider,
-    "static": StaticProvider,
-    "reference": ReferenceProvider,
+    "unavailable": lambda cfg: UnavailableProvider(),
+    "static": lambda cfg: StaticProvider.from_config(),
+    "reference": lambda cfg: ReferenceProvider.from_config(),
+    "metalprice": _metalprice,
 }
+
+
+def build_provider(name: str, cfg: config_module.Config | None = None):
+    """The provider `pricing.provider` names, or an error listing the choices."""
+    cfg = config_module.load() if cfg is None else cfg
+    try:
+        factory = PROVIDERS[name]
+    except KeyError:
+        raise config_module.ConfigError(
+            f"pricing.provider: unknown provider {name!r}. Known providers: "
+            f"{', '.join(sorted(PROVIDERS))}."
+        ) from None
+    return factory(cfg)
 
 
 def _age_seconds(timestamp: str | None, now: datetime) -> float | None:
@@ -437,10 +475,10 @@ class PriceService:
     @classmethod
     def from_config(cls, cfg: config_module.Config | None = None) -> PriceService:
         cfg = config_module.load() if cfg is None else cfg
-        name = cfg["pricing.provider"]
-        factory = PROVIDERS[name]
-        provider = factory.from_config() if name in ("static", "reference") else factory()
-        return cls(provider=provider, max_age_seconds=cfg["pricing.max_age_seconds"])
+        return cls(
+            provider=build_provider(cfg["pricing.provider"], cfg),
+            max_age_seconds=cfg["pricing.max_age_seconds"],
+        )
 
     def price(self, metal: str, now: datetime | None = None) -> MetalPrice:
         """The current price for one metal symbol, e.g. ``Au``."""

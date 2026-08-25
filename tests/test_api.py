@@ -456,8 +456,21 @@ class TestPricesEndpoint:
         assert quote.status.value == "UNAVAILABLE"
         assert "AURUM_PRICE_PROVIDER" in quote.reason
 
-    def test_it_says_no_live_source_is_approved(self, client):
-        assert "No live market data source" in client.get("/prices").json()["note"]
+    def test_it_distinguishes_a_reference_price_from_a_live_one(self, client):
+        """Re-pointed 2026-08-26: a live provider now exists.
+
+        The claim this guarded - "no live market data source is approved" -
+        became false when app/valuation/metalprice.py shipped. What it was
+        really protecting is that a figure which is not a current market quote
+        can never be read as one, and that survives the change.
+        """
+        body = client.get("/prices").json()
+        assert "Only LIVE is a current market price" in body["note"]
+        assert body["configured_provider"] == "reference"
+        for metal, quote in body["prices"].items():
+            if quote["price_per_gram"] is not None:
+                assert quote["status"] == "REFERENCE", metal
+                assert "not a live market quote" in quote["reason"], metal
 
 
 class TestDecisionIsExposed:

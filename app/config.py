@@ -297,15 +297,36 @@ SPEC: dict[str, tuple] = {
         "mass_fraction_only",
         "AURUM_PRICE_UNAVAILABLE_POLICY",
     ),
+    # metalprice: the live MetalpriceAPI feed, composed over the reference
+    # snapshot so an outage degrades rather than stops. Needs a key; without
+    # one every live quote is UNAVAILABLE and the snapshot answers instead.
     # reference: a dated snapshot of real published prices, labelled REFERENCE
     # and never reported as current. The shipped default - see
-    # configs/pricing.yaml for why there is no live feed.
+    # configs/pricing.yaml.
     "pricing.provider": (
-        _one_of("reference", "unavailable", "static"),
+        _one_of("reference", "unavailable", "static", "metalprice"),
         "reference",
         "AURUM_PRICE_PROVIDER",
     ),
     "pricing.max_age_seconds": (_non_negative, 900.0, "AURUM_PRICE_MAX_AGE_SECONDS"),
+    #: The single currency every quote is normalised into before anything is
+    #: added. Changing it changes what the dashboard's money figures mean.
+    "pricing.currency": (_text, "INR", "AURUM_PRICE_CURRENCY"),
+    # A live feed that stops answering must fall back to the dated snapshot
+    # rather than take the pipeline down. Off makes an outage UNAVAILABLE.
+    "pricing.fallback_to_reference": (_bool, True, "AURUM_PRICE_FALLBACK_TO_REFERENCE"),
+    # MetalpriceAPI. THE KEY IS NOT HERE - see config.secret() below.
+    "pricing.metalprice.base": (_text, "USD", "AURUM_METALPRICE_BASE"),
+    "pricing.metalprice.base_url": (
+        _text,
+        "https://api.metalpriceapi.com/v1",
+        "AURUM_METALPRICE_BASE_URL",
+    ),
+    "pricing.metalprice.timeout_s": (_non_negative, 5.0, "AURUM_METALPRICE_TIMEOUT_S"),
+    # One request answers for every metal and every item until it expires.
+    # Matched to pricing.max_age_seconds by default: refreshing more often
+    # than a quote can go stale spends quota for nothing.
+    "pricing.metalprice.cache_seconds": (_non_negative, 900.0, "AURUM_METALPRICE_CACHE_SECONDS"),
     "tracking.tracker": (_text, "bytetrack.yaml", "AURUM_TRACKER"),
     "tracking.max_missing_frames": (_int, 15, "AURUM_TRACK_MAX_MISSING_FRAMES"),
     "tracking.min_detections_to_confirm": (_int, 3, "AURUM_TRACK_MIN_DETECTIONS"),
@@ -395,6 +416,23 @@ def _dig(tree: dict[str, Any], key: str) -> tuple[bool, Any]:
             return False, None
         node = node[part]
     return True, node
+
+
+def secret(env_var: str, environ: dict[str, str] | None = None) -> str | None:
+    """A credential, read from the environment and NEVER stored in `Config`.
+
+    Everything else in this module resolves through `SPEC` into an object that
+    a future `/config` endpoint, a debug dump or a dashboard could serialise
+    wholesale. An API key must not be reachable that way, so it is read at the
+    point of use and held only by the object that needs it.
+
+    Absent and empty are the same answer: a variable exported as an empty
+    string is not a key, and treating it as one produces a 101 from the
+    provider instead of the clear "no key configured" this returns.
+    """
+    environ = os.environ if environ is None else environ
+    value = (environ.get(env_var) or "").strip()
+    return value or None
 
 
 def load(config_dir: Path | None = None, environ: dict[str, str] | None = None) -> Config:
