@@ -6,3 +6,15 @@
 pytest==9.1.1
 ruff==0.16.3
 httpx==0.28.1              # used by starlette's TestClient in tests/test_api.py
+
+# ---------------------------------------------------------------------------
+# VISION QA - optional, and deliberately not pinned into the runtime set.
+#
+# FiftyOne turns the failure frames the pipeline captures into a browsable,
+# evaluable dataset (tools/fiftyone/, docs/evaluation.md). It is a large
+# install with its own database server, so it is NOT installed by default and
+# nothing in app/ imports it. The tests for the dataset layer skip when it is
+# absent; the capture layer is tested unconditionally.
+#
+#   pip install fiftyone
+# ---------------------------------------------------------------------------

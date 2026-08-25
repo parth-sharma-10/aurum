@@ -50,3 +50,27 @@ tracking:
     # being split off into their own objects; raise it if components merely
     # lying beside a board are being absorbed into it.
     containment_ratio: 0.7
+
+  # ==========================================================================
+  # VISION FAILURE CAPTURE
+  #
+  # Ships OFF. With it on, the camera loop writes a JPEG and a line of JSONL
+  # for every frame it can justify calling a failure, into `directory`.
+  # `python -m tools.fiftyone export` turns that into a FiftyOne dataset
+  # afterwards. NOTHING IN THE LIVE PIPELINE IMPORTS FIFTYONE.
+  #
+  # Only categories one frame can justify are captured: nothing detected, a
+  # degenerate box, two boxes of one class overlapping, a detection on the
+  # frame edge, a class with no cited material profile. A false positive, a
+  # missed detection and a class confusion are COMPARISONS AGAINST A LABEL and
+  # are assigned by the offline evaluation, never here.
+  # ==========================================================================
+  capture:
+    enabled: false
+    directory: data/vision_errors
+    # ENGINEERING APPROXIMATION - above the model's 0.35 operating threshold
+    # but below this is worth a second look.
+    low_confidence: 0.5
+    # A cap per category, so a demonstration cannot fill a disk with a
+    # thousand near-identical frames of the same problem.
+    per_category_limit: 50

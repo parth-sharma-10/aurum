@@ -406,6 +406,22 @@ SPEC: dict[str, tuple] = {
         ["PCB"],
         "AURUM_ASSEMBLY_CONTAINER_CLASSES",
     ),
+    # ------------------------------------------------------------------
+    # VISION FAILURE CAPTURE - frames worth looking at again.
+    #
+    # Ships OFF. With it on, the camera loop writes a JPEG and a JSONL line
+    # for each frame it can justify calling a failure, and tools/fiftyone
+    # turns that directory into a FiftyOne dataset afterwards. Nothing in the
+    # live pipeline imports FiftyOne.
+    # ------------------------------------------------------------------
+    "tracking.capture.enabled": (_bool, False, "AURUM_VISION_CAPTURE"),
+    "tracking.capture.directory": (_text, "data/vision_errors", "AURUM_VISION_CAPTURE_DIR"),
+    # A detection above the model's operating confidence but below this is
+    # worth a second look. ENGINEERING APPROXIMATION.
+    "tracking.capture.low_confidence": (_fraction, 0.5, "AURUM_VISION_LOW_CONFIDENCE"),
+    # A cap per category, so a demonstration cannot quietly fill a disk with
+    # a thousand near-identical frames of the same problem.
+    "tracking.capture.per_category_limit": (_int, 50, "AURUM_VISION_CAPTURE_LIMIT"),
     # ENGINEERING APPROXIMATION - how much of a component's box must fall
     # inside a container's before it counts as sitting on it.
     "tracking.assembly.containment_ratio": (

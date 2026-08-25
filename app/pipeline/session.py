@@ -50,6 +50,7 @@ import threading
 import time
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 import cv2
 
@@ -97,6 +98,26 @@ def _unavailable_reading(reason: str) -> WeightReading:
         usable=False,
         reason=reason,
         timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
+    )
+
+
+def _vision_capture(cfg: config_module.Config, session_id: str):
+    """The failure-capture sink, off unless someone asked for it.
+
+    Imported from `tools/` rather than `app/`, which is the wrong direction for
+    a dependency and is why the import is local: nothing in `app` may fail to
+    load because a developer tool is missing. It never imports FiftyOne.
+    """
+    from tools.fiftyone.failures import FailureCapture
+
+    directory = Path(cfg["tracking.capture.directory"])
+    if not directory.is_absolute():
+        directory = config_module.ROOT / directory
+    return FailureCapture(
+        directory=directory,
+        enabled=bool(cfg["tracking.capture.enabled"]),
+        session_id=session_id,
+        per_category_limit=cfg["tracking.capture.per_category_limit"],
     )
 
 
@@ -160,6 +181,7 @@ class DemoSession:
         self.controller = controller
         self.calibration = Calibration.load()
         self.errors = ErrorLog(self.session_id)
+        self.capture = _vision_capture(self.cfg, self.session_id)
         #: One latch, shared with whatever board layer this session ends up
         #: with, so the session and the controller cannot disagree about
         #: whether the machine is safe to actuate.
@@ -205,6 +227,9 @@ class DemoSession:
         #: Finished records, newest last. The run's ledger, kept here because
         #: the tracker deliberately forgets an item once it has been drained.
         self._routed: dict[str, dict] = {}
+        #: Cached on first use: reading the evidence database per frame would
+        #: parse a 950-line YAML file thirty times a second.
+        self._classes: set[str] | None = None
 
     # -- hardware ----------------------------------------------------------
     def connect_board(self) -> dict:
@@ -370,8 +395,10 @@ class DemoSession:
                 detections = self.pipeline.detector_tracker.track(frame)
             except Exception as exc:  # a driver or model fault must not kill the run
                 self.camera_error = f"tracking failed: {exc}"
+                self.errors.record(ErrorCode.VISION_ERROR, "camera", str(exc))
                 time.sleep(0.2)
                 continue
+            self._capture_failures(frame, detections)
             with self._lock:
                 self.pipeline.process_detections(detections)
                 self.frames += 1
@@ -382,6 +409,40 @@ class DemoSession:
                 )
                 if ok_enc:
                     self._jpeg = buf.tobytes()
+
+    def _capture_failures(self, frame, detections) -> None:
+        """Keep frames worth looking at again. Never at the cost of the run.
+
+        Off unless `tracking.capture.enabled`, in which case `FailureCapture`
+        does its own rate limiting. A disk that fills or a directory that
+        cannot be written is a lost sample, not a stopped machine.
+        """
+        if not self.capture.enabled:
+            return
+        try:
+            height, width = frame.shape[:2]
+            self.capture.capture_frame(
+                frame,
+                detections,
+                width,
+                height,
+                low_confidence=self.cfg["tracking.capture.low_confidence"],
+                known_classes=self._known_classes(),
+            )
+        except Exception as exc:
+            self.errors.record(ErrorCode.VISION_ERROR, "capture", str(exc))
+
+    def _known_classes(self) -> set[str]:
+        """Classes the evidence database has a cited profile for.
+
+        Derived from the database rather than listed here, so a class stops
+        being an UNKNOWN_OBJECT the day composition is added for it.
+        """
+        if self._classes is None:
+            from app import materials
+
+            self._classes = set((materials.load().get("components") or {}).keys())
+        return self._classes
 
     @property
     def assemblies(self) -> list[Assembly]:
@@ -960,6 +1021,7 @@ class DemoSession:
                 },
                 "pricing": self.pricing_snapshot(),
                 "errors": self.errors.snapshot(),
+                "vision_capture": self.capture.snapshot(),
                 "epr": {
                     "session_id": self.session_id,
                     "provenance": self._provenance(),
