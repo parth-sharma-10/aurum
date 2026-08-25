@@ -418,7 +418,8 @@ class TestSimulationIsolation:
     def test_the_test_profile_is_reachable_only_in_simulation(self):
         geo = Geometry.from_config(config.load(environ={"AURUM_SIMULATION": "true"}))
         assert geo.mode is RoutingMode.SIMULATED
-        assert geo.belt_speed_cm_s == 20.0
+        # 10 cm/s = 0.10 m/s, the demonstration belt speed. A TEST value.
+        assert geo.belt_speed_cm_s == 10.0
 
     def test_every_simulated_route_is_stamped(self):
         cfg = config.load(environ={"AURUM_SIMULATION": "true"})
@@ -433,8 +434,16 @@ class TestSimulationIsolation:
         assert "engineering approximation" in snapshot["geometry"]["belt_speed_basis"]
 
     def test_the_belt_speed_is_never_described_as_measured(self):
+        """A geometry with no speed source attached says so.
+
+        Re-pointed 2026-08-26: "this machine has no encoder" became a claim
+        about the machine that app/routing/conveyor.py can now falsify. The
+        property protected is unchanged - a configured constant must never
+        read as a measurement - and the basis string now names its source
+        instead of asserting a fact about the hardware.
+        """
         blob = str(geometry().as_dict()).lower()
-        assert "no encoder" in blob
+        assert "no speed source is attached" in blob
         assert "configured constant" in blob
 
 

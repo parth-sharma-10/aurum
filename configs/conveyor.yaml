@@ -24,11 +24,44 @@ conveyor:
     confidence: 0.35
     iou: 0.5
 
+  # Where the belt speed comes from, and whether there is a belt at all.
+  #
+  #   NONE        no belt. The operator carries the object from the camera to
+  #               the pan and routing is immediate. THE SHIPPED DEFAULT,
+  #               because that is what this machine physically is.
+  #   SIMULATION  the demonstration belt: the simulation profile below, with
+  #               every derived figure stamped SIMULATED. Also switches the
+  #               routing layer onto the TEST distances.
+  #   ENCODER     roller pulses differentiated into a real speed.
+  #   MANUAL      a real belt with no encoder, at a hand-measured speed.
+  #
+  # See app/routing/conveyor.py. Turning this on without a belt makes the
+  # machine wait several seconds and fire a paddle at nothing.
+  mode: NONE
+
   belt:
     # MEASURE THIS. Time a marked item over a known distance, repeat 5 times,
     # take the median. Timing error scales directly with speed: at 10 cm/s a
     # 200 ms scheduling error is 2 cm; at 50 cm/s it is 10 cm.
+    #
+    # Used when mode is MANUAL or ENCODER and nothing better is available.
     speed_cm_s: UNMEASURED
+
+  manual:
+    # MEASURE THIS if the belt has no encoder. Real, but entered once: it
+    # cannot notice the belt slowing under load.
+    belt_speed_cm_s: UNMEASURED
+
+  encoder:
+    # No encoder model is assumed - nobody has bought one - so both figures
+    # are configuration. An UNMEASURED circumference makes every reading
+    # UNAVAILABLE rather than papering over a missing tape measurement.
+    pulses_per_revolution: 20
+    roller_circumference_cm: UNMEASURED
+    sample_interval_s: 0.25
+    # Past this with no sample the encoder reads STALE and the scheduler
+    # refuses. A belt nobody can hear is not a belt whose speed is known.
+    timeout_s: 2.0
 
   geometry:
     # MEASURE THESE, along the belt, from the camera's field-of-view centre.
@@ -116,13 +149,18 @@ conveyor:
   # anything. Every routing result computed from them is stamped
   # mode: SIMULATED.
   #
-  # They are reachable ONLY when runtime.simulation is true. With simulation
-  # off, the geometry above applies and stays UNMEASURED, so an unmeasured
-  # machine refuses to schedule rather than routing on plausible-looking
-  # numbers. Do not move these values up into the real geometry block.
+  # They are reachable ONLY when runtime.simulation is true OR mode is
+  # SIMULATION. With both off, the geometry above applies and stays
+  # UNMEASURED, so an unmeasured machine refuses to schedule rather than
+  # routing on plausible-looking numbers. Do not move these values up into the
+  # real geometry block.
   # ==========================================================================
   simulation:
-    belt_speed_cm_s: 20.0            # TEST
+    # 10 cm/s = 0.10 m/s. Slow on purpose: timing error from Python, serial
+    # latency and inference jitter is roughly +/-200 ms, which is +/-2 cm at
+    # this speed and +/-10 cm at 50 cm/s. Run a demonstration belt slow and
+    # make the bin mouths wide.
+    belt_speed_cm_s: 10.0            # TEST - a demonstration value, not a measurement
     camera_to_load_cell_cm: 25.0     # TEST
     camera_to_servo_a_cm: 60.0       # TEST
     camera_to_servo_b_cm: 90.0       # TEST

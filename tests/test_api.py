@@ -565,8 +565,21 @@ class TestRoutingEndpoint:
         assert body["geometry"]["belt_speed_cm_s"] is None
 
     def test_the_belt_speed_is_not_described_as_measured(self, client):
+        """The basis string names where the speed came from, always.
+
+        Re-pointed 2026-08-26. The claim it used to assert - "this machine has
+        no encoder" - is now something app/routing/conveyor.py decides rather
+        than something this string can state. On the shipped configuration
+        there is no belt at all, and that is what it must say.
+        """
         basis = client.get("/routing").json()["geometry"]["belt_speed_basis"]
-        assert "no encoder" in basis
+        assert "UNAVAILABLE" in basis
+        assert "no belt" in basis.lower()
+
+    def test_the_endpoint_carries_the_belt(self, client):
+        conveyor = client.get("/routing").json()["conveyor"]
+        assert conveyor["mode"] == "NONE"
+        assert conveyor["present"] is False
 
     def test_the_queue_starts_empty(self, client):
         body = client.get("/routing").json()

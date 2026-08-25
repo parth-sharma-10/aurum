@@ -31,7 +31,7 @@ from app.dashboard import draw_detections
 from app.decision import engine as decision_engine
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
 from app.pipeline import DemoSession, ItemPipeline
-from app.routing import RoutingScheduler
+from app.routing import Conveyor, RoutingScheduler
 from app.valuation import prices as prices_module
 from app.valuation import valuation as valuation_module
 from app.weight import get_weight_source
@@ -74,6 +74,7 @@ _detector: AurumDetector | None = None
 _sessions: dict[str, BatchSession] = {}
 _pipeline: ItemPipeline | None = None
 _routing: RoutingScheduler | None = None
+_belt: Conveyor | None = None
 _demo: DemoSession | None = None
 
 
@@ -89,11 +90,19 @@ def demo_session() -> DemoSession:
     return _demo
 
 
+def _conveyor() -> Conveyor:
+    """The belt for this process, whatever `conveyor.mode` says it is."""
+    global _belt
+    if _belt is None:
+        _belt = Conveyor.from_config()
+    return _belt
+
+
 def _scheduler() -> RoutingScheduler:
     """The routing queue for this process, sharing the tracker's identities."""
     global _routing
     if _routing is None:
-        _routing = RoutingScheduler(lifecycle=pipeline().tracker)
+        _routing = RoutingScheduler(lifecycle=pipeline().tracker, conveyor=_conveyor())
     return _routing
 
 
@@ -198,12 +207,21 @@ async def detect_annotated(file: UploadFile = File(...)) -> Response:
 def routing_status() -> dict:
     """The routing queue: what is scheduled, what is due, and what was refused.
 
-    A route is a time, not a movement. Nothing in this phase actuates a servo;
-    a DUE route is one Phase 7 will act on.
+    A route is a time, not a movement. A DUE route is one the actuation layer
+    will act on; nothing here moves a servo.
     """
-    import time as _time
+    return {**_scheduler().snapshot(now=time.monotonic()), "conveyor": _conveyor().snapshot()}
 
-    return _scheduler().snapshot(now=_time.monotonic())
+
+@app.get("/conveyor")
+def conveyor_status() -> dict:
+    """The belt: mode, speed, where that speed came from, and the ETAs it implies.
+
+    `mode: NONE` is the shipped answer and is a fact about this machine, not a
+    missing configuration: there is no conveyor. `SPEED ... (SIMULATED)` is a
+    demonstration value and says so on every reading.
+    """
+    return _conveyor().snapshot()
 
 
 # ---------------------------------------------------------------------------

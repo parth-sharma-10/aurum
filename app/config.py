@@ -164,7 +164,40 @@ SPEC: dict[str, tuple] = {
         UNMEASURED,
         "AURUM_CAMERA_TO_SERVO_B_CM",
     ),
+    # Where the belt speed comes from, and whether there is a belt at all.
+    #   NONE        no belt. The operator carries the object. THE DEFAULT,
+    #               because that is what this machine is.
+    #   SIMULATION  the demonstration belt: configured speed and configured
+    #               distances, every figure derived from them stamped SIMULATED.
+    #   ENCODER     roller pulses differentiated into a real speed.
+    #   MANUAL      a speed somebody measured by hand and entered.
+    # See app/routing/conveyor.py.
+    "conveyor.mode": (
+        _one_of("NONE", "SIMULATION", "ENCODER", "MANUAL"),
+        "NONE",
+        "AURUM_CONVEYOR_MODE",
+    ),
     "conveyor.timing.offset_ms": (_float, 0.0, "AURUM_TIMING_OFFSET_MS"),
+    # A hand-measured belt speed, for a real belt with no encoder.
+    "conveyor.manual.belt_speed_cm_s": (
+        _non_negative,
+        UNMEASURED,
+        "AURUM_MANUAL_BELT_SPEED_CM_S",
+    ),
+    # Rotary encoder on the roller. No encoder model is assumed: nobody has
+    # bought one, so both numbers are configuration. An UNMEASURED
+    # circumference makes every reading UNAVAILABLE rather than papering over
+    # a missing tape measurement with a plausible default.
+    "conveyor.encoder.pulses_per_revolution": (_int, 20, "AURUM_ENCODER_PULSES_PER_REV"),
+    "conveyor.encoder.roller_circumference_cm": (
+        _non_negative,
+        UNMEASURED,
+        "AURUM_ENCODER_ROLLER_CIRCUMFERENCE_CM",
+    ),
+    "conveyor.encoder.sample_interval_s": (_non_negative, 0.25, "AURUM_ENCODER_SAMPLE_INTERVAL_S"),
+    # Past this with no sample, the encoder reads STALE and the scheduler
+    # refuses. A belt nobody can hear is not a belt whose speed is known.
+    "conveyor.encoder.timeout_s": (_non_negative, 2.0, "AURUM_ENCODER_TIMEOUT_S"),
     "conveyor.timing.servo_actuation_delay_ms": (
         _non_negative,
         UNMEASURED,
@@ -217,7 +250,11 @@ SPEC: dict[str, tuple] = {
     "conveyor.servo.actuation_ms": (_non_negative, 700.0, "AURUM_SERVO_ACTUATION_MS"),
     # The demonstration profile. TEST values, used ONLY when
     # conveyor.runtime.simulation is true. See configs/conveyor.yaml.
-    "conveyor.simulation.belt_speed_cm_s": (_non_negative, 20.0, "AURUM_SIM_BELT_SPEED_CM_S"),
+    # 10 cm/s = 0.10 m/s. A DEMONSTRATION VALUE, not a measurement of any
+    # belt. Slow on purpose: timing error from Python, serial latency and
+    # inference jitter is roughly +/-200 ms, which is +/-2 cm here and
+    # +/-10 cm at 50 cm/s.
+    "conveyor.simulation.belt_speed_cm_s": (_non_negative, 10.0, "AURUM_SIM_BELT_SPEED_CM_S"),
     "conveyor.simulation.camera_to_load_cell_cm": (
         _non_negative,
         25.0,
