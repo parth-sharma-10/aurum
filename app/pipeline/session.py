@@ -101,6 +101,19 @@ def _unavailable_reading(reason: str) -> WeightReading:
     )
 
 
+#: Which stage of the machine each pan state belongs to, so one exception
+#: handler in the loop can still file a failure under the right code.
+_STAGE_ERROR = {
+    PanState.WAITING_FOR_OBJECT: ErrorCode.WEIGHT_ERROR,
+    PanState.OBJECT_PRESENT: ErrorCode.WEIGHT_ERROR,
+    PanState.WEIGHING: ErrorCode.WEIGHT_ERROR,
+    PanState.WEIGHT_STABLE: ErrorCode.WEIGHT_ERROR,
+    PanState.PROCESSING: ErrorCode.DECISION_ERROR,
+    PanState.ROUTING: ErrorCode.SERVO_ERROR,
+    PanState.WAITING_FOR_CLEAR: ErrorCode.WEIGHT_ERROR,
+}
+
+
 def _vision_capture(cfg: config_module.Config, session_id: str):
     """The failure-capture sink, off unless someone asked for it.
 
@@ -340,10 +353,21 @@ class DemoSession:
                     # sensor being asked too often, and a second constant here
                     # would be one more number nobody can configure.
                     self.pan.reason = f"The pan machine hit an error and is retrying: {exc}"
-                    self.errors.record(ErrorCode.WEIGHT_ERROR, "pan", str(exc))
+                    # The state the machine was IN decides the code. One
+                    # handler covers weighing, estimating and actuating, and
+                    # filing all three as a weight problem would send whoever
+                    # reads the log to the wrong end of the machine.
+                    self.errors.record(
+                        _STAGE_ERROR.get(self.pan.state, ErrorCode.WEIGHT_ERROR),
+                        f"pan:{self.pan.state}",
+                        str(exc),
+                    )
                     time.sleep(interval)
                     continue
-            self.drain_routes()
+            try:
+                self.drain_routes()
+            except Exception as exc:  # the belt must not take the loop down
+                self.errors.record(ErrorCode.SERVO_ERROR, "drain", str(exc))
             # Only the polling states need pacing; the rest are transitions
             # through work that has already taken its own time.
             if state in (PanState.WAITING_FOR_OBJECT, PanState.WAITING_FOR_CLEAR):
