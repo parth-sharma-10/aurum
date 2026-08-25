@@ -651,3 +651,111 @@ pre.record {
   padding: 20px 4px 0;
   max-width: 70ch;
 }
+
+/* --- systems row: conveyor, pricing, hardware ---------------------------- */
+/* Three panels that answer "what is the machine doing right now", side by
+   side because an operator reads them together: a belt speed with no price
+   status beside it is half an answer. */
+.systems {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.systems section {
+  padding: 16px 18px 18px;
+}
+
+@media (max-width: 900px) {
+  .systems {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A fourth badge colour. The three that existed map to bins; this one means
+   "not a bin at all" - unavailable, unknown, or nothing to say yet. */
+.badge-none {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  border: 1px solid var(--rule);
+  color: var(--faint);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.badge-bad {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  border: 1px solid rgba(225, 70, 70, 0.4);
+  color: var(--red);
+  background: rgba(225, 70, 70, 0.1);
+}
+
+.field-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.field-row:last-child {
+  border-bottom: none;
+}
+
+.field-row .field-value {
+  margin-top: 0;
+  text-align: right;
+}
+
+.panel-note {
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 12px;
+}
+
+.trail {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.trail span::after {
+  content: " \2192";
+  color: var(--faint);
+}
+
+.trail span:last-child::after {
+  content: "";
+}
+
+.errors-list {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.errors-list li {
+  list-style: none;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--hairline);
+}

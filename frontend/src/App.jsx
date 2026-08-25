@@ -149,6 +149,209 @@ function metalRows(pmdi) {
   ];
 }
 
+/**
+ * One provenance word, rendered so its meaning cannot be mistaken.
+ *
+ * The whole dashboard rests on this distinction. MEASURED, CALIBRATED, LIVE
+ * and VALIDATED are things the machine established. SIMULATED, REFERENCE and
+ * MANUAL are real numbers that are not measurements of THIS object right now.
+ * STALE, UNAVAILABLE, UNKNOWN, UNCALIBRATED and FAILED are absences. A colour
+ * per group, and never a bare number without one of these beside it.
+ */
+const STATUS_CLASS = {
+  MEASURED: "badge-b",
+  CALIBRATED: "badge-b",
+  VALIDATED: "badge-b",
+  LIVE: "badge-b",
+  ACKED: "badge-b",
+  SIMULATED: "badge-a",
+  REFERENCE: "badge-a",
+  MANUAL: "badge-a",
+  TEST: "badge-a",
+  ESTIMATED: "badge-a",
+  APPROXIMATE: "badge-a",
+  STALE: "badge-c",
+  UNSTABLE: "badge-c",
+  PARTIAL: "badge-c",
+  UNKNOWN: "badge-c",
+  UNCALIBRATED: "badge-c",
+  UNAVAILABLE: "badge-none",
+  NONE: "badge-none",
+  FAILED: "badge-bad",
+  ERROR: "badge-bad",
+  TIMED_OUT: "badge-bad",
+};
+
+function Status({ value, title }) {
+  if (value == null) return <span className="badge-none">--</span>;
+  const text = String(value);
+  return (
+    <span className={STATUS_CLASS[text] ?? "badge-none"} title={title ?? ""}>
+      {text}
+    </span>
+  );
+}
+
+function Row({ label, children }) {
+  return (
+    <div className="field-row">
+      <span className="field-label">{label}</span>
+      <span className="field-value">{children}</span>
+    </div>
+  );
+}
+
+const seconds = (v) => (v == null ? "--" : `${v.toFixed(2)} s`);
+
+/**
+ * The belt. `NONE` is a fact about this machine, not a missing setting: there
+ * is no conveyor, the operator carries the object, and routing is immediate.
+ */
+function ConveyorPanel({ conveyor }) {
+  const speed = conveyor?.speed ?? {};
+  const geometry = conveyor?.geometry ?? {};
+  return (
+    <section className="glass-panel">
+      <h2 className="section-title">Conveyor</h2>
+      <Row label="Mode">
+        <Status value={conveyor?.present ? conveyor.mode : "NONE"} />
+      </Row>
+      <Row label="Speed source">{conveyor?.speed_source ?? "--"}</Row>
+      <Row label="Speed">
+        {speed.m_s == null ? "--" : `${speed.m_s.toFixed(2)} m/s`}{" "}
+        <Status value={speed.status} title={speed.reason} />
+      </Row>
+      <Row label="Encoder">
+        {conveyor?.encoder
+          ? `${conveyor.encoder.updates} samples, ${
+              conveyor.encoder.healthy ? "healthy" : "not reporting"
+            }`
+          : "not fitted"}
+      </Row>
+      <Row label="Camera to servo A">
+        {geometry.camera_to_servo_a_cm == null
+          ? "UNMEASURED"
+          : `${geometry.camera_to_servo_a_cm} cm`}
+      </Row>
+      <Row label="ETA to servo A">{seconds(conveyor?.eta_to_servo_a_s)}</Row>
+      <Row label="ETA to servo B">{seconds(conveyor?.eta_to_servo_b_s)}</Row>
+      <p className="panel-note">{conveyor?.note}</p>
+    </section>
+  );
+}
+
+/** Metal prices, each with whether it may be presented as current. */
+function PricingPanel({ pricing }) {
+  const metals = pricing?.metals ?? {};
+  const order = ["Au", "Ag", "Pd", "Cu"];
+  return (
+    <section className="glass-panel">
+      <h2 className="section-title">Metal prices</h2>
+      <Row label="Provider">{pricing?.provider ?? "--"}</Row>
+      {order
+        .filter((m) => metals[m])
+        .map((metal) => {
+          const quote = metals[metal];
+          return (
+            <Row key={metal} label={`${metal} per gram`}>
+              {quote.price_per_gram == null
+                ? "--"
+                : money(quote.price_per_gram, quote.currency)}{" "}
+              <Status value={quote.status} title={quote.reason} />
+            </Row>
+          );
+        })}
+      <p className="panel-note">
+        LIVE is a market feed answering now. REFERENCE is a real published price
+        being used after its date. STALE is a feed that should have been current
+        and was not. Nothing here is ever a number without a source.
+      </p>
+    </section>
+  );
+}
+
+/** The board, the paddles, and whether a fault is holding the machine. */
+function HardwarePanel({ hardware, board, actuation, onReset, busy }) {
+  const fault = hardware?.fault ?? {};
+  const servo = hardware?.servo ?? {};
+  const last = actuation?.last_command;
+  return (
+    <section className="glass-panel">
+      <h2 className="section-title">Hardware</h2>
+      <Row label="Mode">
+        <Status
+          value={hardware?.mode === "SIMULATION" ? "SIMULATED" : "MEASURED"}
+          title={`HARDWARE_MODE=${hardware?.mode}`}
+        />
+      </Row>
+      <Row label="Arduino">
+        {board?.connected ? board.port : "not connected"}{" "}
+        <Status value={board?.connected ? "LIVE" : "UNAVAILABLE"} />
+      </Row>
+      <Row label="Actuation">
+        <Status value={hardware?.actuation_enabled ? "LIVE" : "NONE"} />
+      </Row>
+      <Row label="Servo A / B">
+        {`rest ${servo.rest_angle_deg}, push ${servo.push_angle_deg}, hold ${servo.actuation_ms} ms`}
+      </Row>
+      <Row label="Last command">
+        {last ? `${last.servo ?? last.target} ` : "none "}
+        <Status value={last?.state} title={last?.reason} />
+      </Row>
+      <Row label="Hardware fault">
+        {fault.active ? (
+          <>
+            <Status value="FAILED" title={fault.reason} /> {fault.code}
+          </>
+        ) : (
+          <Status value="LIVE" title="No latched fault." />
+        )}
+      </Row>
+      {fault.active && (
+        <>
+          <p className="panel-note">{fault.reason}</p>
+          <button disabled={busy} onClick={onReset}>
+            {busy === "fault" ? "Resetting..." : "Reset hardware fault"}
+          </button>
+        </>
+      )}
+      <p className="panel-note">
+        An ACK means the board received a well-formed frame and believes it
+        acted. It is not evidence that a servo physically moved.
+      </p>
+    </section>
+  );
+}
+
+/** What went wrong this run. A recorded failure is not a crash. */
+function ErrorsPanel({ errors }) {
+  const recent = errors?.recent ?? [];
+  if (!recent.length) return null;
+  const codes = Object.entries(errors.by_code ?? {})
+    .map(([code, n]) => `${code} ${n}`)
+    .join(" · ");
+  return (
+    <section className="glass-panel">
+      <h2 className="section-title">Recorded failures</h2>
+      <p className="section-note">
+        {errors.count} this run{codes && ` · ${codes}`}
+      </p>
+      <ul className="errors-list">
+        {recent.slice(0, 8).map((e, i) => (
+          <li key={i}>
+            <Status value="FAILED" />{" "}
+            <span className="mono small">{e.error_code}</span>{" "}
+            <span className="muted small">{e.stage}</span>
+            {e.item_id && <span className="mono small"> {e.item_id}</span>}
+            <div className="muted small">{e.message}</div>
+          </li>
+        ))}
+      </ul>
+      <p className="panel-note">{errors.note}</p>
+    </section>
+  );
+}
+
 /** The chain for one item, stage by stage, in the order a judge watches it. */
 function ItemChain({ item }) {
   if (!item) {
@@ -557,6 +760,8 @@ export default function App() {
   const board = state?.board ?? {};
   const actuation = state?.actuation ?? {};
   const cal = state?.calibration ?? {};
+  const hardware = state?.hardware ?? {};
+  const fault = hardware.fault ?? {};
   const processed = (state?.items ?? []).filter((i) => i.decision);
 
   return (
@@ -650,12 +855,32 @@ export default function App() {
           )}
         </div>
       )}
+      {fault.active && (
+        <div className="notice bad">
+          <strong>HARDWARE FAULT LATCHED — {fault.code}.</strong> {fault.reason}{" "}
+          No servo will move until it is reset. Nothing clears this on its own:
+          a command that went unacknowledged may have left a paddle half out,
+          and the machine does not know where it is.
+        </div>
+      )}
       <PanBanner pan={state?.pan} automatic={state?.automatic} />
 
       {error && <div className="notice bad">{error}</div>}
       {state?.camera?.error && (
         <div className="notice bad">Camera: {state.camera.error}</div>
       )}
+
+      <div className="systems">
+        <ConveyorPanel conveyor={state?.conveyor} />
+        <PricingPanel pricing={state?.pricing} />
+        <HardwarePanel
+          hardware={hardware}
+          board={board}
+          actuation={actuation}
+          busy={busy}
+          onReset={() => act("fault", "/hardware/fault/reset")}
+        />
+      </div>
 
       <div className="split">
         <section className="glass-panel feed">
@@ -702,6 +927,7 @@ export default function App() {
               <th>Conf.</th>
               <th>Mass</th>
               <th>ppm</th>
+              <th>Decision</th>
               <th>Bin</th>
               <th>Servo</th>
               <th>Why</th>
@@ -728,8 +954,18 @@ export default function App() {
                   {num(i.valuation?.pmdi?.precious_mass_fraction_ppm, 1)}
                 </td>
                 <td>
-                  <span className={BIN_CLASS[i.decision.decision]}>
+                  <span
+                    className={
+                      BIN_CLASS[i.decision.decision] ?? "badge-c"
+                    }
+                    title={i.decision.decision_note ?? i.decision.reason}
+                  >
                     {i.decision.decision}
+                  </span>
+                </td>
+                <td>
+                  <span className={BIN_CLASS[i.decision.physical_bin] ?? "badge-none"}>
+                    {i.decision.physical_bin ?? i.decision.target_bin}
                   </span>
                 </td>
                 <td className="mono small">{i.actuation?.servo ?? "—"}</td>
@@ -738,7 +974,7 @@ export default function App() {
             ))}
             {processed.length === 0 && (
               <tr>
-                <td colSpan={8} className="muted">
+                <td colSpan={9} className="muted">
                   Nothing routed yet.
                 </td>
               </tr>
@@ -746,6 +982,77 @@ export default function App() {
           </tbody>
         </table>
       </section>
+
+      <ErrorsPanel errors={state?.errors} />
+
+      {state?.epr && (
+        <section className="glass-panel">
+          <h2 className="section-title">EPR record</h2>
+          <p className="section-note">
+            Run {state.epr.session_id}. Every item's whole trail — detected,
+            classified, weighed, valued, binned, actuated — is written to the
+            EPR ledger with the provenance below stamped on each event.
+            <span className="mono small"> GET /epr/&lt;item_id&gt;</span>
+          </p>
+          <div className="trail">
+            <span>DETECTED</span>
+            <span>CLASSIFIED</span>
+            <span>WEIGHED</span>
+            <span>COMPOSITION</span>
+            <span>PMDI</span>
+            <span>VALUE</span>
+            <span>BIN</span>
+            <span>SERVO</span>
+            <span>SORT RESULT</span>
+          </div>
+          <div className="field-grid" style={{ marginTop: 16 }}>
+            <div>
+              <div className="field-label">Vision model</div>
+              <div className="field-value">
+                {state.epr.provenance?.vision_model_version ?? "--"}
+              </div>
+            </div>
+            <div>
+              <div className="field-label">Composition DB</div>
+              <div className="field-value">
+                schema {state.epr.provenance?.composition_db_schema ?? "--"},{" "}
+                {state.epr.provenance?.composition_db_evidence_count ?? 0} sources
+              </div>
+            </div>
+            <div>
+              <div className="field-label">Price provider</div>
+              <div className="field-value">
+                {state.epr.provenance?.price_provider ?? "--"}
+              </div>
+            </div>
+            <div>
+              <div className="field-label">Calibration</div>
+              <div className="field-value">
+                <Status
+                  value={
+                    state.epr.provenance?.calibration?.verified
+                      ? "CALIBRATED"
+                      : "UNCALIBRATED"
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <div className="field-label">Hardware mode</div>
+              <div className="field-value">
+                {state.epr.provenance?.hardware_mode ?? "--"}
+              </div>
+            </div>
+            <div>
+              <div className="field-label">Software</div>
+              <div className="field-value">
+                {state.epr.provenance?.software_version ?? "--"} · PMDI{" "}
+                {state.epr.provenance?.pmdi_version ?? "--"}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <footer className="foot">
         Aurum identifies components and estimates contained metal from cited
