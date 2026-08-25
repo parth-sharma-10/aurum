@@ -40,7 +40,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app import config as config_module
-from app.hardware.transport import FakeTransport, LinkState, SerialTransport, Transport
+from app.hardware.fault import FaultCode, HardwareFault
+from app.hardware.transport import (
+    FakeTransport,
+    LinkState,
+    SerialTransport,
+    SimulatedTransport,
+    Transport,
+)
 
 PROTOCOL = "AURUM/1"
 VALID_TARGETS = ("A", "B")
@@ -158,16 +165,27 @@ class ArduinoController:
         transport: Transport | None = None,
         cfg: config_module.Config | None = None,
         clock=time.monotonic,
+        fault: HardwareFault | None = None,
     ) -> None:
         self.cfg = config_module.load() if cfg is None else cfg
         self.transport = transport if transport is not None else self._transport_from_config()
         self.ack_timeout_s = self.cfg["conveyor.arduino.ack_timeout_ms"] / 1000.0
         self.enabled = bool(self.cfg["conveyor.arduino.enabled"])
+        self.simulation = bool(self.cfg["conveyor.runtime.simulation"])
+        #: Shared with the servo bridge and the session, so all three agree
+        #: about whether the machine is currently safe to actuate.
+        self.fault = HardwareFault() if fault is None else fault
         self._clock = clock
         self._commands: dict[str, Command] = {}
         self._by_item: dict[str, str] = {}
 
     def _transport_from_config(self) -> Transport:
+        if self.cfg["conveyor.runtime.simulation"]:
+            # HARDWARE_MODE=SIMULATION. The whole protocol still runs and the
+            # board still acknowledges, but no byte reaches a real port even if
+            # one is configured - which is the difference between simulating
+            # the machine and driving it.
+            return SimulatedTransport(connected=True)
         port = self.cfg["conveyor.arduino.port"]
         if not port:
             # No port configured is a normal state, not an error: the software
@@ -178,6 +196,27 @@ class ArduinoController:
             baudrate=self.cfg["conveyor.arduino.baudrate"],
             timeout_s=self.cfg["conveyor.arduino.timeout_s"],
         )
+
+    def servo_angle_problem(self) -> str | None:
+        """Why the configured servo angles cannot be used, or None.
+
+        An MG995 accepts 0-180 degrees. A value outside that is a typo that
+        would be written to the board and either ignored or driven against a
+        mechanical stop, and neither is something to discover during a
+        demonstration.
+        """
+        for key in ("conveyor.servo.rest_angle_deg", "conveyor.servo.push_angle_deg"):
+            angle = self.cfg[key]
+            if not isinstance(angle, (int, float)) or isinstance(angle, bool):
+                return f"{key} is {angle!r}, which is not an angle."
+            if not 0.0 <= float(angle) <= 180.0:
+                return f"{key} is {angle}, outside the 0-180 degrees a servo accepts."
+        if self.cfg["conveyor.servo.rest_angle_deg"] == self.cfg["conveyor.servo.push_angle_deg"]:
+            return (
+                "conveyor.servo.rest_angle_deg and push_angle_deg are equal, so the "
+                "paddle would not move at all."
+            )
+        return None
 
     # -- link --------------------------------------------------------------
     @property
@@ -313,6 +352,23 @@ class ArduinoController:
             command.settled_at = now
             return command
 
+        refusal = self.fault.refusal()
+        if refusal is not None:
+            command.state = CommandState.FAILED
+            command.error_code = "HARDWARE_FAULT"
+            command.reason = refusal
+            command.settled_at = now
+            return command
+
+        angle_problem = self.servo_angle_problem()
+        if angle_problem is not None:
+            command.state = CommandState.FAILED
+            command.error_code = "INVALID_SERVO_STATE"
+            command.reason = f"Refusing to command a servo: {angle_problem}"
+            command.settled_at = now
+            self.fault.latch(FaultCode.INVALID_SERVO_STATE, angle_problem, item_id, command_id)
+            return command
+
         if not self.connected:
             command.state = CommandState.FAILED
             command.error_code = "NOT_CONNECTED"
@@ -321,6 +377,7 @@ class ArduinoController:
                 f"{getattr(self.transport, 'last_error', '') or ''}".strip()
             )
             command.settled_at = now
+            self.fault.latch(FaultCode.ARDUINO_DISCONNECTED, command.reason, item_id, command_id)
             return command
 
         frame = build_frame(target, item_id, command_id)
@@ -330,6 +387,7 @@ class ArduinoController:
             command.error_code = "WRITE_FAILED"
             command.reason = getattr(self.transport, "last_error", "the write failed")
             command.settled_at = self._clock()
+            self.fault.latch(FaultCode.WRITE_FAILED, command.reason, item_id, command_id)
             return command
 
         command.state = CommandState.SENT
@@ -344,6 +402,10 @@ class ArduinoController:
                 f"No acknowledgement within {self.ack_timeout_s * 1000:.0f} ms. "
                 "Not retried: a blind resend is how one item gets moved twice."
             )
+            # Latching: the frame was written, so the paddle may have moved,
+            # may be half out, may be jammed. Nothing else may be commanded
+            # into a machine whose physical state nobody knows.
+            self.fault.latch(FaultCode.ACK_TIMEOUT, command.reason, item_id, command_id)
             return command
 
         command.raw_response = f"{PROTOCOL} {response.verb} {response.command_id}"
@@ -351,6 +413,7 @@ class ArduinoController:
             command.state = CommandState.FAILED
             command.error_code = response.code
             command.reason = f"The board reported {response.code}."
+            self.fault.latch(FaultCode.BOARD_ERROR, command.reason, item_id, command_id)
             return command
 
         command.state = CommandState.ACKED
@@ -399,6 +462,9 @@ class ArduinoController:
             "port": self.cfg["conveyor.arduino.port"],
             "baudrate": self.cfg["conveyor.arduino.baudrate"],
             "actuation_enabled": self.enabled,
+            "hardware_mode": "SIMULATION" if self.simulation else "PHYSICAL",
+            "fault": self.fault.snapshot(),
+            "servo_angle_problem": self.servo_angle_problem(),
             "ack_timeout_ms": self.ack_timeout_s * 1000.0,
             "last_error": getattr(self.transport, "last_error", None),
             "last_command": last.as_dict() if last else None,

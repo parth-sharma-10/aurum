@@ -427,7 +427,10 @@ class DemoSession:
         a time, which is the vision freeze this split exists to prevent.
         """
         decision = assembly.decision or {}
-        target = str(decision.get("decision") or "C")
+        # The PHYSICAL bin, not the decision. They differ for UNKNOWN, which is
+        # a decision state and not a place: the item still reaches C, and the
+        # record keeps both so the dashboard can show `UNKNOWN -> C`.
+        target = str(decision.get("physical_bin") or decision.get("decision") or "C")
         actuation = self._actuate(assembly.assembly_id, target)
         with self._lock:
             assembly.actuation = actuation

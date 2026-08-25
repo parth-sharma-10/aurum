@@ -235,3 +235,15 @@ class FakeTransport(Transport):
         self._state = LinkState.DISCONNECTED
 
     close = disconnect
+
+
+class SimulatedTransport(FakeTransport):
+    """HARDWARE_MODE=SIMULATION: the whole protocol, none of the wire.
+
+    Distinct from `FakeTransport` only in its name, and the name is the point:
+    a snapshot showing `transport: simulated` says the ACKs on screen came from
+    software. A test fixture and a deliberately simulated run should not look
+    identical in a report.
+    """
+
+    name = "simulated"

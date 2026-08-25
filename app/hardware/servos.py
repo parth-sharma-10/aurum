@@ -34,6 +34,7 @@ from enum import StrEnum
 
 from app import config as config_module
 from app.hardware.arduino import ArduinoController, Command, CommandState
+from app.hardware.fault import FaultCode
 from app.routing.scheduler import RouteStatus, ScheduledRoute
 
 
@@ -48,6 +49,8 @@ class ActuationOutcome(StrEnum):
     FAILED = "FAILED"
     #: Deliberately not attempted: already handed across, or not actionable.
     SKIPPED = "SKIPPED"
+    #: Refused because a hardware fault is latched. Nothing was sent.
+    BLOCKED = "BLOCKED"
 
 
 @dataclass
@@ -97,6 +100,9 @@ class ServoActuator:
         self.scheduler = scheduler
         self.controller = ArduinoController(cfg=self.cfg) if controller is None else controller
         self._clock = clock
+        #: The same latch the controller checks, so the bridge and the board
+        #: layer can never disagree about whether the machine may move.
+        self.fault = self.controller.fault
         #: Items already handed to the hardware boundary, whatever the outcome.
         #: A failure is not a licence to try again.
         self._attempted: set[str] = set()
@@ -163,6 +169,44 @@ class ServoActuator:
                     at=now,
                 )
             )
+
+        # A latched fault stops the machine here as well as at the board layer.
+        # Twice on purpose: this one keeps the item out of `_attempted`, so a
+        # route blocked by a fault can still be actuated after a reset, whereas
+        # one that reached the board never can.
+        refusal = self.fault.refusal()
+        if refusal is not None:
+            return self._record(
+                ActuationResult(
+                    route.item_id,
+                    route.target,
+                    ActuationOutcome.BLOCKED,
+                    refusal,
+                    route_status=str(route.status),
+                    at=now,
+                )
+            )
+
+        if route.servo is None or route.target not in ("A", "B"):
+            # A SCHEDULED route with no paddle should be unreachable. If one
+            # arrives, the scheduler and this layer disagree about the machine,
+            # and that is exactly the state to stop in rather than write into.
+            self.fault.latch(
+                FaultCode.INVALID_SCHEDULE,
+                f"A SCHEDULED route for {route.item_id} named target {route.target!r}, "
+                "which is not an actuator.",
+                route.item_id,
+            )
+            return self._record(
+                ActuationResult(
+                    route.item_id,
+                    route.target,
+                    ActuationOutcome.FAILED,
+                    f"Target {route.target!r} is not an actuator; refusing to guess.",
+                    route_status=str(route.status),
+                    at=now,
+                )
+            )
         if route.execute_at is None or now < route.execute_at:
             return self._record(
                 ActuationResult(
@@ -217,6 +261,7 @@ class ServoActuator:
         return {
             "arduino": self.controller.snapshot(),
             "servo": self.servo_settings,
+            "fault": self.fault.snapshot(),
             "attempted_items": len(self._attempted),
             "last_actuation": recent[0].as_dict() if recent else None,
             "recent": [r.as_dict() for r in recent],

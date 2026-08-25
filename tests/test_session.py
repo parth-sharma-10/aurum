@@ -161,8 +161,9 @@ class TestTheChain:
 
         result = run.measure_and_route()
 
-        assert result["decision"]["decision"] == "C"
-        assert result["decision"]["reason_code"] == "C_UNKNOWN_CLASS"
+        assert result["decision"]["decision"] == "UNKNOWN"
+        assert result["decision"]["physical_bin"] == "C"
+        assert result["decision"]["reason_code"] == "UNKNOWN_CLASS"
         assert result["actuation"]["commanded"] is False
         assert result["actuation"]["servo"] is None
         assert transport.sent == []
@@ -252,7 +253,7 @@ class TestFailsClosed:
         present(run, "PCB")
         result = run.measure_and_route()
         assert result["weight_status"] == "STABLE"
-        assert result["decision"]["decision"] == "C"
+        assert result["decision"]["physical_bin"] == "C"
         assert result["valuation"]["pmdi"]["available"] is False
 
     def test_an_uncalibrated_cell_reports_unavailable_not_zero(self):
@@ -275,7 +276,8 @@ class TestFailsClosed:
         present(run, "PCB")
         result = run.measure_and_route()
         assert result["weight_status"] == "UNAVAILABLE"
-        assert result["decision"]["decision"] == "C"
+        assert result["decision"]["decision"] == "UNKNOWN"
+        assert result["decision"]["physical_bin"] == "C"
 
     def test_a_disconnected_board_leaves_the_decision_and_drops_the_movement(self):
         """The decision is not rewritten to express "I could not move it"."""
@@ -403,8 +405,9 @@ class TestMockMassFallback:
         run = self.mock_session(transport=transport)
         present(run, "GPU")
         result = run.measure_and_route()
-        assert result["decision"]["decision"] == "C"
-        assert result["decision"]["reason_code"] == "C_UNKNOWN_CLASS"
+        assert result["decision"]["decision"] == "UNKNOWN"
+        assert result["decision"]["physical_bin"] == "C"
+        assert result["decision"]["reason_code"] == "UNKNOWN_CLASS"
         assert transport.movements == []
 
     def test_with_the_flag_off_a_pcb_still_reaches_c(self):
@@ -412,8 +415,9 @@ class TestMockMassFallback:
         run = session(board=False)
         present(run, "PCB")
         result = run.measure_and_route()
-        assert result["decision"]["decision"] == "C"
-        assert result["decision"]["reason_code"] == "C_UNMEASURED_WEIGHT"
+        assert result["decision"]["decision"] == "UNKNOWN"
+        assert result["decision"]["physical_bin"] == "C"
+        assert result["decision"]["reason_code"] == "UNKNOWN_WEIGHT"
 
     def test_an_unmarked_simulated_mass_is_still_refused(self):
         """The permission rides on the reading, so it cannot be forged by config."""

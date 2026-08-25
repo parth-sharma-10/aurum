@@ -248,14 +248,30 @@ class TestLinkLifecycle:
         )
         assert ctl.ping() is False
 
-    def test_reconnecting_allows_a_later_command(self):
+    def test_reconnecting_alone_does_not_allow_a_later_command(self):
+        """Changed 2026-08-26 by app/hardware/fault.py, deliberately.
+
+        This used to assert that a reconnect was enough. It is not: a link that
+        dropped mid-command left the paddle in a position nobody knows, and the
+        latch exists so that the next item is not commanded into that. The
+        cable coming back is not somebody having looked at the rig.
+        """
         board = FakeTransport(connected=True)
         ctl = controller(board)
         board.unplug()
         assert ctl.move("A", "AUR-ITEM-1").error_code == "NOT_CONNECTED"
         ctl.connect()
-        assert ctl.move("A", "AUR-ITEM-2").state is CommandState.ACKED
+        assert ctl.move("A", "AUR-ITEM-2").error_code == "HARDWARE_FAULT"
         assert board.connects >= 1
+
+    def test_reconnecting_and_resetting_the_fault_allows_a_later_command(self):
+        board = FakeTransport(connected=True)
+        ctl = controller(board)
+        board.unplug()
+        ctl.move("A", "AUR-ITEM-1")
+        ctl.connect()
+        ctl.fault.reset(by="test")
+        assert ctl.move("A", "AUR-ITEM-2").state is CommandState.ACKED
 
 
 class TestServoConfiguration:

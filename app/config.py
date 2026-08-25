@@ -328,6 +328,37 @@ SPEC: dict[str, tuple] = {
     ),
     "grading.bin_b.minimum_confidence": (_fraction, 0.60, "AURUM_BIN_B_MIN_CONFIDENCE"),
     "grading.fallback": (_one_of("A", "B", "C"), "C", "AURUM_GRADING_FALLBACK"),
+    # ------------------------------------------------------------------
+    # MASS PLAUSIBILITY - is this mass possible for this class at all?
+    #
+    # ENGINEERING APPROXIMATIONS, deliberately wide. This catches a 5 kg
+    # "RAM module" and a 0.1 g "motherboard" - a mis-detection, an item that
+    # rolled off the pan, a calibration factor that is out by a decade. It is
+    # NOT a second opinion on the class, and nothing infers composition from
+    # a mass: an implausible mass makes the decision UNKNOWN and sends the
+    # item for manual inspection.
+    #
+    # The upper bounds are for a whole ASSEMBLY, because one mass covers every
+    # component on the object: a board carrying two modules and a processor
+    # weighs what all of it weighs.
+    # ------------------------------------------------------------------
+    "grading.mass_plausibility.enabled": (_bool, True, "AURUM_MASS_PLAUSIBILITY"),
+    "grading.mass_plausibility.cpu_min_g": (_non_negative, 5.0, "AURUM_MASS_MIN_CPU_G"),
+    "grading.mass_plausibility.cpu_max_g": (_non_negative, 500.0, "AURUM_MASS_MAX_CPU_G"),
+    "grading.mass_plausibility.ram_min_g": (_non_negative, 3.0, "AURUM_MASS_MIN_RAM_G"),
+    "grading.mass_plausibility.ram_max_g": (_non_negative, 200.0, "AURUM_MASS_MAX_RAM_G"),
+    "grading.mass_plausibility.pcb_min_g": (_non_negative, 20.0, "AURUM_MASS_MIN_PCB_G"),
+    "grading.mass_plausibility.pcb_max_g": (_non_negative, 5000.0, "AURUM_MASS_MAX_PCB_G"),
+    "grading.mass_plausibility.connector_min_g": (
+        _non_negative,
+        0.5,
+        "AURUM_MASS_MIN_CONNECTOR_G",
+    ),
+    "grading.mass_plausibility.connector_max_g": (
+        _non_negative,
+        200.0,
+        "AURUM_MASS_MAX_CONNECTOR_G",
+    ),
     "grading.policy.class_aware": (_bool, True, "AURUM_GRADING_CLASS_AWARE"),
     "grading.policy.price_unavailable_policy": (
         _one_of("mass_fraction_only", "route_to_c"),

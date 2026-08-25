@@ -358,8 +358,9 @@ class TestFailures:
         record = cycle(run)
 
         assert record["weight_status"] == "UNSTABLE"
-        assert record["decision"]["decision"] == "C"
-        assert record["decision"]["reason_code"] == "C_UNMEASURED_WEIGHT"
+        assert record["decision"]["decision"] == "UNKNOWN"
+        assert record["decision"]["physical_bin"] == "C"
+        assert record["decision"]["reason_code"] == "UNKNOWN_WEIGHT"
 
     def test_the_cell_disconnecting_mid_weigh_is_reported_not_raised(self):
         cell = ScriptedCell(0.0)
@@ -396,8 +397,9 @@ class TestFailures:
         record = cycle(run)
 
         assert record["weight_status"] == "UNAVAILABLE"
-        assert record["decision"]["decision"] == "C"
-        assert record["decision"]["reason_code"] == "C_UNMEASURED_WEIGHT"
+        assert record["decision"]["decision"] == "UNKNOWN"
+        assert record["decision"]["physical_bin"] == "C"
+        assert record["decision"]["reason_code"] == "UNKNOWN_WEIGHT"
         assert record["actuation"]["commanded"] is False
 
     def test_a_disconnected_cell_releases_rather_than_holding_an_object_forever(self):

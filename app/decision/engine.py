@@ -60,18 +60,40 @@ from app.valuation.prices import PriceStatus
 from app.valuation.valuation import Valuation
 
 #: The physical machine: A and B have paddles, C is the end of the belt.
-#: Phase 6 owns actuation; this is only the label a decision carries.
-SERVO_FOR_BIN = {"A": "A", "B": "B", "C": None}
+#: `app.routing` owns actuation; this is only the label a decision carries.
+#: UNKNOWN is not a place, so it has no paddle - it reaches a bin through
+#: `physical_bin` below.
+SERVO_FOR_BIN = {"A": "A", "B": "B", "C": None, "UNKNOWN": None}
 
 
 class Bin(StrEnum):
+    """What Aurum decided. Four values, and the fourth is not a place.
+
+    A, B and C are physical destinations. UNKNOWN is the honest answer when
+    the evidence does not support any of them: an unreadable detection, a
+    class with no cited composition, a mass that could not be measured or is
+    not plausible for the class. It reaches a bin by `physical_bin`, which is
+    C, because C is where an item goes when nobody does anything.
+
+    Collapsing UNKNOWN into C would put "Aurum graded this and it did not
+    qualify" and "Aurum could not read this at all" under one label, and only
+    the second is a reason to look at the camera.
+    """
+
     A = "A"
     B = "B"
     C = "C"
+    UNKNOWN = "UNKNOWN"
 
 
 class ReasonCode(StrEnum):
-    """Machine-readable justification. Every decision carries exactly one."""
+    """Machine-readable justification. Every decision carries exactly one.
+
+    The `UNKNOWN_` codes mean Aurum could not judge the item. The `C_` codes
+    mean it judged it and the item did not qualify. Both end up in bin C; only
+    the first is a reason to check the camera, the cell or the evidence
+    database.
+    """
 
     A_PREFERRED_CLASS = "A_PREFERRED_CLASS"
     A_PRECIOUS_FRACTION = "A_PRECIOUS_FRACTION"
@@ -81,13 +103,18 @@ class ReasonCode(StrEnum):
     B_BASE_METAL_VALUE = "B_BASE_METAL_VALUE"
     B_SUPPORTED_RECOVERABLE = "B_SUPPORTED_RECOVERABLE"
 
-    C_UNKNOWN_CLASS = "C_UNKNOWN_CLASS"
-    C_UNSUPPORTED_MATERIAL = "C_UNSUPPORTED_MATERIAL"
-    C_MISSING_EVIDENCE = "C_MISSING_EVIDENCE"
-    C_UNMEASURED_WEIGHT = "C_UNMEASURED_WEIGHT"
-    C_LOW_CONFIDENCE = "C_LOW_CONFIDENCE"
+    #: Aurum could not judge the item. Decision UNKNOWN, physical bin C.
+    UNKNOWN_CLASS = "UNKNOWN_CLASS"
+    UNKNOWN_MATERIAL = "UNKNOWN_MATERIAL"
+    UNKNOWN_EVIDENCE = "UNKNOWN_EVIDENCE"
+    UNKNOWN_WEIGHT = "UNKNOWN_WEIGHT"
+    UNKNOWN_CONFIDENCE = "UNKNOWN_CONFIDENCE"
+    UNKNOWN_DATA = "UNKNOWN_DATA"
+    #: The mass is not plausible for the class. Manual inspection.
+    UNKNOWN_MASS_ANOMALY = "UNKNOWN_MASS_ANOMALY"
+
+    #: Aurum judged the item and it did not qualify. Decision C.
     C_PRICE_UNAVAILABLE = "C_PRICE_UNAVAILABLE"
-    C_INVALID_DATA = "C_INVALID_DATA"
     C_BELOW_THRESHOLD = "C_BELOW_THRESHOLD"
 
 
@@ -100,7 +127,18 @@ THRESHOLD_NOTE = (
 
 @dataclass
 class Decision:
-    """One routing decision, with everything needed to explain it."""
+    """One routing decision, with everything needed to explain it.
+
+    Two fields that are deliberately not the same thing:
+
+        decision       what Aurum concluded: A, B, C or UNKNOWN
+        physical_bin   where the item physically ends up: A, B or C
+
+    They differ only for UNKNOWN, and that is the whole reason both exist. A
+    dashboard shows `UNKNOWN -> C`, an operator knows to look at the item, and
+    nothing in the record claims the machine graded something it could not
+    read.
+    """
 
     decision: Bin
     reason_code: ReasonCode
@@ -108,15 +146,32 @@ class Decision:
     signals: dict = field(default_factory=dict)
     policy: dict = field(default_factory=dict)
     status: OverallStatus = OverallStatus.UNAVAILABLE
+    #: Where an UNKNOWN item is physically sent. From `grading.fallback`, so
+    #: the fail-safe destination is configuration rather than a constant here.
+    fallback_bin: str = "C"
+
+    @property
+    def physical_bin(self) -> str:
+        """The bin the item actually reaches. UNKNOWN is not a place."""
+        return self.fallback_bin if self.decision is Bin.UNKNOWN else str(self.decision)
+
+    @property
+    def unknown(self) -> bool:
+        return self.decision is Bin.UNKNOWN
 
     @property
     def target_bin(self) -> str:
-        return str(self.decision)
+        """The routing target. Always a physical bin, never UNKNOWN.
+
+        Named for what `app.routing` consumes: the scheduler needs somewhere to
+        send the item, and "I could not tell" is not somewhere.
+        """
+        return self.physical_bin
 
     @property
     def servo(self) -> str | None:
         """The paddle this bin uses, or None for the fail-safe end of the belt."""
-        return SERVO_FOR_BIN[str(self.decision)]
+        return SERVO_FOR_BIN[self.physical_bin]
 
     def as_dict(self) -> dict:
         return {
@@ -124,11 +179,21 @@ class Decision:
             "reason_code": str(self.reason_code),
             "reason": self.reason,
             "target_bin": self.target_bin,
+            "physical_bin": self.physical_bin,
+            "physical_fallback": self.fallback_bin if self.unknown else None,
+            "unknown": self.unknown,
             "servo": self.servo,
             "signals": dict(self.signals),
             "policy": dict(self.policy),
             "status": str(self.status),
             "threshold_note": THRESHOLD_NOTE,
+            "decision_note": (
+                "UNKNOWN is a decision state, not a destination. Aurum could not "
+                f"judge this item and it goes to bin {self.fallback_bin}, which is "
+                "reached by nobody doing anything."
+                if self.unknown
+                else None
+            ),
         }
 
 
@@ -158,6 +223,53 @@ def class_support(component_class: str, db: dict | None = None) -> dict:
     }
 
 
+def mass_range(component_class: str | None, cfg: config_module.Config) -> tuple | None:
+    """The plausible mass window for a class, or None if none is configured.
+
+    Derived from the settings table by name, so a class gets a window by
+    having one configured rather than by being named in this file.
+    """
+    key = (component_class or "").lower()
+    low, high = (
+        f"grading.mass_plausibility.{key}_min_g",
+        f"grading.mass_plausibility.{key}_max_g",
+    )
+    if low not in config_module.SPEC or high not in config_module.SPEC:
+        return None
+    return cfg[low], cfg[high]
+
+
+def mass_anomaly(
+    component_class: str | None, grams: float | None, cfg: config_module.Config
+) -> str | None:
+    """Why this mass is not possible for this class, or None if it is.
+
+    Answers one question and refuses the obvious second one. An implausible
+    mass says the identity, the mounting or the calibration is wrong; it says
+    nothing whatsoever about what the object is made of, and no composition is
+    ever inferred from it.
+    """
+    if not cfg["grading.mass_plausibility.enabled"] or grams is None:
+        return None
+    window = mass_range(component_class, cfg)
+    if window is None:
+        return None
+    low, high = window
+    if grams < low:
+        return (
+            f"{grams:.4g} g is below the {low:g} g minimum plausible for a "
+            f"{component_class}. Nothing is inferred from it: check the detection, "
+            "the pan and the calibration factor."
+        )
+    if grams > high:
+        return (
+            f"{grams:.4g} g is above the {high:g} g maximum plausible for a "
+            f"{component_class}. Nothing is inferred from it: check the detection, "
+            "the pan and the calibration factor."
+        )
+    return None
+
+
 def _policy(cfg: config_module.Config) -> dict:
     return {
         "class_aware": cfg["grading.policy.class_aware"],
@@ -169,6 +281,7 @@ def _policy(cfg: config_module.Config) -> dict:
         "bin_b_minimum_precious_fraction_ppm": cfg["grading.bin_b.minimum_precious_fraction_ppm"],
         "bin_b_minimum_confidence": cfg["grading.bin_b.minimum_confidence"],
         "fallback": cfg["grading.fallback"],
+        "mass_plausibility": cfg["grading.mass_plausibility.enabled"],
     }
 
 
@@ -202,6 +315,26 @@ def _signals(component_class, confidence, valuation: Valuation | None, applied) 
     }
 
 
+def _plausibility(component_class, valuation, cfg) -> dict:
+    """What the mass window said, reported whether or not it fired."""
+    grams = valuation.pmdi.mass_g if valuation else None
+    window = mass_range(component_class, cfg)
+    anomaly = mass_anomaly(component_class, grams, cfg)
+    return {
+        "checked": bool(cfg["grading.mass_plausibility.enabled"]) and window is not None,
+        "mass_g": grams,
+        "min_g": None if window is None else window[0],
+        "max_g": None if window is None else window[1],
+        "plausible": anomaly is None,
+        "reason": anomaly,
+        "basis": (
+            "ENGINEERING APPROXIMATION - a deliberately wide window that catches a "
+            "mis-detection or a calibration factor out by a decade, not a claim "
+            "about what any component weighs."
+        ),
+    }
+
+
 def decide(
     component_class: str | None,
     confidence: float | None,
@@ -223,9 +356,13 @@ def decide(
             decision=bin_,
             reason_code=code,
             reason=reason,
-            signals=_signals(component_class, confidence, valuation, applied),
+            signals={
+                **_signals(component_class, confidence, valuation, applied),
+                "mass_plausibility": _plausibility(component_class, valuation, cfg),
+            },
             policy=policy,
             status=status,
+            fallback_bin=policy["fallback"],
         )
 
     support = class_support(component_class, db) if component_class else {"known": False}
@@ -234,8 +371,8 @@ def decide(
     #    detection the model could not stand behind.
     if not component_class or not support["known"]:
         return out(
-            Bin.C,
-            ReasonCode.C_UNKNOWN_CLASS,
+            Bin.UNKNOWN,
+            ReasonCode.UNKNOWN_CLASS,
             f"No cited material profile exists for class {component_class!r}.",
         )
     # `bool` is an int subclass, and True would otherwise pass as a confidence
@@ -244,8 +381,8 @@ def decide(
     numeric = isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
     if not numeric or not 0.0 <= confidence <= 1.0:
         return out(
-            Bin.C,
-            ReasonCode.C_INVALID_DATA,
+            Bin.UNKNOWN,
+            ReasonCode.UNKNOWN_DATA,
             f"Detection confidence {confidence!r} is missing, non-numeric, or outside 0..1.",
         )
 
@@ -255,13 +392,13 @@ def decide(
     #    check was asking.
     if not support["has_composition"] and not (valuation and valuation.pmdi.available):
         return out(
-            Bin.C,
-            ReasonCode.C_UNSUPPORTED_MATERIAL,
+            Bin.UNKNOWN,
+            ReasonCode.UNKNOWN_MATERIAL,
             f"The evidence database holds no cited composition for {component_class}. "
             "Routing it to a recovery stream would be a guess.",
         )
     if valuation is None:
-        return out(Bin.C, ReasonCode.C_MISSING_EVIDENCE, "No valuation was supplied.")
+        return out(Bin.UNKNOWN, ReasonCode.UNKNOWN_EVIDENCE, "No valuation was supplied.")
 
     # 3. Required measurement. Concentration evidence is meaningless without a
     #    real mass, and a simulated reading is not one.
@@ -275,17 +412,24 @@ def decide(
         accepted.add(MassStatus.SIMULATED)
     if support["requires_mass"] and mass_status not in accepted:
         return out(
-            Bin.C,
-            ReasonCode.C_UNMEASURED_WEIGHT,
+            Bin.UNKNOWN,
+            ReasonCode.UNKNOWN_WEIGHT,
             f"{component_class} composition is cited as a concentration, which needs a "
             f"measured mass; this item's mass is {mass_status}.",
         )
 
+    # 3b. Mass plausibility. A mass that cannot belong to this class means the
+    #     identity, the mounting or the calibration is wrong, and none of those
+    #     is something to route on. It never implies a composition.
+    anomaly = mass_anomaly(component_class, valuation.pmdi.mass_g, cfg)
+    if anomaly is not None:
+        return out(Bin.UNKNOWN, ReasonCode.UNKNOWN_MASS_ANOMALY, f"MASS_ANOMALY: {anomaly}")
+
     # 4. Data validity.
     if valuation.evidence_status is EvidenceStatus.MISSING or not valuation.pmdi.available:
         return out(
-            Bin.C,
-            ReasonCode.C_MISSING_EVIDENCE,
+            Bin.UNKNOWN,
+            ReasonCode.UNKNOWN_EVIDENCE,
             valuation.reason or "The material estimate is unavailable.",
         )
     price_current = valuation.pmdi.price_status in (
@@ -342,8 +486,8 @@ def decide(
     b_conf = policy["bin_b_minimum_confidence"]
     if confidence < b_conf:
         return out(
-            Bin.C,
-            ReasonCode.C_LOW_CONFIDENCE,
+            Bin.UNKNOWN,
+            ReasonCode.UNKNOWN_CONFIDENCE,
             f"Detection confidence {confidence:.2f} is below the {b_conf:.2f} minimum "
             "for any routed bin.",
             b_conf,

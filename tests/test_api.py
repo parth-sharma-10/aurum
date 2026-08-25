@@ -479,7 +479,8 @@ class TestDecisionIsExposed:
     def test_the_valuation_endpoint_carries_a_decision(self, client):
         batch_id = _closed_batch(client, weight_mode="simulated")
         decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
-        assert decision["decision"] in ("A", "B", "C")
+        assert decision["decision"] in ("A", "B", "C", "UNKNOWN")
+        assert decision["physical_bin"] in ("A", "B", "C")
         assert decision["reason_code"]
         assert decision["reason"]
 
@@ -500,13 +501,14 @@ class TestDecisionIsExposed:
         batch_id = _closed_batch(client, weight_mode="simulated")
         decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
         if decision["signals"]["component_class"] is None:
-            assert decision["decision"] == "C"
-            assert decision["reason_code"] == "C_UNKNOWN_CLASS"
+            assert decision["decision"] == "UNKNOWN"
+            assert decision["physical_bin"] == "C"
+            assert decision["reason_code"] == "UNKNOWN_CLASS"
 
     def test_bin_c_names_no_servo(self, client):
         batch_id = _closed_batch(client, weight_mode="simulated")
         decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
-        if decision["decision"] == "C":
+        if decision["physical_bin"] == "C":
             assert decision["servo"] is None
 
 
