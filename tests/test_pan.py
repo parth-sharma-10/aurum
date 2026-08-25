@@ -688,12 +688,19 @@ class TestTheThread:
         assert run.start_pan() is True
         try:
             cell.place(42.7)
+            # Wait for the ACTUATION, not merely for the record. `_process`
+            # publishes the item as soon as the decision is taken and `_route`
+            # fills in the movement afterwards, so polling for the record alone
+            # can catch it between the two.
             deadline = time.monotonic() + 5.0
-            while not run._routed and time.monotonic() < deadline:
+            while time.monotonic() < deadline:
+                if any(r.get("actuation") for r in run._routed.values()):
+                    break
                 time.sleep(0.02)
 
             assert run._routed, f"nothing was sorted; pan is {run.pan.state} ({run.pan.reason})"
             [record] = run._routed.values()
+            assert record["actuation"], f"decided but never routed; pan is {run.pan.state}"
             assert record["weight_status"] == "MEASURED"
             assert transport.movements == [("A", record["actuation"]["command_id"])]
 

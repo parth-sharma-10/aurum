@@ -324,8 +324,12 @@ class TestSnapshot:
         """The demonstration must not imply a belt it does not have."""
         conveyor = session().snapshot()["conveyor"]
         assert conveyor["present"] is False
-        assert "No conveyor exists" in conveyor["note"]
+        assert conveyor["mode"] == "NONE"
+        assert "No belt exists" in conveyor["note"]
         assert "not scheduled" in conveyor["note"]
+        # And no speed is offered in place of one.
+        assert conveyor["speed"]["cm_s"] is None
+        assert conveyor["speed"]["status"] == "UNAVAILABLE"
 
     def test_the_snapshot_reports_calibration_verification_honestly(self):
         assert session(calibration=UNVERIFIED).snapshot()["calibration"]["verified"] is False

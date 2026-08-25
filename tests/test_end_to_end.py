@@ -1,0 +1,329 @@
+"""The acceptance chain, end to end, with no hardware attached.
+
+    DETECT -> TRACK -> IDENTIFY -> MASS -> COMPOSITION -> PRICE -> PMDI
+      -> VALUATION -> A/B/C -> CONVEYOR -> ETA -> SCHEDULE -> ARDUINO -> ACK
+      -> SERVO RESULT -> EPR LEDGER -> DASHBOARD
+
+Two configurations, because the machine genuinely has two:
+
+**No belt** (`conveyor.mode: NONE`, the shipped state) - the operator carries
+the object from the camera to the pan and the paddle moves immediately.
+
+**A mock belt** (`conveyor.mode: SIMULATION`) - the item is upstream of the
+paddle, so the decision produces a `ScheduledRoute` with a firing time and
+nothing moves until that moment arrives.
+
+Both run the same pipeline and both end in the same EPR trail. Every mass here
+is a labelled stand-in and every belt figure is a demonstration value; the
+point of these tests is that the record says so at every stage.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from app import config, epr
+from app.hardware.arduino import ArduinoController
+from app.hardware.transport import FakeTransport
+from app.pipeline.session import DemoSession
+from app.vision.tracker import TrackedDetection
+
+BOARD = (10, 10, 400, 300)
+
+
+def cfg(**environ):
+    environ.setdefault("AURUM_DEMO_MOCK_MASS", "true")
+    environ.setdefault("AURUM_ARDUINO_ENABLED", "true")
+    environ.setdefault("AURUM_TRACK_MIN_DETECTIONS", "1")
+    return config.load(environ=environ)
+
+
+def det(track_id: int, class_name: str, box) -> TrackedDetection:
+    return TrackedDetection(track_id, class_name, 0.95, box)
+
+
+def run(**environ) -> tuple[DemoSession, FakeTransport]:
+    """A session with a fake board, a stand-in mass and no camera."""
+    settings = cfg(**environ)
+    board = FakeTransport(connected=True)
+    session = DemoSession(cfg=settings, controller=ArduinoController(transport=board, cfg=settings))
+    return session, board
+
+
+def show(session: DemoSession, *detections) -> None:
+    """Put detections in front of the tracker until the item is confirmed."""
+    for frame in range(4):
+        session.pipeline.process_detections(list(detections), frame_id=frame)
+
+
+class TestTheChainWithNoBelt:
+    """The shipped machine: the operator carries the object, routing is now."""
+
+    def test_a_cpu_runs_the_whole_chain_and_reaches_servo_a(self):
+        session, board = run()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+
+        record = session.measure_and_route()
+
+        assert record["class_name"] == "CPU"
+        assert record["weight_status"] == "SIMULATED"
+        assert record["valuation"]["pmdi"]["available"] is True
+        assert record["decision"]["decision"] == "A"
+        assert record["actuation"]["state"] == "ACKED"
+        assert board.movements == [("A", record["actuation"]["command_id"])]
+
+    def test_the_epr_trail_covers_every_stage(self):
+        session, _ = run()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+
+        events = [e["event"] for e in epr.history(record["item_id"])]
+        assert events == [
+            "DETECTED",
+            "CLASSIFIED",
+            "WEIGHED",
+            "COMPOSITION_LOOKUP",
+            "PMDI_CALCULATED",
+            "VALUE_CALCULATED",
+            "BIN_ASSIGNED",
+            "SERVO_TRIGGERED",
+            "SORT_CONFIRMED",
+        ]
+
+    def test_no_route_is_scheduled_because_there_is_no_belt(self):
+        session, _ = run()
+        assert session.scheduler is None
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+        assert "SERVO_SCHEDULED" not in [e["event"] for e in epr.history(record["item_id"])]
+
+    def test_a_stand_in_mass_is_stamped_simulated_all_the_way_to_the_ledger(self):
+        session, _ = run()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+
+        trail = epr.history(record["item_id"])
+        weighed = next(e for e in trail if e["event"] == "WEIGHED")
+        assert weighed["simulated"] is True
+        assert weighed["payload"]["mock"] is True
+        assert epr.items()[0]["simulated"] is True
+
+    def test_every_event_carries_its_provenance(self):
+        session, _ = run()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+
+        for event in epr.history(record["item_id"]):
+            prov = event["provenance"]
+            assert prov["software_version"]
+            assert prov["pmdi_version"]
+            assert prov["composition_db_schema"]
+            assert prov["price_provider"]
+            assert prov["hardware_mode"] in ("PHYSICAL", "SIMULATION")
+            assert prov["calibration"]["verified"] is False
+            assert prov["mock_mass_enabled"] is True
+
+
+class TestTheChainOverTheMockBelt:
+    def belt(self, **environ):
+        environ.setdefault("AURUM_CONVEYOR_MODE", "SIMULATION")
+        return run(**environ)
+
+    def test_the_decision_produces_a_firing_time_and_nothing_moves_yet(self):
+        session, board = self.belt()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+
+        record = session.measure_and_route()
+
+        assert record["decision"]["decision"] == "A"
+        assert record["actuation"]["scheduled"] is True
+        assert record["actuation"]["route"]["servo"] == "SERVO_A"
+        # 60 cm at 10 cm/s. Nothing has been written to the board.
+        assert record["actuation"]["route"]["geometry"]["travel_time_s"] == pytest.approx(6.0)
+        assert board.sent == []
+
+    def test_the_route_is_stamped_simulated(self):
+        session, _ = self.belt()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+        assert record["actuation"]["route"]["simulated"] is True
+        assert record["actuation"]["route"]["mode"] == "SIMULATED"
+
+    def test_draining_before_the_moment_moves_nothing(self):
+        session, board = self.belt()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        session.measure_and_route()
+
+        assert session.drain_routes(now=0.0) == []
+        assert board.movements == []
+
+    def test_draining_after_the_moment_fires_the_paddle_and_confirms_the_sort(self):
+        session, board = self.belt()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+
+        fire_at = record["actuation"]["route"]["execute_at"]
+        results = session.drain_routes(now=fire_at + 0.1)
+
+        assert [r["outcome"] for r in results] == ["ACTUATED"]
+        assert board.movements[0][0] == "A"
+        events = [e["event"] for e in epr.history(record["item_id"])]
+        assert "SERVO_SCHEDULED" in events
+        assert "SORT_CONFIRMED" in events
+
+    def test_the_paddle_moves_once_however_often_the_loop_runs(self):
+        session, board = self.belt()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+        fire_at = record["actuation"]["route"]["execute_at"]
+
+        for _ in range(5):
+            session.drain_routes(now=fire_at + 0.1)
+
+        assert len(board.movements) == 1
+
+    def test_a_pcb_is_scheduled_further_down_the_belt(self):
+        session, _ = self.belt()
+        show(session, det(1, "PCB", BOARD))
+        record = session.measure_and_route()
+        assert record["decision"]["decision"] == "B"
+        assert record["actuation"]["route"]["geometry"]["travel_time_s"] == pytest.approx(9.0)
+
+    def test_bin_c_schedules_no_movement_and_confirms_no_sort(self):
+        session, board = self.belt()
+        show(session, det(1, "GPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+
+        assert record["decision"]["decision"] == "UNKNOWN"
+        assert record["decision"]["physical_bin"] == "C"
+        assert record["actuation"]["route"]["status"] == "NO_ACTION"
+        session.drain_routes(now=0.0)
+        assert board.movements == []
+        assert "SORT_CONFIRMED" not in [e["event"] for e in epr.history(record["item_id"])]
+
+    def test_changing_the_belt_speed_changes_what_the_next_item_is_scheduled_on(self):
+        """The session's scheduler re-reads the speed rather than caching it."""
+        session, _ = self.belt()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        first = session.measure_and_route()
+        assert first["actuation"]["route"]["geometry"]["belt_speed_cm_s"] == pytest.approx(10.0)
+
+        session.conveyor.source.cm_s = 20.0
+
+        assert session.conveyor.eta_seconds(60.0) == pytest.approx(3.0)
+        assert session.conveyor.live_geometry().belt_speed_cm_s == pytest.approx(20.0)
+        assert session.snapshot()["routing"]["geometry"]["belt_speed_cm_s"] == pytest.approx(20.0)
+
+
+class TestFailureDoesNotProduceAFalseSort:
+    def test_a_disconnected_board_records_a_failure_not_a_sort(self):
+        settings = cfg()
+        board = FakeTransport(connected=False)
+        session = DemoSession(
+            cfg=settings, controller=ArduinoController(transport=board, cfg=settings)
+        )
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+
+        record = session.measure_and_route()
+
+        assert record["decision"]["decision"] == "A"
+        assert record["actuation"]["state"] == "FAILED"
+        events = [e["event"] for e in epr.history(record["item_id"])]
+        assert "SORT_FAILURE" in events
+        assert "SORT_CONFIRMED" not in events
+
+    def test_the_failure_reaches_the_error_log_with_a_code(self):
+        settings = cfg()
+        session = DemoSession(
+            cfg=settings,
+            controller=ArduinoController(transport=FakeTransport(connected=False), cfg=settings),
+        )
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+
+        entries = session.errors.for_item(record["item_id"])
+        assert [str(e.code) for e in entries] == ["SERVO_ERROR"]
+        assert entries[0].session_id == session.session_id
+
+    def test_an_ack_timeout_latches_and_the_next_item_does_not_move(self):
+        settings = cfg(AURUM_ARDUINO_ACK_TIMEOUT_MS="20")
+        board = FakeTransport(connected=True, silent=True)
+        session = DemoSession(
+            cfg=settings, controller=ArduinoController(transport=board, cfg=settings)
+        )
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        first = session.measure_and_route()
+        assert first["actuation"]["state"] == "TIMED_OUT"
+        assert session.controller.fault.active
+
+        # The board recovers. The machine does not, until somebody resets it.
+        board.silent = False
+        show(session, det(1, "CPU", (10, 10, 90, 90)), det(2, "CPU", (200, 200, 280, 280)))
+        second_id = next(
+            a.assembly_id for a in session.assemblies if a.assembly_id != first["item_id"]
+        )
+        second = session.measure_and_route(second_id)
+        assert second["actuation"]["error_code"] == "HARDWARE_FAULT"
+        assert len(board.movements) == 0
+
+    def test_after_a_reset_the_machine_sorts_again(self):
+        settings = cfg(AURUM_ARDUINO_ACK_TIMEOUT_MS="20")
+        board = FakeTransport(connected=True, silent=True)
+        session = DemoSession(
+            cfg=settings, controller=ArduinoController(transport=board, cfg=settings)
+        )
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        first = session.measure_and_route()
+
+        board.silent = False
+        session.fault.reset(by="test")
+        show(session, det(1, "CPU", (10, 10, 90, 90)), det(2, "CPU", (200, 200, 280, 280)))
+        second_id = next(
+            a.assembly_id for a in session.assemblies if a.assembly_id != first["item_id"]
+        )
+        second = session.measure_and_route(second_id)
+        assert second["actuation"]["state"] == "ACKED"
+
+    def test_the_ledger_aggregate_counts_confirmations_not_attempts(self):
+        settings = cfg()
+        session = DemoSession(
+            cfg=settings,
+            controller=ArduinoController(transport=FakeTransport(connected=False), cfg=settings),
+        )
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        session.measure_and_route()
+
+        totals = epr.aggregates()
+        assert totals["sort_confirmed"] == 0
+        assert totals["sort_failed"] == 1
+
+
+class TestTheDashboardPayload:
+    def test_the_snapshot_carries_every_panel_the_dashboard_renders(self):
+        session, _ = run()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        session.measure_and_route()
+
+        state = session.snapshot()
+        for key in ("conveyor", "hardware", "pricing", "errors", "epr", "calibration", "pan"):
+            assert key in state, key
+
+    def test_the_conveyor_panel_never_implies_a_measured_belt(self):
+        session, _ = run(AURUM_CONVEYOR_MODE="SIMULATION")
+        conveyor = session.snapshot()["conveyor"]
+        assert conveyor["mode"] == "SIMULATION"
+        assert conveyor["speed"]["status"] == "SIMULATED"
+        assert conveyor["speed"]["m_s"] == pytest.approx(0.10)
+
+    def test_the_hardware_panel_carries_the_mode_and_the_fault(self):
+        session, _ = run()
+        hardware = session.snapshot()["hardware"]
+        assert hardware["mode"] == "PHYSICAL"
+        assert hardware["fault"]["active"] is False
+
+    def test_the_pricing_panel_says_which_prices_are_current(self):
+        session, _ = run()
+        pricing = session.snapshot()["pricing"]
+        assert pricing["currency"] == "INR"
+        for metal, quote in pricing["metals"].items():
+            assert quote["status"] in ("LIVE", "REFERENCE", "STALE", "UNAVAILABLE", "ERROR"), metal

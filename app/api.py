@@ -25,7 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
 from app import config as config_module
-from app import ledger, pricing
+from app import epr, ledger, pricing
 from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.decision import engine as decision_engine
@@ -41,8 +41,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Create the batch ledger before the first request is served."""
+    """Create both ledgers before the first request is served."""
     ledger.init_db()
+    epr.init_db()
     yield
 
 
@@ -335,6 +336,65 @@ def arduino_status() -> dict:
             "hx711_sck": "D3",
             "bin_c": "no servo - reached by this system doing nothing",
         },
+    }
+
+
+@app.get("/hardware")
+def hardware_status() -> dict:
+    """The machine's physical state: mode, link, fault, servo geometry."""
+    return demo_session().snapshot()["hardware"]
+
+
+@app.post("/hardware/fault/reset")
+def hardware_fault_reset() -> dict:
+    """Clear a latched hardware fault. Nothing does this automatically.
+
+    A fault latches because a command that went unacknowledged may have left a
+    paddle in a position nobody knows. Clearing it is a statement that somebody
+    has looked at the rig, so it is a deliberate call and it is recorded.
+    """
+    session = demo_session()
+    cleared = session.fault.reset(by="dashboard")
+    return {
+        "cleared": cleared.as_dict() if cleared else None,
+        "fault": session.fault.snapshot(),
+    }
+
+
+@app.get("/errors")
+def error_log() -> dict:
+    """Failures this run recorded, newest first, by code.
+
+    A recorded failure is not a crash. Aurum keeps running and routes what it
+    cannot read to Bin C; this is where the reason for that ends up.
+    """
+    return demo_session().errors.snapshot(limit=50)
+
+
+@app.get("/epr")
+def epr_items(limit: int = 50) -> dict:
+    """One summary row per physical item the EPR ledger has heard of."""
+    return {"items": epr.items(limit), "aggregates": epr.aggregates()}
+
+
+@app.get("/epr/{item_id}")
+def epr_item(item_id: str) -> dict:
+    """One item's whole trail: every event, with the provenance of each.
+
+    This is the Extended Producer Responsibility record. It answers, for one
+    physical object: what was it, what did it weigh, was that weighed or
+    assumed, what was it worth, which bin did it reach, and on what model,
+    evidence database, price snapshot and grading policy.
+    """
+    trail = epr.history(item_id)
+    if not trail:
+        raise HTTPException(404, f"No EPR record for {item_id}")
+    return {
+        "item_id": item_id,
+        "events": trail,
+        "sort_confirmed": any(e["event"] == "SORT_CONFIRMED" for e in trail),
+        "simulated_inputs": any(e["simulated"] for e in trail),
+        "provenance": trail[-1]["provenance"],
     }
 
 
