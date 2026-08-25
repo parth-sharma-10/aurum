@@ -20,6 +20,11 @@ data/realworld/
 data/batches/
 data/*.db
 
+# Vision failure frames captured off a running machine (tracking.capture.*).
+# Real photographs of a real bench, written by the thousand when capture is on,
+# and turned into a FiftyOne dataset locally. See docs/vision-qa.md.
+data/vision_errors/
+
 # Training runs. Curated outputs are copied into models/ and reports/.
 runs/
 

@@ -35,7 +35,11 @@ published prices (IBJA, MCX, Kitco, with ECB for the FX), every quote stamped
 `REFERENCE`. That status means one thing — a real price, published on a stated
 date, being read as such. It is never `LIVE`, and it is never downgraded to
 `STALE` either, because age is not a defect in a snapshot; `STALE` keeps its one
-meaning of a live feed that went quiet. No live provider ships because no
+meaning of a live feed that went quiet. The shipped default is the dated
+snapshot; `app/valuation/metalprice.py` is a LIVE provider that needs a
+MetalpriceAPI key and is composed over the snapshot by `FallbackProvider`, so
+an outage degrades rather than stops. What follows was written when no live
+provider existed: no KEYLESS one still does, because
 keyless market-data source exists; `FallbackProvider` composes LIVE → REFERENCE
 for the day one is configured.
 

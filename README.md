@@ -816,14 +816,38 @@ stated date, being used deliberately after that date.
 | Cu | ₹1,385.80 / kg | MCX near-month futures | 2026-08-21 |
 | Pd | $1,331.00 / ozt | Kitco spot bid, converted at ECB USD/INR 95.70 | 2026-08-23 |
 
-**No live feed ships, and the difference is never blurred.** `REFERENCE` is not
-`LIVE`, and it is not `STALE` either — age does not degrade a price that was
-published on a date and is being read as such, so only a live feed that goes
-quiet is ever called stale. No keyless market-data source exists to point a live
-provider at (LBMA's tabulated data is behind an ICE Benchmark Administration
-licence; the metals APIs all need keys), so `FallbackProvider` composes
-LIVE → REFERENCE for the day one is configured, and the pipeline cannot be taken
-down by a feed outage.
+**The reference snapshot is the default, and the difference is never blurred.**
+`REFERENCE` is not `LIVE`, and it is not `STALE` either — age does not degrade a
+price that was published on a date and is being read as such, so only a live
+feed that goes quiet is ever called stale.
+
+**A live feed exists and needs a key.** `app/valuation/metalprice.py` reads spot
+gold, silver and palladium from MetalpriceAPI, which quotes them per **troy
+ounce** (31.1034768 g, never the avoirdupois 28.3495 g). The INR conversion
+rides the same request, so a USD metal price and the rate it is converted at
+share an instant and a provenance rather than being pulled from two sources an
+hour apart.
+
+```bash
+export AURUM_METALPRICE_API_KEY=...        # free key from metalpriceapi.com
+export AURUM_PRICE_PROVIDER=metalprice
+```
+
+One request answers for every metal and every item for 900 s, so an assembly of
+four components does not issue twelve identical calls. `FallbackProvider`
+composes LIVE → REFERENCE: a feed that times out, errors, hits its monthly
+allowance or answers with nothing degrades to the dated snapshot instead of
+taking the pipeline down, and the quote says which one answered. A cached
+snapshot past `pricing.max_age_seconds` is served and marked `STALE` — which is
+exactly what STALE means. **No failure path produces a price of zero.**
+
+The key is read straight from the environment by `config.secret()` and never
+enters the `Config` object, so it cannot be serialised out through a debug dump
+or an endpoint. It is redacted out of every message this layer can produce.
+
+MetalpriceAPI is used for Au, Ag, Pd and Pt only — the metals it quotes per troy
+ounce. Copper is quoted per tonne and would be wrong by 32,150× if converted on
+the same factor, so the live provider declines it and the snapshot answers.
 
 Set `pricing.provider: unavailable` to run on grams and ppm alone, with no
 currency figure anywhere.
@@ -881,9 +905,10 @@ currency, timestamp and source, plus a `calculation_version`.
 quote, a unit mismatch (grams priced per troy ounce would be wrong by 31× and
 look plausible), or mixed currencies all produce `available: false`.
 
-**Live prices are not implemented.** The `PriceProvider` protocol exists and the
-shipped implementation reads a pinned snapshot from configuration; nothing polls
-a market feed.
+**Live prices are implemented and are not the default.** The shipped
+configuration reads the dated snapshot; `pricing.provider: metalprice` plus a
+key polls a market feed. Both go through the same `quote()` protocol, and
+nothing in `app/valuation/pmdi.py` changes between them.
 
 Every batch record names these quantities so they cannot be confused:
 
@@ -902,9 +927,11 @@ knowing before reading a result.
 Its units are currency, not a density — nothing in it is divided by mass — so
 Aurum reports the concept document's figure as `pmdi_value` and the true
 density separately as `precious_mass_fraction_ppm`. Only the second works
-without a price, and **no live price provider is approved for this project**, so
-`pmdi_value` is `UNAVAILABLE` in the shipped configuration rather than a number
-nobody can attribute.
+without a price. In the shipped configuration `pmdi_value` is computed from the
+dated `REFERENCE` snapshot and is labelled as such; with a MetalpriceAPI key it
+is computed from a `LIVE` quote. With `pricing.provider: unavailable` it is
+`UNAVAILABLE` rather than a number nobody can attribute, and the
+price-independent fraction keeps the machine sorting either way.
 
 `Y_estimated` is called a *yield* in the formula. Aurum holds *contained
 composition* and never renames one into the other; every amount is labelled
@@ -968,7 +995,7 @@ is no conveyor, and the operator carries components between stages.
 |---|---|---|---|---|
 | 0 Checkpoint | COMPLETE | repo protected, research committed | n/a | n/a |
 | 1 Configuration | COMPLETE | `app/config.py`, 35 settings | n/a | software-tested |
-| 2 PMDI + pricing | COMPLETE | `app/valuation/` | n/a | software-tested; **REFERENCE prices, no live feed** |
+| 2 PMDI + pricing | COMPLETE | `app/valuation/` | n/a | software-tested; REFERENCE prices by default, **LIVE MetalpriceAPI feed available with a key** |
 | 3 A/B/C decision | COMPLETE | `app/decision/` | n/a | software-tested |
 | 4 Tracking | COMPLETE | `app/vision/`, `app/pipeline/` | camera | software-tested + real model |
 | 5 HX711 | COMPLETE (software) | `app/weight.py`, `app/calibrate.py` | HX711 responds | **calibration NOT verified** |
@@ -1047,7 +1074,12 @@ Full detail: [docs/hardware.md](docs/hardware.md) ·
 | A/B/C decision engine (`app/decision/engine.py`) | **implemented** — auditable, fail-closed |
 | Grading thresholds | **implemented as engineering approximations**, configurable, not scientific cutoffs |
 | Routing geometry + scheduler (`app/routing/`) | **implemented** — software-tested against TEST geometry |
-| Mock conveyor demonstration mode | **implemented, unused** — the demo has no conveyor and routes immediately |
+| Mock conveyor demonstration mode | **implemented and wired, ships off** — `conveyor.mode: SIMULATION` runs the belt at 0.10 m/s, computes a per-item ETA and fires through the scheduler. `NONE` is the default because there is no belt |
+| Belt speed sources | **implemented** — SIMULATION / ENCODER / MANUAL / NONE, each labelled on every reading |
+| Live metal prices | **implemented, needs a key** — MetalpriceAPI, composed over the dated snapshot |
+| Latched hardware fault | **implemented** — a failed write, an unacknowledged command or a board error stops all actuation until reset |
+| Per-item EPR ledger | **implemented** — eleven events per object in SQLite, each stamped with model, evidence, price, policy, calibration and hardware mode |
+| Vision QA / FiftyOne | **implemented, ships off** — `tools/fiftyone/`; capture writes JPEG + JSONL, evaluation happens offline |
 | Routing geometry measurements | **UNMEASURED** — all six; not needed without a conveyor |
 | Demonstration session (`app/pipeline/session.py`) | **implemented** — the one object joining every stage |
 | Sorting console (live feed, chain, hardware pills) | **implemented** — verified in the browser |
@@ -1105,6 +1137,9 @@ figure.
 | [docs/dataset.md](docs/dataset.md) | Every source dataset, license, label mapping and exclusion reason |
 | [docs/training.md](docs/training.md) | Reproducing the model end to end |
 | [docs/architecture.md](docs/architecture.md) | How the runtime pieces fit together |
+| [docs/conveyor.md](docs/conveyor.md) | Belt modes, speed sources, geometry, the dynamic ETA, and what to measure when a belt arrives |
+| [docs/vision-qa.md](docs/vision-qa.md) | Capturing production vision failures and evaluating them in FiftyOne |
+| [docs/hardware.md](docs/hardware.md) | Wiring, protocol, bench results, the latched hardware fault |
 | [docs/demo.md](docs/demo.md) | Presentation runbook — setup, sequence, failure recovery, Q&A |
 | [docs/material-reference.md](docs/material-reference.md) | Material database: sources, evidence table, units, composition vs recovery, gaps |
 

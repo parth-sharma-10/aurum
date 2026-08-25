@@ -118,7 +118,11 @@ this subsystem produces is labelled `basis: contained`.
 
 ## Pricing
 
-**No live market feed is configured**, because none is available without a
+**The shipped default is the dated REFERENCE snapshot.** A LIVE feed
+(MetalpriceAPI) is implemented in `app/valuation/metalprice.py` and is enabled
+by setting `pricing.provider: metalprice` with `AURUM_METALPRICE_API_KEY`. It
+is not the default because it needs a key, and because no KEYLESS feed is
+available without a
 licence or an API key. `configs/pricing.yaml` ships `provider: reference`: a
 dated snapshot of real published prices, labelled as such everywhere it appears.
 
@@ -211,18 +215,56 @@ failed safety check: a preferred class cannot rescue an unmeasured weight, and
 a high fraction cannot rescue a weak detection.
 
 ```
-1. detection valid?          no -> C_UNKNOWN_CLASS / C_INVALID_DATA
-2. cited composition?        no -> C_UNSUPPORTED_MATERIAL / C_MISSING_EVIDENCE
-3. required measurement?     no -> C_UNMEASURED_WEIGHT
-4. data and price valid?     no -> C_MISSING_EVIDENCE / C_PRICE_UNAVAILABLE
+1. detection valid?          no -> UNKNOWN_CLASS / UNKNOWN_DATA
+2. cited composition?        no -> UNKNOWN_MATERIAL / UNKNOWN_EVIDENCE
+3. required measurement?     no -> UNKNOWN_WEIGHT
+3b. mass plausible?          no -> UNKNOWN_MASS_ANOMALY
+4. data and price valid?     no -> UNKNOWN_EVIDENCE / C_PRICE_UNAVAILABLE
 5. Bin A policy              yes -> A_PREFERRED_CLASS | A_PRECIOUS_FRACTION | A_PMDI_VALUE
 6. Bin B policy              yes -> B_PRECIOUS_FRACTION | B_BASE_METAL_VALUE | B_SUPPORTED_RECOVERABLE
-7. otherwise                     -> C_LOW_CONFIDENCE / C_BELOW_THRESHOLD
+7. otherwise                     -> UNKNOWN_CONFIDENCE / C_BELOW_THRESHOLD
 ```
 
 Step 3 is derived from the database, not from a hardcoded list: a class needs a
 measured mass when its default subtype's composition is cited as a
 concentration. Add per-piece evidence for a class and it stops needing one.
+
+### UNKNOWN is a decision; C is a place
+
+Two different facts used to render as the same letter:
+
+| | |
+|---|---|
+| **`decision: UNKNOWN`** | Aurum could not judge this item. The detection was unreadable, the class has no cited composition, the mass could not be measured or is not plausible for the class. |
+| **`decision: C`** | Aurum judged it and it did not qualify for A or B. |
+
+Both reach bin C physically, by nobody doing anything. Only the first is a
+reason to look at the camera, the load cell or the evidence database, and every
+record now carries both:
+
+```json
+{"decision": "UNKNOWN", "physical_bin": "C", "physical_fallback": "C",
+ "servo": null, "reason_code": "UNKNOWN_WEIGHT"}
+```
+
+`physical_fallback` comes from `grading.fallback`, so where an unreadable item
+is sent is configuration rather than a constant in Python. The routing layer
+consumes `target_bin`, which is always a physical bin: "I could not tell" is
+not somewhere to send an object.
+
+### Step 3b — mass plausibility
+
+`configs/grading.yaml` carries a **deliberately wide** mass window per class.
+It exists to catch a 5 kg "RAM module" and a 0.1 g "motherboard": a
+mis-detection, an item that rolled off the pan, a calibration factor out by a
+decade. The upper bounds are for a whole assembly, because one mass covers
+every component on the object.
+
+**Nothing infers a composition from a mass.** An implausible weight says the
+identity or the calibration is wrong and says nothing about metal content. The
+item becomes `UNKNOWN` with `UNKNOWN_MASS_ANOMALY` and goes for manual
+inspection. The check is reported in `signals.mass_plausibility` whether or not
+it fires, and every bound is an engineering approximation with no source.
 
 ### Reason codes
 
@@ -234,13 +276,15 @@ concentration. Add per-piece evidence for a class and it stops needing one.
 | `B_PRECIOUS_FRACTION` | Fraction met the recoverable ppm threshold. |
 | `B_BASE_METAL_VALUE` | Cited base-metal content is worth recovering. |
 | `B_SUPPORTED_RECOVERABLE` | Per-piece evidence, no mass needed, no density formable. |
-| `C_UNKNOWN_CLASS` | No cited material profile for this class. |
-| `C_UNSUPPORTED_MATERIAL` | Class known, no cited composition. **RAM today.** |
-| `C_MISSING_EVIDENCE` | The material estimate is unavailable. |
-| `C_UNMEASURED_WEIGHT` | Concentration evidence without a measured mass. |
-| `C_LOW_CONFIDENCE` | Below the minimum for any routed bin. |
+| `UNKNOWN_CLASS` | No cited material profile for this class. |
+| *(every `UNKNOWN_` code carries `decision: UNKNOWN`, `physical_bin: C`)* | |
+| `UNKNOWN_MATERIAL` | Class known, no cited composition. **RAM today.** |
+| `UNKNOWN_EVIDENCE` | The material estimate is unavailable. |
+| `UNKNOWN_WEIGHT` | Concentration evidence without a measured mass. |
+| `UNKNOWN_CONFIDENCE` | Below the minimum for any routed bin. |
+| `UNKNOWN_MASS_ANOMALY` | The mass is not plausible for this class. Manual inspection. |
 | `C_PRICE_UNAVAILABLE` | `route_to_c` policy with no current price. |
-| `C_INVALID_DATA` | Confidence missing, non-numeric or outside 0..1. |
+| `UNKNOWN_DATA` | Confidence missing, non-numeric or outside 0..1. |
 | `C_BELOW_THRESHOLD` | Fraction below the recoverable threshold, no base-metal value. |
 
 ### Fail-closed, by physical design

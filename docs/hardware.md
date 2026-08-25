@@ -256,7 +256,7 @@ on the frame or table, whether both ends are screwed down, and whether the mass
 lands on the pan or beside it.
 
 Until it is fixed, no reading can reach `MEASURED`, so a PCB routes to Bin C on
-`C_UNMEASURED_WEIGHT`. That is the fail-closed design working. The demonstration
+`UNKNOWN_WEIGHT`. That is the fail-closed design working. The demonstration
 fallback in `demo.mock_mass` exists to work around it, and is labelled
 SIMULATED throughout — see the README.
 
@@ -356,3 +356,48 @@ one always gets quoted.
 
 The demonstration runs on the simulated conveyor profile. That is a model of a
 machine, not a machine.
+
+---
+
+## The latched hardware fault
+
+Once something physical goes wrong, **nothing moves until a human resets it**.
+
+| Latches | Does not latch |
+|---|---|
+| the frame could not be written | bin C — no frame is sent, and that is normal |
+| no ACK inside `ack_timeout_ms` | actuation disabled — the shipped state |
+| the board answered `ERR` | a decision the engine could not make |
+| the link was gone when a command was due | a price that was unavailable |
+| servo angles outside 0–180°, or equal | |
+| a route reached the boundary with no paddle | |
+
+**Latched, not transient.** A link that recovers between two items does not
+clear it. A command that went unacknowledged may have moved a paddle, may have
+left it half out, may have jammed it against something — the next command
+would be issued into a machine whose physical state nobody knows. Reconnecting
+is not somebody having looked at the rig.
+
+```
+GET  /hardware              mode, link, fault, servo geometry
+POST /hardware/fault/reset  clear it — deliberate, and recorded
+```
+
+The dashboard puts an active fault at the top of the page with the reset
+button, because it is the reason nothing is moving and nothing else on screen
+explains that.
+
+The first fault is kept as `current` even when later ones are recorded: the
+first is the one that explains everything after it, and overwriting it loses
+the cause in favour of a consequence. `history` and `resets` survive the reset,
+so "why did nothing move for six items" has an answer afterwards.
+
+## HARDWARE_MODE=SIMULATION sends nothing to a port
+
+With `conveyor.runtime.simulation` true, `ArduinoController` builds a
+`SimulatedTransport` **regardless of `conveyor.arduino.port`**. The full
+protocol runs and the board acknowledges, so the whole chain can be
+demonstrated — and no byte reaches a real board however the rest is
+configured. `GET /arduino` reports `transport: simulated` and
+`hardware_mode: SIMULATION`, so a simulated ACK on screen is never mistaken
+for a physical one.

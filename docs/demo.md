@@ -152,7 +152,7 @@ volunteering it is far stronger than being caught by a question:
 > routing decision are real. The mass is not."
 
 It ships **off**. Without the flag, a PCB routes to Bin C on
-`C_UNMEASURED_WEIGHT`, which is the correct fail-closed behaviour.
+`UNKNOWN_WEIGHT`, which is the correct fail-closed behaviour.
 
 ---
 
@@ -214,7 +214,7 @@ Rehearse with all three so nothing is a surprise on camera.
 
 **RAM going to C is the best thing in the demonstration.** It is not a
 failure — it is the system refusing to invent data it does not have, and
-saying exactly why: `C_UNSUPPORTED_MATERIAL`. Point at it deliberately. Note
+saying exactly why: `UNKNOWN_MATERIAL`. Point at it deliberately. Note
 that the mock-mass fallback does not rescue it: a stand-in mass changes the
 arithmetic, never the evidence.
 
