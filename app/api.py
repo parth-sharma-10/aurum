@@ -375,6 +375,48 @@ def session_measure(item_id: str | None = None) -> dict:
     return demo_session().measure_and_route(item_id)
 
 
+@app.post("/session/demo/step")
+def session_demo_step() -> dict:
+    """Run the next scripted object through the machine. No camera required.
+
+    The stage fallback: a webcam that will not open otherwise takes the whole
+    demonstration with it. Only the detections are scripted — identity, mass,
+    composition, value, bin and actuation are the code a camera-seen item runs.
+
+    One object per call, so each can be narrated. `POST /track/reset` restarts
+    the script.
+    """
+    from app.pipeline import scripted
+
+    return scripted.step(demo_session())
+
+
+@app.get("/session/demo/script")
+def session_demo_script() -> dict:
+    """What the scripted run will do, before it does any of it."""
+    from app.pipeline import scripted
+
+    session = demo_session()
+    return {
+        "objects": [
+            {
+                "index": i,
+                "component_class": o.component_class,
+                "confidence": o.confidence,
+                "shows": o.shows,
+            }
+            for i, o in enumerate(scripted.SCRIPT)
+        ],
+        "next_index": session.scripted_index,
+        "remaining": max(0, len(scripted.SCRIPT) - session.scripted_index),
+        "note": (
+            "No bin appears in the script. The decision engine is given a class "
+            "and a mass and reaches its own conclusion, so a scripted run can be "
+            "wrong in front of an audience."
+        ),
+    }
+
+
 @app.get("/session/pan")
 def session_pan() -> dict:
     """The automatic weighing cycle: where it is, and why it is there."""

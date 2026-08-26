@@ -243,6 +243,8 @@ class DemoSession:
         #: Cached on first use: reading the evidence database per frame would
         #: parse a 950-line YAML file thirty times a second.
         self._classes: set[str] | None = None
+        #: How far through `app.pipeline.scripted.SCRIPT` a camera-less run is.
+        self.scripted_index = 0
 
     # -- hardware ----------------------------------------------------------
     def connect_board(self) -> dict:
@@ -481,6 +483,18 @@ class DemoSession:
                 )
                 if ok_enc:
                     self._jpeg = buf.tobytes()
+
+    def inject_detections(self, detections) -> None:
+        """Advance the lifecycle by one frame's detections that no camera produced.
+
+        The seam a camera-less run enters through (`app.pipeline.scripted`).
+        Everything downstream of the tracker cannot tell the difference, which
+        is the point: a scripted item must not get a shorter path than a seen
+        one.
+        """
+        with self._lock:
+            self.pipeline.process_detections(detections)
+            self.frames += 1
 
     def _capture_failures(self, frame, detections) -> None:
         """Keep frames worth looking at again. Never at the cost of the run.
@@ -930,6 +944,7 @@ class DemoSession:
             self.zone.reset()
             self._handled.clear()
             self._routed.clear()
+            self.scripted_index = 0
         return {"status": "reset", "session_id": self.session_id}
 
     def _resolve(self, item_id: str | None):

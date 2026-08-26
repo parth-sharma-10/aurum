@@ -933,6 +933,18 @@ export default function App() {
         >
           {busy === "measure" ? "Measuring…" : "Measure & route now (manual)"}
         </button>
+        <button
+          disabled={busy}
+          onClick={() => act("scripted", "/session/demo/step")}
+        >
+          {busy === "scripted" ? "Running…" : "Scripted object (no camera)"}
+        </button>
+        <p className="controls-note">
+          The stage fallback for a camera that will not open. Only the
+          detections are scripted — the mass, the composition, the value and
+          the bin are the same code a camera-seen item runs, and two of the six
+          objects are there to be refused.
+        </p>
       </details>
 
       {actionError && <div className="notice bad">{actionError}</div>}
