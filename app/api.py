@@ -30,6 +30,7 @@ from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.decision import engine as decision_engine
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
+from app.hardware.fault import FaultCode
 from app.pipeline import DemoSession, ItemPipeline
 from app.routing import Conveyor, RoutingScheduler
 from app.valuation import prices as prices_module
@@ -343,6 +344,29 @@ def arduino_status() -> dict:
 def hardware_status() -> dict:
     """The machine's physical state: mode, link, fault, servo geometry."""
     return demo_session().snapshot()["hardware"]
+
+
+@app.post("/hardware/estop")
+def hardware_emergency_stop(by: str = "dashboard") -> dict:
+    """Stop the machine actuating, now, because a human said so.
+
+    This latches the same fault the machine latches on a lost ACK, and for the
+    same reason: after it, nobody can be sure where a paddle is or what is in
+    the way. Every servo command is refused until it is explicitly reset.
+
+    It deliberately does NOT release the camera or the serial port — that is
+    `POST /session/stop`. An emergency stop that closes the link takes away the
+    ability to command anything at all, including a paddle back to rest, and
+    the port reopening resets the board.
+
+    Idempotent: pressing it twice records two events and stays latched once.
+    """
+    session = demo_session()
+    fault = session.fault.latch(
+        FaultCode.EMERGENCY_STOP,
+        f"Emergency stop by {by}. Nothing will actuate until it is reset.",
+    )
+    return {"stopped": True, "fault": fault.as_dict(), "hardware": session.fault.snapshot()}
 
 
 @app.post("/hardware/fault/reset")

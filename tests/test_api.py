@@ -103,6 +103,12 @@ def client(tmp_path, monkeypatch):
     stub = StubDetector()
     monkeypatch.setattr(api_mod, "detector", lambda: stub)
     api_mod._sessions.clear()
+    # `_demo` is a process-wide global and `_sessions.clear()` does not touch
+    # it, so the DemoSession — its latched hardware fault included — used to
+    # survive into every later test in this file. Nothing noticed until a test
+    # latched a fault: after that the machine was stopped for everything that
+    # ran afterwards, and which tests failed depended on collection order.
+    monkeypatch.setattr(api_mod, "_demo", None)
     with TestClient(api_mod.app) as c:
         yield c
 
@@ -587,3 +593,47 @@ class TestRoutingEndpoint:
         body = client.get("/routing").json()
         assert body["pending"] == []
         assert body["due"] == []
+
+
+class TestEmergencyStop:
+    """The operator's halt. It latches the same fault a lost ACK does, because
+    after either one nobody can be sure where a paddle is."""
+
+    def test_it_latches_the_machine(self, client):
+        assert client.get("/hardware").json()["fault"]["active"] is False
+        body = client.post("/hardware/estop").json()
+        assert body["stopped"] is True
+        assert body["fault"]["code"] == "EMERGENCY_STOP"
+        assert client.get("/hardware").json()["fault"]["active"] is True
+
+    def test_a_latched_machine_refuses_to_actuate(self, client):
+        """The point of the button, and the only test that proves it works."""
+        client.post("/hardware/estop")
+        session = api_mod.demo_session()
+        assert session.fault.refusal() is not None
+
+    def test_it_does_not_release_the_camera_or_the_port(self, client):
+        """`/session/stop` does that. An e-stop that closes the link takes away
+        the ability to command a paddle back to rest."""
+        client.post("/hardware/estop")
+        assert client.get("/session").json()["running"] is False
+        # Distinct endpoints, distinct effects: the fault is what stopped it.
+        assert client.get("/hardware").json()["fault"]["code"] == "EMERGENCY_STOP"
+
+    def test_pressing_it_twice_stays_latched_on_the_first_press(self, client):
+        first = client.post("/hardware/estop").json()["fault"]["at"]
+        client.post("/hardware/estop")
+        fault = client.get("/hardware").json()["fault"]
+        assert fault["since"] == first
+        assert fault["faults"] == 2
+
+    def test_it_records_who_stopped_the_machine(self, client):
+        body = client.post("/hardware/estop", params={"by": "bench operator"}).json()
+        assert "bench operator" in body["fault"]["reason"]
+
+    def test_resetting_clears_it_and_the_reset_is_recorded(self, client):
+        client.post("/hardware/estop")
+        cleared = client.post("/hardware/fault/reset").json()
+        assert cleared["cleared"]["code"] == "EMERGENCY_STOP"
+        assert cleared["fault"]["active"] is False
+        assert cleared["fault"]["resets"][0]["by"] == "dashboard"

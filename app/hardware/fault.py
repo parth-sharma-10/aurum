@@ -47,6 +47,10 @@ class FaultCode(StrEnum):
     INVALID_SPEED = "INVALID_SPEED"
     #: The encoder stopped reporting while the machine required it.
     ENCODER_FAILURE = "ENCODER_FAILURE"
+    #: A human hit stop. Not a malfunction, and latched for the same reason
+    #: one is: the operator stopped the machine because of something happening
+    #: in front of them, and software cannot see whether it is over.
+    EMERGENCY_STOP = "EMERGENCY_STOP"
 
 
 @dataclass(frozen=True)

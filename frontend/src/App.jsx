@@ -369,6 +369,58 @@ function HardwarePanel({ hardware, board, actuation, onReset, busy }) {
 }
 
 /** What went wrong this run. A recorded failure is not a crash. */
+function UpcomingQueue({ routing }) {
+  // Null means there is no belt, which is the shipped configuration. An empty
+  // queue panel on a machine that can never queue anything is furniture.
+  if (!routing) return null;
+  const pending = routing.pending ?? [];
+  return (
+    <section className="glass-panel">
+      <h2 className="section-title">Upcoming</h2>
+      <p className="section-note">
+        Items whose moment has been computed but has not arrived. A scheduled
+        route is a time, not a movement.
+        {routing.simulated && (
+          <span className="badge-c"> SIMULATED GEOMETRY</span>
+        )}
+      </p>
+      <table className="ledger">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Class</th>
+            <th>Bin</th>
+            <th>Servo</th>
+            <th>Fires in</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pending.map((r) => (
+            <tr key={r.item_id}>
+              <td className="mono small">{r.item_id}</td>
+              <td>{r.component_class ?? "—"}</td>
+              <td>
+                <span className={BIN_CLASS[r.decision] ?? "badge-c"}>
+                  {r.decision}
+                </span>
+              </td>
+              <td className="mono small">{r.servo ?? "—"}</td>
+              <td className="mono">{seconds(r.seconds_remaining)}</td>
+            </tr>
+          ))}
+          {pending.length === 0 && (
+            <tr>
+              <td colSpan={5} className="muted">
+                Nothing waiting.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 function ErrorsPanel({ errors }) {
   const recent = errors?.recent ?? [];
   if (!recent.length) return null;
@@ -850,6 +902,15 @@ export default function App() {
         <button disabled={busy} onClick={reset}>
           {busy === "reset" ? "Resetting…" : "New item / reset run"}
         </button>
+        {/* Deliberately not disabled while another action is in flight: the
+            one button that must work when the machine is busy is this one. */}
+        <button
+          className="estop"
+          onClick={() => act("estop", "/hardware/estop")}
+          title="Latches the machine. Every servo command is refused until a human resets it."
+        >
+          {busy === "estop" ? "Stopping…" : "EMERGENCY STOP"}
+        </button>
         <span className="controls-note">
           Place the object on the pan and wait. The load cell starts the
           measurement, the model gives the classes, the decision engine gives
@@ -900,10 +961,25 @@ export default function App() {
       )}
       {fault.active && (
         <div className="notice bad">
-          <strong>HARDWARE FAULT LATCHED — {fault.code}.</strong> {fault.reason}{" "}
-          No servo will move until it is reset. Nothing clears this on its own:
-          a command that went unacknowledged may have left a paddle half out,
-          and the machine does not know where it is.
+          <strong>
+            {fault.code === "EMERGENCY_STOP"
+              ? "EMERGENCY STOP — the machine is latched."
+              : `HARDWARE FAULT LATCHED — ${fault.code}.`}
+          </strong>{" "}
+          {fault.reason}{" "}
+          {fault.code === "EMERGENCY_STOP"
+            ? "Every servo command is refused. Clearing this is a statement that somebody has looked at the rig."
+            : "No servo will move until it is reset. Nothing clears this on its own: a command that went unacknowledged may have left a paddle half out, and the machine does not know where it is."}
+          {/* The reset lives in the maintenance panel too. It is repeated here
+              because a latched machine is exactly when nobody wants to go
+              looking for the button that unlatches it. */}
+          <button
+            className="inline-action"
+            disabled={busy}
+            onClick={() => act("fault", "/hardware/fault/reset")}
+          >
+            {busy === "fault" ? "Resetting…" : "Reset fault"}
+          </button>
         </div>
       )}
       <PanBanner pan={state?.pan} automatic={state?.automatic} />
@@ -1030,6 +1106,8 @@ export default function App() {
           </tbody>
         </table>
       </section>
+
+      <UpcomingQueue routing={state?.routing} />
 
       <ErrorsPanel errors={state?.errors} />
 

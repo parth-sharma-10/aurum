@@ -685,3 +685,38 @@ details.controls > summary {
   padding: 6px 0;
   border-bottom: 1px solid var(--hairline);
 }
+
+/* The emergency stop. Deliberately the only red control on the page, and
+   deliberately not disabled while another action is in flight: the one button
+   that has to work when the machine is busy is the one that stops it. */
+.controls button.estop {
+  margin-left: auto;
+  color: #fff;
+  background: var(--red);
+  border-color: var(--red);
+  letter-spacing: 0.04em;
+}
+
+.controls button.estop:hover:not(:disabled) {
+  background: #c93a3a;
+  border-color: #c93a3a;
+}
+
+/* A reset offered inside the notice that explains why it is needed. */
+.notice .inline-action {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 5px 12px;
+  margin-left: 10px;
+  cursor: pointer;
+}
+
+.notice .inline-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
