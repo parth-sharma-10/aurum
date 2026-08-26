@@ -1,9 +1,14 @@
 /*
  * Aurum - sorter firmware. Weight sensing + Servo A/B actuation.
  *
- * NEVER RUN ON HARDWARE. Written against the AURUM/1 protocol in
- * app/hardware/arduino.py and software-tested against a fake board only.
- * The Python side has never opened a serial port to a real Arduino.
+ * RUN ON HARDWARE. The Python side has opened a real serial port to an
+ * attached Arduino, sent MOVE, and had it acknowledged. What no one has done
+ * is watch a paddle: see docs/hardware.md, and scripts/bench_check.py.
+ *
+ * WARNING: the board on the bench is NOT flashed with this file. It banners
+ * `SERVO_INIT B rest=90`, a string that appears nowhere in this repository,
+ * so the running firmware is an older build. Reflash before trusting any
+ * behaviour described here.
  *
  * For CALIBRATION use hardware/arduino/aurum_weight/ instead: it has no servo
  * code at all, so nothing can move while you are handling reference masses.

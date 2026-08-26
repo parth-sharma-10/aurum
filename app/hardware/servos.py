@@ -279,7 +279,10 @@ class ServoActuator:
             "last_actuation": recent[0].as_dict() if recent else None,
             "recent": [r.as_dict() for r in recent],
             "note": (
-                "No servo has been moved by Aurum code. Physical actuation is "
-                "pending a user bench test; see docs/hardware.md."
+                "A servo HAS been commanded by Aurum code over a real serial link, "
+                "and the board acknowledged. Nobody has yet watched a paddle move, "
+                "so physical movement remains UNVERIFIED: run "
+                "`python -m scripts.bench_check --move A --move B` and answer it. "
+                "See docs/hardware.md."
             ),
         }

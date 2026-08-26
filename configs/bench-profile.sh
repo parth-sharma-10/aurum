@@ -57,9 +57,12 @@ AURUM_ARDUINO_PORT=/dev/cu.usbmodem101
 # and no frame is written, which looks exactly like a dead servo.
 AURUM_ARDUINO_ENABLED=true
 
-# The load cell is mechanically bypassed (see docs/hardware.md), so an item
-# that cannot be weighed gets a per-class stand-in mass: CPU 25 g, PCB 180 g,
-# RAM 30 g, Connector 5 g. The reading is SIMULATED and never `usable`, and
-# every figure derived from it carries that status. Calibrating the cell is a
-# separate bench job and is NOT a prerequisite for moving a servo.
+# STALE AS WRITTEN: the cell is no longer bypassed. The mounting was corrected
+# on 2026-08-26 and it now carries a calibration verified against a second
+# known mass (docs/hardware.md). Leave this true only to run the servo half of
+# the bench without touching the cell — an item that cannot be weighed then
+# gets a per-class stand-in mass (CPU 25 g, PCB 180 g, RAM 30 g, Connector 5 g),
+# SIMULATED and never `usable`, and every figure derived from it says so.
+# Set it false to exercise the real cell. Calibrating is still not a
+# prerequisite for moving a servo.
 AURUM_DEMO_MOCK_MASS=true

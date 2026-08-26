@@ -418,9 +418,14 @@ class TestReporting:
         assert snapshot["last_actuation"]["outcome"] == "ACTUATED"
         assert snapshot["servo"]["push_angle_deg"] == 90.0
 
-    def test_the_snapshot_says_no_servo_has_moved_by_aurum_code(self):
+    def test_the_snapshot_says_movement_is_unverified_not_that_none_happened(self):
+        """It used to claim no servo had ever been commanded, which stopped
+        being true on 2026-08-26. The honest claim is narrower: commanded and
+        acknowledged, never watched."""
         _, actuator, _ = rig()
-        assert "pending a user bench test" in actuator.snapshot()["note"]
+        note = actuator.snapshot()["note"]
+        assert "UNVERIFIED" in note
+        assert "no servo has been moved" not in note.lower()
 
     def test_the_controller_snapshot_explains_what_an_ack_means(self):
         assert "never inferred from here" in controller().snapshot()["note"]

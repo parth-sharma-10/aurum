@@ -96,8 +96,10 @@ must not let a resend swing the paddle into whatever is now in front of it.
 in firmware would be the single most misleading thing this repository could do.
 
 **The ACK follows the stroke, not the frame.** It means the board completed its
-movement routine — which is why `conveyor.arduino.ack_timeout_ms` is 2 s
-against a 700 ms hold. It is still not proof a servo physically moved: a
+movement routine — which is why `conveyor.arduino.ack_timeout_ms` is 4 s
+against a 700 ms hold: a MOVE was measured at 1.212 s on the attached board,
+and 2 s produced false timeouts on a board that was answering correctly. It is
+still not proof a servo physically moved: a
 stripped horn or a dead supply rail acknowledges identically.
 
 ### Serial protocol
@@ -379,8 +381,13 @@ Software status, which is a different claim:
 `SOFTWARE-TESTED` · `SIMULATION-VERIFIED` · `HARDWARE-BENCH-VERIFIED` ·
 `PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
 
-The actuation path reaches **level 3**: both paddles have been moved by Aurum's
-own command, over a real serial link, and watched doing it.
+The actuation path has **not** reached level 3. A paddle has been commanded by
+Aurum's own code over a real serial link and the board acknowledged, which is
+level 3's first half. Its second half — a human watching the paddle move — has
+never been done: there is no camera on the bench, and no observation is on
+record. Level 3 is claimed the moment
+`python -m scripts.bench_check --port <port> --move A --move B` is run and
+answered, and not before.
 
 **Level 4 is reached, with one qualification.** The cell is mounted, responds
 linearly through the tare, and carries a calibration verified against a second
