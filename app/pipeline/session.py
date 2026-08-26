@@ -58,6 +58,7 @@ from app import config as config_module
 from app import epr
 from app.decision import engine as decision_engine
 from app.errors import ErrorCode, ErrorLog
+from app.hardware import verification
 from app.hardware.arduino import ArduinoController
 from app.hardware.fault import HardwareFault
 from app.hardware.link import BoardLink
@@ -483,6 +484,24 @@ class DemoSession:
                 )
                 if ok_enc:
                     self._jpeg = buf.tobytes()
+
+    def reload_calibration(self) -> dict:
+        """Re-read the calibration file without restarting the server.
+
+        `Calibration.load()` runs once at construction, so calibrating the cell
+        used to require a uvicorn restart before the new factor reached a
+        reading — and nothing said so. An operator who calibrated, saw the file
+        change and then weighed a known mass got the old factor and no
+        indication of why.
+
+        `weight_sensor` builds a fresh sensor per read from this attribute, so
+        replacing it here is enough; there is no cached sensor to invalidate.
+        """
+        with self._lock:
+            before = self.calibration.as_dict()
+            self.calibration = Calibration.load()
+            after = self.calibration.as_dict()
+        return {"changed": before != after, "before": before, "after": after}
 
     def inject_detections(self, detections) -> None:
         """Advance the lifecycle by one frame's detections that no camera produced.
@@ -1130,6 +1149,7 @@ class DemoSession:
                 "hardware": {
                     "mode": hardware_mode(self.cfg),
                     "fault": self.fault.snapshot(),
+                    "movement_verification": verification.snapshot(),
                     "arduino_connected": bool(self._board_snapshot().get("connected")),
                     "actuation_enabled": bool(self.cfg["conveyor.arduino.enabled"]),
                     "servo": (

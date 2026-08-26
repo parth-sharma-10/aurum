@@ -385,9 +385,28 @@ The actuation path has **not** reached level 3. A paddle has been commanded by
 Aurum's own code over a real serial link and the board acknowledged, which is
 level 3's first half. Its second half — a human watching the paddle move — has
 never been done: there is no camera on the bench, and no observation is on
-record. Level 3 is claimed the moment
-`python -m scripts.bench_check --port <port> --move A --move B` is run and
-answered, and not before.
+record.
+
+That claim is no longer prose. `app/hardware/verification.py` holds two states
+and the machine reports which one it is in:
+
+| State | Means |
+|---|---|
+| `VERIFICATION_UNAVAILABLE` | Nobody has recorded watching this servo move. The shipped state, and the state after any ACK. Says "nobody knows", never "it did not move". |
+| `PHYSICAL_MOVEMENT_VERIFIED` | A human watched it throw and said so. |
+
+**No software path produces the second.** There is no encoder, no limit switch
+and no camera on the paddle, so the only thing that can is a person answering:
+
+```
+python -m scripts.bench_check --port /dev/cu.usbmodem101 --move A --move B
+```
+
+The answer — either answer — is appended to `reports/movement_verification.json`
+with the throw that was verified, and surfaces on the dashboard's Hardware
+panel and at `GET /ready`. A paddle that acknowledged and did **not** move is
+recorded too: that is the most valuable observation the bench can produce, and
+discarding it would leave a known-broken rig looking merely untested.
 
 **Level 4 is reached, with one qualification.** The cell is mounted, responds
 linearly through the tare, and carries a calibration verified against a second

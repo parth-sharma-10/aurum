@@ -418,14 +418,23 @@ class TestReporting:
         assert snapshot["last_actuation"]["outcome"] == "ACTUATED"
         assert snapshot["servo"]["push_angle_deg"] == 90.0
 
-    def test_the_snapshot_says_movement_is_unverified_not_that_none_happened(self):
-        """It used to claim no servo had ever been commanded, which stopped
-        being true on 2026-08-26. The honest claim is narrower: commanded and
-        acknowledged, never watched."""
+    def test_the_snapshot_reports_verification_as_a_state_not_a_paragraph(
+        self, tmp_path, monkeypatch
+    ):
+        """It used to be prose claiming no servo had ever been commanded, which
+        stopped being true on 2026-08-26 and which nothing could check. The
+        claim now has a shape, and an ACK still cannot produce it.
+
+        Pointed at a temporary record: reading the repository's own would make
+        this test's result depend on whether anybody has been to the bench."""
+        from app.hardware import verification
+
+        monkeypatch.setattr(verification, "RECORD", tmp_path / "none.json")
         _, actuator, _ = rig()
-        note = actuator.snapshot()["note"]
-        assert "UNVERIFIED" in note
-        assert "no servo has been moved" not in note.lower()
+        claim = actuator.snapshot()["movement_verification"]
+        assert set(claim["servos"]) == {"A", "B"}
+        assert all(s["state"] == "VERIFICATION_UNAVAILABLE" for s in claim["servos"].values())
+        assert claim["verified"] == []
 
     def test_the_controller_snapshot_explains_what_an_ack_means(self):
         assert "never inferred from here" in controller().snapshot()["note"]

@@ -30,6 +30,7 @@ from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.decision import engine as decision_engine
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
+from app.hardware import verification
 from app.hardware.fault import FaultCode
 from app.pipeline import DemoSession, ItemPipeline
 from app.routing import Conveyor, RoutingScheduler
@@ -186,6 +187,7 @@ def readiness() -> dict:
     fault = hardware["fault"]
     weights = DEFAULT_WEIGHTS.exists()
     simulated = hardware["mode"] == "SIMULATION"
+    movement = verification.snapshot()
 
     checks = [
         _check(
@@ -235,6 +237,14 @@ def readiness() -> dict:
             cal.get("notes") or "no factor verified against a second known mass",
         ),
         _check(
+            "paddle movement verified",
+            bool(movement["verified"]),
+            False,
+            f"SERVO_{'/'.join(movement['verified'])} watched moving"
+            if movement["verified"]
+            else "no paddle has been watched moving — " + movement["how"],
+        ),
+        _check(
             "actuation enabled",
             bool(hardware["actuation_enabled"]),
             False,
@@ -250,6 +260,7 @@ def readiness() -> dict:
         "advisory": [c["name"] for c in checks if not c["blocking"] and not c["ready"]],
         "checks": checks,
         "hardware_mode": hardware["mode"],
+        "movement_verification": movement,
         "note": (
             "Advisory failures are not defects. A machine with no board and no "
             "calibration runs the whole pipeline and marks every figure that "
@@ -373,6 +384,17 @@ def session_measure(item_id: str | None = None) -> dict:
     route can be requested through this endpoint.
     """
     return demo_session().measure_and_route(item_id)
+
+
+@app.post("/session/calibration/reload")
+def session_calibration_reload() -> dict:
+    """Re-read configs/calibration.yaml. Calibrating no longer needs a restart.
+
+    The factor was read once when the session was built, so a cell calibrated
+    against a live server kept weighing with the old one until uvicorn was
+    restarted, and nothing on screen said which factor was in force.
+    """
+    return demo_session().reload_calibration()
 
 
 @app.post("/session/demo/step")

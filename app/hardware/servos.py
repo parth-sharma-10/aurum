@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app import config as config_module
+from app.hardware import verification
 from app.hardware.arduino import ArduinoController, Command, CommandState
 from app.hardware.fault import FaultCode
 from app.routing.scheduler import RouteStatus, ScheduledRoute
@@ -278,11 +279,8 @@ class ServoActuator:
             "attempted_items": len(self._attempted),
             "last_actuation": recent[0].as_dict() if recent else None,
             "recent": [r.as_dict() for r in recent],
-            "note": (
-                "A servo HAS been commanded by Aurum code over a real serial link, "
-                "and the board acknowledged. Nobody has yet watched a paddle move, "
-                "so physical movement remains UNVERIFIED: run "
-                "`python -m scripts.bench_check --move A --move B` and answer it. "
-                "See docs/hardware.md."
-            ),
+            # Was a paragraph of prose that nothing could check and nothing
+            # could render as a state, and which went stale the day a servo was
+            # first commanded. This is the same claim with a shape.
+            "movement_verification": verification.snapshot(),
         }

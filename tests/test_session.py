@@ -25,6 +25,8 @@ each leave a reason on the item.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from app import config
@@ -552,3 +554,37 @@ class TestPerClassMockMass:
         cfg = self.mock_cfg()
         per_class = DemoSession(cfg=cfg).snapshot()["mock_mass"]["per_class"]
         assert per_class == {"CPU": 25.0, "PCB": 180.0, "RAM": 30.0, "Connector": 5.0}
+
+
+class TestCalibrationReload:
+    """Confirmed stale on 2026-08-26: editing calibration.yaml under a live
+    session changed nothing until uvicorn was restarted, and nothing said so."""
+
+    @staticmethod
+    def recalibrated(monkeypatch, counts_per_gram: float) -> Calibration:
+        """Stand in for somebody having calibrated the cell and saved the file."""
+        swapped = dataclasses.replace(VERIFIED, counts_per_gram=counts_per_gram)
+        monkeypatch.setattr(Calibration, "load", classmethod(lambda cls: swapped))
+        return swapped
+
+    def test_a_changed_factor_reaches_the_session(self, monkeypatch):
+        run = session()
+        self.recalibrated(monkeypatch, 999.0)
+
+        out = run.reload_calibration()
+        assert out["changed"] is True
+        assert out["before"]["counts_per_gram"] == VERIFIED.counts_per_gram
+        assert run.calibration.counts_per_gram == 999.0
+
+    def test_reloading_an_unchanged_file_says_nothing_changed(self, monkeypatch):
+        run = session()
+        self.recalibrated(monkeypatch, VERIFIED.counts_per_gram)
+        assert run.reload_calibration()["changed"] is False
+
+    def test_the_new_factor_is_what_the_next_reading_uses(self, monkeypatch):
+        """Reassigning the attribute has to be enough — a cached sensor would
+        keep the old factor and make the reload a lie."""
+        run = session()
+        self.recalibrated(monkeypatch, 999.0)
+        run.reload_calibration()
+        assert run.snapshot()["calibration"]["counts_per_gram"] == 999.0

@@ -346,6 +346,27 @@ function HardwarePanel({ hardware, board, actuation, onReset, busy }) {
         {last ? `${last.servo ?? last.target} ` : "none "}
         <Status value={last?.state} title={last?.reason} />
       </Row>
+      {/* The claim the whole repository keeps making in prose, as a state.
+          Nothing in software can turn this green — a human has to watch the
+          paddle and record it with scripts/bench_check.py. */}
+      <Row label="Paddle movement">
+        {["A", "B"].map((servo) => {
+          const claim = hardware?.movement_verification?.servos?.[servo];
+          return (
+            <span key={servo} className="mono small">
+              {servo}{" "}
+              <Status
+                value={
+                  claim?.state === "PHYSICAL_MOVEMENT_VERIFIED"
+                    ? "MEASURED"
+                    : "UNAVAILABLE"
+                }
+                title={claim?.detail}
+              />{" "}
+            </span>
+          );
+        })}
+      </Row>
       <Row label="Hardware fault">
         {fault.active ? (
           <>
@@ -368,7 +389,6 @@ function HardwarePanel({ hardware, board, actuation, onReset, busy }) {
   );
 }
 
-/** What went wrong this run. A recorded failure is not a crash. */
 function UpcomingQueue({ routing }) {
   // Null means there is no belt, which is the shipped configuration. An empty
   // queue panel on a machine that can never queue anything is furniture.
@@ -421,6 +441,7 @@ function UpcomingQueue({ routing }) {
   );
 }
 
+/** What went wrong this run. A recorded failure is not a crash. */
 function ErrorsPanel({ errors }) {
   const recent = errors?.recent ?? [];
   if (!recent.length) return null;

@@ -14,15 +14,26 @@ Exits non-zero if any check failed, so it can gate a demonstration.
 from __future__ import annotations
 
 import argparse
+import getpass
 import sys
 import time
 
 from app import config as config_module
+from app.hardware import verification
 from app.hardware.arduino import ArduinoController
 from app.hardware.link import BoardLink
+from app.hardware.verification import RECORD, ROOT
 
 #: Marks a step that reports what happened without deciding pass or fail.
 UNVERIFIED = "UNVERIFIED"
+
+
+def _rel(path) -> str:
+    """A path the operator can find, without a screenful of home directory."""
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _report(results: list[tuple[str, str, str]]) -> int:
@@ -103,9 +114,26 @@ def check_move(cfg: config_module.Config, board: BoardLink, target: str) -> tupl
     if not command.acknowledged:
         return "FAIL", f"{command.state}: {command.reason}"
     answer = input(f"  Did paddle {target} physically move? [y/N] ").strip().lower()
-    if answer != "y":
-        return "FAIL", "the board acknowledged but the paddle was not seen to move"
-    return "PASS", f"acknowledged AND observed moving ({command.command_id})"
+    moved = answer == "y"
+    # Recorded either way. A paddle that acknowledged and did not move is the
+    # single most valuable observation this script can produce, and throwing it
+    # away because it is a "failure" would leave the rig looking merely
+    # untested rather than known-broken.
+    observation = verification.record(
+        target,
+        moved=moved,
+        by=getpass.getuser(),
+        rest_deg=cfg["conveyor.servo.rest_angle_deg"],
+        push_deg=cfg["conveyor.servo.push_angle_deg"],
+        hold_ms=cfg["conveyor.servo.actuation_ms"],
+        command_id=command.command_id,
+    )
+    if not moved:
+        return "FAIL", f"the board acknowledged but the paddle was not seen to move; {_rel(RECORD)}"
+    return (
+        "PASS",
+        f"{verification.MovementVerification.PHYSICAL_MOVEMENT_VERIFIED} — {observation.summary}",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
