@@ -175,6 +175,72 @@ cd aurum/frontend && npm install && npm run dev    # http://localhost:5173
 # 3 — spare, for curl if the browser misbehaves
 ```
 
+### With no hardware at all — `configs/demo-profile.sh`
+
+The block above drives a real board. On a laptop with nothing attached, source
+the checked-in demonstration profile instead:
+
+```bash
+cd aurum && source .venv/bin/activate
+set -a; source configs/demo-profile.sh; set +a
+uvicorn app.api:app --port 8000
+```
+
+That resolves to:
+
+| Setting | Demonstration | The physical machine |
+|---|---|---|
+| `conveyor.mode` | `SIMULATION` | `ENCODER` |
+| belt speed | **0.10 m/s, SIMULATED** | measured by the encoder |
+| `HARDWARE_MODE` | `SIMULATION` — no byte reaches a port | `PHYSICAL` |
+| mass | per-class stand-in, `SIMULATED` | HX711, `MEASURED` |
+
+**0.10 m/s is a demonstration value, not a measurement.** Say so. It is slow on
+purpose: the timing model is accurate to about ±200 ms, which is ±2 cm at this
+speed and ±10 cm at 50 cm/s. The dashboard stamps every figure derived from it
+`SIMULATED`, and so does the EPR ledger.
+
+`Connect board` still works with the profile sourced — it builds an in-process
+board rather than opening a port, so the decision → schedule → ETA → servo →
+`SORT_CONFIRMED` half of the chain runs and is visible. There is still no load
+cell, so the pan machine idles and the chain is driven from **Developer
+controls → Measure & route now**.
+
+`configs/conveyor.yaml` is untouched by any of this. Without the profile the
+shipped machine is still `mode: NONE`, actuation off, geometry `UNMEASURED`.
+
+### With a real board — `configs/bench-profile.sh`
+
+`demo-profile.sh` simulates the board too, so **no byte reaches a port even when
+one is attached**. To make a physical paddle stroke, source the bench profile
+instead:
+
+```bash
+cd aurum && source .venv/bin/activate
+lsof /dev/cu.usbmodem101                 # must be empty
+set -a; source configs/bench-profile.sh; set +a
+uvicorn app.api:app --port 8000
+```
+
+| | `demo-profile.sh` | `bench-profile.sh` |
+|---|---|---|
+| belt, geometry, mass | SIMULATED | SIMULATED — unchanged |
+| transport | in-process board | **real serial, `/dev/cu.usbmodem101`** |
+| `HARDWARE_MODE` | `SIMULATION` | **`PHYSICAL`** |
+
+The one difference is the servo command. Everything else is still a test value
+and still stamped `SIMULATED` to the EPR ledger.
+
+**The two flags are not interchangeable.** `AURUM_SIMULATION` picks the
+transport *and* the geometry, so turning it off alone drops the router onto the
+`UNMEASURED` real geometry, which refuses to schedule — and the servo then never
+fires, board attached or not. The bench profile leaves `AURUM_SIMULATION` unset
+and keeps `AURUM_CONVEYOR_MODE=SIMULATION` for exactly that reason.
+
+Verify the firmware before trusting a silent paddle: `aurum_sorter` answers
+`AURUM/1 PING <id>` with `AURUM/1 PONG <id>`, and `aurum_weight` — which has no
+servo code at all — does not.
+
 Then, in the dashboard:
 
 | # | Action | What to expect |

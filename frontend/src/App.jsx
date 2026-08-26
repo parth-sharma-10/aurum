@@ -204,6 +204,26 @@ function Row({ label, children }) {
 const seconds = (v) => (v == null ? "--" : `${v.toFixed(2)} s`);
 
 /**
+ * A secondary panel: folded away, never removed.
+ *
+ * `headline` is what the closed panel still says out loud — the one fact worth
+ * seeing without opening it. Everything the panel used to print stays in the
+ * DOM, which is the point: this dashboard's whole claim is that it shows its
+ * working, so the fix for a crowded screen is disclosure, not deletion.
+ */
+function Panel({ title, headline, children }) {
+  return (
+    <details className="glass-panel panel">
+      <summary>
+        <span className="section-title">{title}</span>
+        {headline != null && <span className="panel-headline">{headline}</span>}
+      </summary>
+      <div className="panel-body">{children}</div>
+    </details>
+  );
+}
+
+/**
  * The belt. `NONE` is a fact about this machine, not a missing setting: there
  * is no conveyor, the operator carries the object, and routing is immediate.
  */
@@ -211,8 +231,10 @@ function ConveyorPanel({ conveyor }) {
   const speed = conveyor?.speed ?? {};
   const geometry = conveyor?.geometry ?? {};
   return (
-    <section className="glass-panel">
-      <h2 className="section-title">Conveyor</h2>
+    <Panel
+      title="Conveyor"
+      headline={<Status value={conveyor?.present ? conveyor.mode : "NONE"} />}
+    >
       <Row label="Mode">
         <Status value={conveyor?.present ? conveyor.mode : "NONE"} />
       </Row>
@@ -236,7 +258,7 @@ function ConveyorPanel({ conveyor }) {
       <Row label="ETA to servo A">{seconds(conveyor?.eta_to_servo_a_s)}</Row>
       <Row label="ETA to servo B">{seconds(conveyor?.eta_to_servo_b_s)}</Row>
       <p className="panel-note">{conveyor?.note}</p>
-    </section>
+    </Panel>
   );
 }
 
@@ -244,9 +266,9 @@ function ConveyorPanel({ conveyor }) {
 function PricingPanel({ pricing }) {
   const metals = pricing?.metals ?? {};
   const order = ["Au", "Ag", "Pd", "Cu"];
+  const headline = metals.Au?.status;
   return (
-    <section className="glass-panel">
-      <h2 className="section-title">Metal prices</h2>
+    <Panel title="Metal prices" headline={<Status value={headline} />}>
       <Row label="Provider">{pricing?.provider ?? "--"}</Row>
       {order
         .filter((m) => metals[m])
@@ -266,7 +288,7 @@ function PricingPanel({ pricing }) {
         being used after its date. STALE is a feed that should have been current
         and was not. Nothing here is ever a number without a source.
       </p>
-    </section>
+    </Panel>
   );
 }
 
@@ -276,23 +298,49 @@ function HardwarePanel({ hardware, board, actuation, onReset, busy }) {
   const servo = hardware?.servo ?? {};
   const last = actuation?.last_command;
   return (
-    <section className="glass-panel">
-      <h2 className="section-title">Hardware</h2>
+    <Panel
+      title="Hardware"
+      headline={
+        fault.active ? (
+          <Status value="FAILED" title={fault.code} />
+        ) : (
+          <Status
+            value={hardware?.mode === "SIMULATION" ? "SIMULATED" : "LIVE"}
+          />
+        )
+      }
+    >
       <Row label="Mode">
         <Status
-          value={hardware?.mode === "SIMULATION" ? "SIMULATED" : "MEASURED"}
+          value={
+            hardware?.mode == null
+              ? null
+              : hardware.mode === "SIMULATION"
+                ? "SIMULATED"
+                : "MEASURED"
+          }
           title={`HARDWARE_MODE=${hardware?.mode}`}
         />
       </Row>
       <Row label="Arduino">
         {board?.connected ? board.port : "not connected"}{" "}
-        <Status value={board?.connected ? "LIVE" : "UNAVAILABLE"} />
+        <Status
+          value={
+            !board?.connected
+              ? "UNAVAILABLE"
+              : hardware?.mode === "SIMULATION"
+                ? "SIMULATED"
+                : "LIVE"
+          }
+        />
       </Row>
       <Row label="Actuation">
         <Status value={hardware?.actuation_enabled ? "LIVE" : "NONE"} />
       </Row>
       <Row label="Servo A / B">
-        {`rest ${servo.rest_angle_deg}, push ${servo.push_angle_deg}, hold ${servo.actuation_ms} ms`}
+        {servo.rest_angle_deg == null
+          ? "--"
+          : `rest ${servo.rest_angle_deg}, push ${servo.push_angle_deg}, hold ${servo.actuation_ms} ms`}
       </Row>
       <Row label="Last command">
         {last ? `${last.servo ?? last.target} ` : "none "}
@@ -307,19 +355,16 @@ function HardwarePanel({ hardware, board, actuation, onReset, busy }) {
           <Status value="LIVE" title="No latched fault." />
         )}
       </Row>
+      {/* The reason itself is on the top banner; repeating it here made the
+          same sentence appear twice on screen and once more as a tooltip. */}
       {fault.active && (
-        <>
-          <p className="panel-note">{fault.reason}</p>
-          <button disabled={busy} onClick={onReset}>
-            {busy === "fault" ? "Resetting..." : "Reset hardware fault"}
-          </button>
-        </>
+        <button disabled={busy} onClick={onReset}>
+          {busy === "fault" ? "Resetting..." : "Reset hardware fault"}
+        </button>
       )}
-      <p className="panel-note">
-        An ACK means the board received a well-formed frame and believes it
-        acted. It is not evidence that a servo physically moved.
-      </p>
-    </section>
+      {/* The ACK caveat lives on the servo stage of the chain, next to the
+          badge it is warning about, rather than here where nothing shows it. */}
+    </Panel>
   );
 }
 
@@ -331,11 +376,11 @@ function ErrorsPanel({ errors }) {
     .map(([code, n]) => `${code} ${n}`)
     .join(" · ");
   return (
-    <section className="glass-panel">
-      <h2 className="section-title">Recorded failures</h2>
-      <p className="section-note">
-        {errors.count} this run{codes && ` · ${codes}`}
-      </p>
+    <Panel
+      title="Recorded failures"
+      headline={<span className="mono small">{errors.count} this run</span>}
+    >
+      <p className="section-note">{codes}</p>
       <ul className="errors-list">
         {recent.slice(0, 8).map((e, i) => (
           <li key={i}>
@@ -348,7 +393,7 @@ function ErrorsPanel({ errors }) {
         ))}
       </ul>
       <p className="panel-note">{errors.note}</p>
-    </section>
+    </Panel>
   );
 }
 
@@ -369,7 +414,6 @@ function ItemChain({ item }) {
   const d = item.decision;
   const act = item.actuation;
   const metals = metalRows(pmdi);
-  const priceRows = Object.entries(v?.prices ?? {});
 
   // Nothing after the camera has run until the operator presses the button.
   // Those stages are PENDING, not failed: rendering them red made a perfectly
@@ -626,40 +670,10 @@ function ItemChain({ item }) {
         />
       )}
 
-      {graded && priceRows.length > 0 && (
-        <div className="notice">
-          <strong>
-            {priceRows[0][1].status === "REFERENCE"
-              ? "REFERENCE PRICES"
-              : `${priceRows[0][1].status} PRICES`}
-          </strong>{" "}
-          — dated published figures used after their date, not a live market
-          feed.
-          <table className="metals">
-            <tbody>
-              {priceRows.map(([metal, q]) => (
-                <tr key={`p-${metal}`}>
-                  <td className="mono">{metal}</td>
-                  <td className="mono">
-                    {q.price_per_gram == null
-                      ? "--"
-                      : `${money(q.price_per_gram, q.currency)}/g`}
-                  </td>
-                  <td className="mono small">
-                    {q.quoted_price} {q.quoted_unit}
-                  </td>
-                  <td className="mono small">{(q.timestamp ?? "").slice(0, 10)}</td>
-                  <td>
-                    <span className={q.status === "LIVE" ? "badge-b" : "badge-c"}>
-                      {q.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* The per-metal price table lives in the Metal prices panel, which shows
+          the same figures, statuses and sources for the whole run rather than
+          repeating them under every item. The status that matters to THIS
+          valuation is already on stage 5 beside the number it produced. */}
 
       <Stage
         n="6"
@@ -717,7 +731,17 @@ function ItemChain({ item }) {
 export default function App() {
   const [state, setState] = useState(null);
   const [health, setHealth] = useState(null);
+  // Two kinds of error, and they must not share a slot. `error` is the backend
+  // being unreachable, and the poll below owns it: it appears and clears on its
+  // own. `actionError` is the backend refusing something the operator asked
+  // for, with a reason worth reading, so it survives until the next action.
+  //
+  // They were one state until 2026-08-26, and act() set it and then immediately
+  // called load(), which cleared it on success. Every refusal the backend
+  // explains carefully - ALREADY_PROCESSED, NO_ITEM, UNKNOWN_ITEM - rendered as
+  // a button that did nothing at all.
   const [error, setError] = useState(null);
+  const [actionError, setActionError] = useState(null);
   const [busy, setBusy] = useState(null);
   const [lastResult, setLastResult] = useState(null);
 
@@ -744,16 +768,23 @@ export default function App() {
 
   const act = async (label, path) => {
     setBusy(label);
+    setActionError(null);
     try {
       const out = await call(path, "POST");
       setLastResult(out);
-      setError(out.error ? `${out.error}: ${out.reason}` : null);
+      // A refusal is the machine explaining itself, not a crash. Keep it.
+      setActionError(out.error ? `${out.error} — ${out.reason}` : null);
       await load();
     } catch (e) {
-      setError(e.message);
+      setActionError(e.message);
     } finally {
       setBusy(null);
     }
+  };
+
+  const reset = async () => {
+    await act("reset", "/track/reset");
+    setLastResult(null);
   };
 
   const running = state?.running;
@@ -816,10 +847,15 @@ export default function App() {
         <button disabled={busy} onClick={() => act("stop", "/session/stop")}>
           Stop
         </button>
+        <button disabled={busy} onClick={reset}>
+          {busy === "reset" ? "Resetting…" : "New item / reset run"}
+        </button>
         <span className="controls-note">
           Place the object on the pan and wait. The load cell starts the
           measurement, the model gives the classes, the decision engine gives
-          the bin. Nobody here says which bin.
+          the bin. Nobody here says which bin. Swapped the object? Press
+          <strong> New item</strong> — one physical item gets one physical
+          action, so the machine will not route the same one twice.
         </span>
       </div>
 
@@ -838,10 +874,17 @@ export default function App() {
         </button>
       </details>
 
+      {actionError && <div className="notice bad">{actionError}</div>}
+
+      {/* The masthead badge is the standing signal and every derived figure is
+          stamped SIMULATED at the point it is shown, so the full explanation
+          folds away rather than occupying four lines of every screenshot. */}
       {state?.mock_mass?.enabled && (
-        <div className="notice">
-          <strong>MOCK MASS — the mass is assumed, not measured.</strong> The
-          load cell cannot supply one, so every figure derived from it is
+        <details className="notice">
+          <summary>
+            <strong>MOCK MASS — the mass is assumed, not measured.</strong>
+          </summary>
+          The load cell cannot supply one, so every figure derived from it is
           stamped SIMULATED. The class, the cited composition and the bin are
           real; the mass is not.
           {state.mock_mass.per_class && (
@@ -853,7 +896,7 @@ export default function App() {
                 .join(" · ")}
             </span>
           )}
-        </div>
+        </details>
       )}
       {fault.active && (
         <div className="notice bad">
@@ -869,18 +912,6 @@ export default function App() {
       {state?.camera?.error && (
         <div className="notice bad">Camera: {state.camera.error}</div>
       )}
-
-      <div className="systems">
-        <ConveyorPanel conveyor={state?.conveyor} />
-        <PricingPanel pricing={state?.pricing} />
-        <HardwarePanel
-          hardware={hardware}
-          board={board}
-          actuation={actuation}
-          busy={busy}
-          onReset={() => act("fault", "/hardware/fault/reset")}
-        />
-      </div>
 
       <div className="split">
         <section className="glass-panel feed">
@@ -898,7 +929,8 @@ export default function App() {
           ) : (
             <div className="stream placeholder">Camera not started</div>
           )}
-          <p className="section-note">{state?.conveyor?.note}</p>
+          {/* The belt's own note is in the Conveyor panel. It was printed here
+              too, so the same three sentences appeared twice on one screen. */}
         </section>
 
         <section className="glass-panel chain">
@@ -911,6 +943,20 @@ export default function App() {
             item={lastResult?.item_id ? lastResult : state?.current_item}
           />
         </section>
+      </div>
+
+      {/* Reference, not narrative: below the thing being watched, and folded.
+          Each summary still carries the one state worth seeing at a glance. */}
+      <div className="systems">
+        <ConveyorPanel conveyor={state?.conveyor} />
+        <PricingPanel pricing={state?.pricing} />
+        <HardwarePanel
+          hardware={hardware}
+          board={board}
+          actuation={actuation}
+          busy={busy}
+          onReset={() => act("fault", "/hardware/fault/reset")}
+        />
       </div>
 
       <section className="glass-panel">
@@ -928,7 +974,6 @@ export default function App() {
               <th>Mass</th>
               <th>ppm</th>
               <th>Decision</th>
-              <th>Bin</th>
               <th>Servo</th>
               <th>Why</th>
             </tr>
@@ -955,18 +1000,21 @@ export default function App() {
                 </td>
                 <td>
                   <span
-                    className={
-                      BIN_CLASS[i.decision.decision] ?? "badge-c"
-                    }
+                    className={BIN_CLASS[i.decision.decision] ?? "badge-c"}
                     title={i.decision.decision_note ?? i.decision.reason}
                   >
                     {i.decision.decision}
                   </span>
-                </td>
-                <td>
-                  <span className={BIN_CLASS[i.decision.physical_bin] ?? "badge-none"}>
-                    {i.decision.physical_bin ?? i.decision.target_bin}
-                  </span>
+                  {/* The grade and the bin the paddle actually used are the
+                      same value except on a physical fallback. Shown only when
+                      they diverge, which is the one case worth the column. */}
+                  {i.decision.physical_bin &&
+                    i.decision.physical_bin !== i.decision.decision && (
+                      <span className="muted small">
+                        {" "}
+                        → {i.decision.physical_bin}
+                      </span>
+                    )}
                 </td>
                 <td className="mono small">{i.actuation?.servo ?? "—"}</td>
                 <td className="muted small">{i.decision.reason_code}</td>
@@ -986,12 +1034,14 @@ export default function App() {
       <ErrorsPanel errors={state?.errors} />
 
       {state?.epr && (
-        <section className="glass-panel">
-          <h2 className="section-title">EPR record</h2>
+        <Panel
+          title="EPR record"
+          headline={<span className="mono small">{state.epr.session_id}</span>}
+        >
           <p className="section-note">
-            Run {state.epr.session_id}. Every item's whole trail — detected,
-            classified, weighed, valued, binned, actuated — is written to the
-            EPR ledger with the provenance below stamped on each event.
+            Every item's whole trail — detected, classified, weighed, valued,
+            binned, actuated — is written to the EPR ledger with the provenance
+            below stamped on each event.
             <span className="mono small"> GET /epr/&lt;item_id&gt;</span>
           </p>
           <div className="trail">
@@ -1051,7 +1101,7 @@ export default function App() {
               </div>
             </div>
           </div>
-        </section>
+        </Panel>
       )}
 
       <footer className="foot">

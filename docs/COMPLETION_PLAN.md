@@ -8,7 +8,7 @@
 |---|---|
 | Branch | `feat/final-integration` |
 | Phases 0-11 | **COMPLETE** |
-| Tests | **1214 passing**, 5 skipped (FiftyOne absent), ruff clean, frontend builds |
+| Tests | **1267 passing**, 5 skipped (FiftyOne absent), ruff clean, frontend builds |
 | Hardware | Board, both sketches, both servos: **PHYSICALLY VERIFIED** 2026-08-22 |
 | Blocking | **The load cell is mechanically bypassed. Nothing else.** |
 

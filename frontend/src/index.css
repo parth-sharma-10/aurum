@@ -102,7 +102,9 @@ body {
 /* --- badges ------------------------------------------------------------- */
 .badge-a,
 .badge-b,
-.badge-c {
+.badge-c,
+.badge-none,
+.badge-bad {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -144,54 +146,6 @@ body {
   box-shadow: 0 0 0 3px rgba(53, 192, 138, 0.18);
 }
 
-/* --- metric row --------------------------------------------------------- */
-.metric-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.metric {
-  padding: 18px 20px;
-}
-
-.metric-label {
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.metric-value {
-  font-family: var(--mono);
-  font-size: 30px;
-  font-weight: 600;
-  line-height: 1.2;
-  margin-top: 6px;
-  font-variant-numeric: tabular-nums;
-}
-
-.metric-unit {
-  font-size: 15px;
-  color: var(--faint);
-  margin-left: 4px;
-}
-
-.metric-foot {
-  margin-top: 10px;
-  min-height: 22px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
-}
-
 .chip::before {
   content: "";
   display: inline-block;
@@ -202,12 +156,55 @@ body {
   background: var(--swatch, var(--gold));
 }
 
-/* --- ledger table ------------------------------------------------------- */
-.section-head {
+/* --- the pan machine banner --------------------------------------------- */
+/* The state machine, front and centre. The operator reads this rather than
+   driving it, so it is the one block that stays open and near the top. Tone
+   rides the left rule, the same way `.stage` carries its state. */
+.pan {
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  border-left: 3px solid var(--faint);
+}
+
+.pan-good {
+  border-left-color: var(--emerald);
+}
+
+.pan-warn {
+  border-left-color: var(--amber);
+}
+
+.pan-neutral {
+  border-left-color: var(--faint);
+}
+
+.pan-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  padding: 18px 20px 12px;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.pan-state {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.pan-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.inventory {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .section-title {
@@ -221,105 +218,6 @@ body {
 .section-note {
   color: var(--faint);
   font-size: 11px;
-}
-
-.table-scroll {
-  overflow-x: auto;
-  padding: 0 8px 8px;
-}
-
-.ledger-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--mono);
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-.ledger-table th {
-  text-align: left;
-  padding: 10px 12px;
-  color: var(--muted);
-  font-weight: 500;
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--hairline);
-  white-space: nowrap;
-}
-
-.ledger-table td {
-  padding: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  white-space: nowrap;
-}
-
-.ledger-table tbody tr {
-  cursor: pointer;
-  transition: background 120ms ease;
-}
-
-.ledger-table tbody tr:hover {
-  background: rgba(214, 175, 60, 0.06);
-}
-
-.ledger-table tbody tr:focus-visible {
-  outline: 1px solid var(--gold);
-  outline-offset: -1px;
-}
-
-.num {
-  text-align: right;
-}
-
-.empty {
-  padding: 40px 20px;
-  text-align: center;
-  color: var(--faint);
-}
-
-/* --- modal -------------------------------------------------------------- */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(6, 7, 8, 0.72);
-  backdrop-filter: blur(3px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  z-index: 10;
-}
-
-.modal {
-  width: min(640px, 100%);
-  max-height: 84vh;
-  overflow-y: auto;
-  padding: 24px;
-}
-
-.modal-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.close {
-  background: none;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  padding: 6px 10px;
-}
-
-.close:hover {
-  color: var(--text);
-  border-color: var(--rule);
 }
 
 .field-grid {
@@ -357,25 +255,6 @@ body {
   border-left-color: var(--rule);
   background: rgba(255, 255, 255, 0.03);
   color: var(--muted);
-}
-
-pre.record {
-  background: #101315;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  padding: 14px;
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: #c9c8c6;
-  overflow-x: auto;
-  margin: 0;
-}
-
-.banner {
-  color: var(--red);
-  font-size: 12.5px;
-  padding: 14px 20px;
-  margin-bottom: 20px;
 }
 
 /* --- scrollbar ---------------------------------------------------------- */
@@ -448,21 +327,27 @@ pre.record {
   cursor: not-allowed;
 }
 
-.controls button.primary {
-  background: var(--gold);
-  border-color: var(--gold);
-  color: #17130a;
-}
-
-.controls button.primary:hover:not(:disabled) {
-  background: #e6bf4c;
-}
-
 .controls-note {
   flex: 1 1 260px;
   color: var(--faint);
   font-size: 11.5px;
   line-height: 1.45;
+}
+
+/* The two disclosures that are not `.panel`: developer controls, and the
+   mock-mass caveat folded down to its first line. */
+details.controls > summary,
+.notice > summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+details.controls > summary {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .split {
@@ -472,11 +357,8 @@ pre.record {
   margin-bottom: 20px;
 }
 
-@media (max-width: 900px) {
-  .split {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
+/* Both grids collapse at the same width; the query lives once, near the end,
+   with the rest of the responsive rules. */
 
 .feed,
 .chain {
@@ -663,44 +545,88 @@ pre.record {
   margin-bottom: 20px;
 }
 
-.systems section {
-  padding: 16px 18px 18px;
+.systems section,
+.systems .panel {
+  padding: 0;
 }
 
+/* --- responsive --------------------------------------------------------- */
+/* One breakpoint, one place. Both grids drop to a single column together. */
 @media (max-width: 900px) {
+  .split,
   .systems {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-/* A fourth badge colour. The three that existed map to bins; this one means
-   "not a bin at all" - unavailable, unknown, or nothing to say yet. */
-.badge-none {
-  display: inline-flex;
+/* --- folded panels ------------------------------------------------------- */
+/* Reference material: in the DOM, out of the way. The summary row carries the
+   one state worth reading without opening the panel, so folding costs the
+   operator nothing at a glance. */
+.panel {
+  margin-bottom: 20px;
+}
+
+.panel > summary {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-  border: 1px solid var(--rule);
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A disclosure caret, drawn rather than imported. */
+.panel > summary::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-right: 2px;
+  border-right: 1.5px solid var(--faint);
+  border-bottom: 1.5px solid var(--faint);
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+
+.panel[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.panel > summary:hover::before {
+  border-color: var(--gold);
+}
+
+.panel > summary .section-title {
+  flex: 1;
+}
+
+.panel-headline {
+  flex: none;
+}
+
+.panel-body {
+  padding: 0 18px 16px;
+}
+
+/* Two more badge colours. The first three map to bins; `none` means "not a bin
+   at all" - unavailable, unknown, or nothing to say yet - and `bad` is a
+   failure. Both take the shared shape from the .badge-a/-b/-c rule above and
+   override only what differs. */
+.badge-none {
+  border-color: var(--rule);
   color: var(--faint);
   background: rgba(255, 255, 255, 0.03);
 }
 
 .badge-bad {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-  border: 1px solid rgba(225, 70, 70, 0.4);
+  border-color: rgba(225, 70, 70, 0.4);
   color: var(--red);
   background: rgba(225, 70, 70, 0.1);
 }
