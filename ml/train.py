@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,8 +27,6 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "aurum" / "data.yaml"
 RUNS = ROOT / "runs"
 MODELS = ROOT / "models"
-
-MODEL_VERSION = "Aurum Vision v0.1"
 
 # The configuration the released v0.1 model was actually trained at. Every value
 # is read back from that checkpoint's own `train_args`, not remembered: it is the
@@ -45,6 +44,17 @@ RELEASE_CONFIG = {
     "patience": 15,
     "seed": 1337,
 }
+
+
+def model_version(run_name: str) -> str:
+    """Human-readable version label for a run: `aurum_vision_v0_2` -> `Aurum Vision v0.2`.
+
+    Derived from the run rather than hardcoded, because the label is what every
+    report and the dashboard quote. A fixed constant meant a second run
+    published its metrics under the previous model's name.
+    """
+    m = re.fullmatch(r"aurum_vision_v(\d+)_(\d+)", run_name)
+    return f"Aurum Vision v{m[1]}.{m[2]}" if m else f"Aurum Vision ({run_name})"
 
 
 def artifact_info(path: Path) -> dict:
@@ -92,7 +102,7 @@ def main() -> int:
         raise SystemExit("data/aurum/data.yaml missing. Run ml.prepare then ml.validate.")
 
     cfg = config()
-    print(f"{MODEL_VERSION} — training")
+    print(f"{model_version(cfg['name'])} — training")
     for k, v in cfg.items():
         print(f"  {k:10s} {v}")
 
@@ -152,10 +162,13 @@ def _finalize(cfg: dict) -> int:
     """
     run_dir = RUNS / cfg["name"]
     weights = run_dir / "weights"
+    # Artifacts are named after the run. Fixed names meant a second run silently
+    # overwrote the released weights it had been fine-tuned from.
+    stem = cfg["name"]
     MODELS.mkdir(exist_ok=True)
     for src, dst in (
-        ("best.pt", "aurum_vision_v0_1_best.pt"),
-        ("last.pt", "aurum_vision_v0_1_last.pt"),
+        ("best.pt", f"{stem}_best.pt"),
+        ("last.pt", f"{stem}_last.pt"),
     ):
         if (weights / src).exists():
             shutil.copy2(weights / src, MODELS / dst)
@@ -163,7 +176,7 @@ def _finalize(cfg: dict) -> int:
 
     classes = yaml.safe_load(DATA.read_text())["names"]
     meta = {
-        "model_version": MODEL_VERSION,
+        "model_version": model_version(stem),
         "architecture": cfg["model"],
         "framework": f"ultralytics {__import__('ultralytics').__version__}",
         "torch": torch.__version__,
@@ -177,12 +190,12 @@ def _finalize(cfg: dict) -> int:
         "trained_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
         "dataset": "data/aurum (see reports/dataset_stats.json)",
         "run_dir": str(run_dir.relative_to(ROOT)),
-        "weights": "models/aurum_vision_v0_1_best.pt",
-        "artifact": artifact_info(MODELS / "aurum_vision_v0_1_best.pt"),
+        "weights": f"models/{stem}_best.pt",
+        "artifact": artifact_info(MODELS / f"{stem}_best.pt"),
         "metrics": "reports/test_metrics.json (regenerate with `python -m ml.evaluate`)",
     }
-    (MODELS / "aurum_vision_v0_1_meta.json").write_text(json.dumps(meta, indent=2))
-    print("\nWrote models/aurum_vision_v0_1_meta.json")
+    (MODELS / f"{stem}_meta.json").write_text(json.dumps(meta, indent=2))
+    print(f"\nWrote models/{stem}_meta.json")
     print("Next: python -m ml.evaluate")
     return 0
 

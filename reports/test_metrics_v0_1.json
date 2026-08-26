@@ -1,5 +1,5 @@
 {
-  "weights": "models/aurum_vision_v0_2_best.pt",
+  "weights": "models/aurum_vision_v0_1_best.pt",
   "split": "test",
   "imgsz": 512,
   "n_images": 230,
@@ -11,35 +11,35 @@
   },
   "conf_threshold_for_examples": 0.35,
   "metrics_overall": {
-    "precision": 0.8904704490719576,
-    "recall": 0.8156912499273065,
-    "mAP50": 0.8787420083047954,
-    "mAP50_95": 0.6657494113448612
+    "precision": 0.9316596856809061,
+    "recall": 0.814036849377995,
+    "mAP50": 0.881602552599379,
+    "mAP50_95": 0.6886724234918269
   },
   "metrics_per_class": {
     "PCB": {
-      "precision": 0.9402264632968034,
-      "recall": 0.9252993408031782,
-      "mAP50": 0.9627872431323696,
-      "mAP50_95": 0.7641664573440622
+      "precision": 0.9249276050766738,
+      "recall": 0.9059702048501523,
+      "mAP50": 0.9342934965051177,
+      "mAP50_95": 0.7827412383105532
     },
     "RAM": {
-      "precision": 0.8933324211203392,
-      "recall": 0.6864852667491851,
-      "mAP50": 0.8770790885154965,
-      "mAP50_95": 0.5993161127246909
+      "precision": 0.9654637993359899,
+      "recall": 0.6874320946226123,
+      "mAP50": 0.8739895180338599,
+      "mAP50_95": 0.6200877525718705
     },
     "CPU": {
-      "precision": 0.9287496026972878,
-      "recall": 0.9058823529411765,
-      "mAP50": 0.9195722796866191,
-      "mAP50_95": 0.7909893310793156
+      "precision": 0.98445852853243,
+      "recall": 0.9176470588235294,
+      "mAP50": 0.9203896925858952,
+      "mAP50_95": 0.8172404373232327
     },
     "Connector": {
-      "precision": 0.7995733091734,
+      "precision": 0.8517888097785302,
       "recall": 0.7450980392156863,
-      "mAP50": 0.755529421884696,
-      "mAP50_95": 0.5085257442313764
+      "mAP50": 0.7977375032726434,
+      "mAP50_95": 0.5346202657616514
     }
   },
   "artifacts": [
@@ -52,6 +52,13 @@
   ],
   "qualitative": {
     "correct": [
+      {
+        "image": "aurum_hardneg__perfboard_poses_v2_pose04_00.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
       {
         "image": "computer_parts__120319_1113_DifferentTy3_jpg.rf.1399f36bf001e4e3244192e64bef4bc0.jpg",
         "false_positives": 0,
@@ -128,35 +135,35 @@
         "false_negatives": 0,
         "n_gt": 1,
         "n_pred": 1
-      },
-      {
-        "image": "computer_parts__20221018_142327_jpg.rf.b723871169a81990e0e70ba34bc705f5.jpg",
-        "false_positives": 0,
-        "false_negatives": 0,
-        "n_gt": 1,
-        "n_pred": 1
       }
     ],
     "failures": [
       {
-        "image": "pc_components_disassembly__pc49_jpg.rf.0f8fac6c93683724e1e1e0af2c5f9992.jpg",
+        "image": "computer_parts__images227_jpg.rf.6b832f9957b762a54d60e34c6c74b89e.jpg",
         "false_positives": 0,
         "false_negatives": 1,
         "n_gt": 1,
         "n_pred": 0
       },
       {
-        "image": "pc_components_disassembly__pc57_jpg.rf.6cd5d911e7d17fa7c1813b39322d02d8.jpg",
+        "image": "computer_parts__images28_jpg.rf.03c42a7fb4b9fd57e43adfdc50d00cee.jpg",
         "false_positives": 0,
-        "false_negatives": 3,
-        "n_gt": 3,
+        "false_negatives": 1,
+        "n_gt": 1,
         "n_pred": 0
       },
       {
-        "image": "pc_components_disassembly__pc71_jpg.rf.17e2cedd6175a78281249f6c51fcbbe8.jpg",
+        "image": "computer_parts__images453_jpg.rf.25b49cd9946f59dbd513283e748072df.jpg",
         "false_positives": 0,
-        "false_negatives": 2,
-        "n_gt": 2,
+        "false_negatives": 1,
+        "n_gt": 1,
+        "n_pred": 0
+      },
+      {
+        "image": "pc_components_disassembly__pc250_jpg.rf.b5266d28c191723b5a07d66ac34b6ed5.jpg",
+        "false_positives": 0,
+        "false_negatives": 1,
+        "n_gt": 1,
         "n_pred": 0
       },
       {
@@ -167,13 +174,6 @@
         "n_pred": 0
       },
       {
-        "image": "pc_components_proelect__PXL_20240611_001422982_jpg.rf.439eb42acdd37bf04a40ba4ce604ab08.jpg",
-        "false_positives": 0,
-        "false_negatives": 3,
-        "n_gt": 3,
-        "n_pred": 0
-      },
-      {
         "image": "pc_components_proelect__PXL_20240613_151628708_jpg.rf.db51b95514d02711ca944a0e311ec544.jpg",
         "false_positives": 0,
         "false_negatives": 5,
@@ -181,10 +181,10 @@
         "n_pred": 0
       },
       {
-        "image": "rc_components__ImmersionRC-Ghost-Ultimate-Hybrid-Receiver-ImmersionRC-52539279_800x_jpg.rf.2e112c3b7121515883ce904b39cbb8b2.jpg",
+        "image": "pc_components_proelect__PXL_20240623_153946800_jpg.rf.09beedfd8083fc07a3c57ac1e3764e79.jpg",
         "false_positives": 0,
-        "false_negatives": 1,
-        "n_gt": 1,
+        "false_negatives": 5,
+        "n_gt": 5,
         "n_pred": 0
       },
       {
@@ -195,28 +195,28 @@
         "n_pred": 0
       },
       {
-        "image": "aurum_hardneg__perfboard_poses_v2_pose04_00.jpg",
-        "false_positives": 1,
-        "false_negatives": 1,
-        "n_gt": 1,
-        "n_pred": 1
-      },
-      {
-        "image": "pc_components_proelect__PXL_20240623_154053337_jpg.rf.041ad81fb56b85a5fc5cd04dd052a2f9.jpg",
+        "image": "pc_components_projeto__531243-17d0b9794239b72879a0d7c5e1d4b938-1600_jpg.rf.c7421989d018a824c10cf564e161f187.jpg",
         "false_positives": 2,
-        "false_negatives": 4,
-        "n_gt": 5,
+        "false_negatives": 2,
+        "n_gt": 3,
         "n_pred": 3
       },
       {
-        "image": "pc_components_proelect__PXL_20240623_153946800_jpg.rf.09beedfd8083fc07a3c57ac1e3764e79.jpg",
+        "image": "pc_components_disassembly__pc71_jpg.rf.17e2cedd6175a78281249f6c51fcbbe8.jpg",
+        "false_positives": 1,
+        "false_negatives": 2,
+        "n_gt": 2,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__CPU-284-_jpg.rf.007fd0b1d5b34f0e63b7e58f9aa0ed6d.jpg",
         "false_positives": 2,
-        "false_negatives": 5,
-        "n_gt": 5,
+        "false_negatives": 6,
+        "n_gt": 6,
         "n_pred": 2
       },
       {
-        "image": "pc_components_projeto__527554-fe7e075443a58f3f196c29e3ab84d728-1600_jpg.rf.2237f958cb1de060ac1994dba79eed61.jpg",
+        "image": "rc_components__4__69349_700x700_jpg.rf.fddad4d1cc23799a9c801a64e80a769b.jpg",
         "false_positives": 2,
         "false_negatives": 2,
         "n_gt": 2,

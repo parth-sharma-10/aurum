@@ -1,0 +1,59 @@
+{
+  "model_version": "Aurum Vision v0.1",
+  "weights": "models/aurum_vision_v0_1_best.pt",
+  "conf_threshold": 0.35,
+  "source": "/private/tmp/claude-501/-Users-parthsharma-baymax/f8faccc9-7434-4b5f-bc9c-4ea418186471/scratchpad/real_cpu",
+  "n_images": 4,
+  "images_with_no_detection": 2,
+  "total_detections": {
+    "PCB": 2
+  },
+  "mean_confidence_per_class": {
+    "PCB": 0.9082,
+    "RAM": null,
+    "CPU": null,
+    "Connector": null
+  },
+  "max_confidence_per_class": {
+    "PCB": 0.9152,
+    "RAM": null,
+    "CPU": null,
+    "Connector": null
+  },
+  "mean_inference_ms": 26.1,
+  "per_image": [
+    {
+      "image": "CPU__E5-2450v2_IvyBridge-EP_Package.jpg",
+      "counts": {},
+      "n_objects": 0,
+      "mean_confidence": 0.0,
+      "inference_ms": 28.3
+    },
+    {
+      "image": "CPU__Intel_CPU_Celeron_G3930_Kaby_Lake_top.jpg",
+      "counts": {},
+      "n_objects": 0,
+      "mean_confidence": 0.0,
+      "inference_ms": 27.4
+    },
+    {
+      "image": "CPU__Intel_CPU_Core_2_Duo_E8400_Wolfdale_bottom.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.9011,
+      "inference_ms": 28.2
+    },
+    {
+      "image": "CPU__Intel_CPU_Core_2_Duo_E8400_Wolfdale_perspective.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.9152,
+      "inference_ms": 20.3
+    }
+  ],
+  "caveat": "Detections only. These images have no ground-truth annotations, so nothing here is an accuracy measurement and no figure from this run may be quoted as model accuracy."
+}

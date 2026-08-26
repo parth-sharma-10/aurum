@@ -1,0 +1,69 @@
+{
+  "split": "test",
+  "weights": "aurum_vision_v0_1_best.pt",
+  "conf": 0.35,
+  "n_images": 206,
+  "note": "Per-image class-set comparison, not a detection metric. A 'swap' is an image where class X was under-reported and class Y appeared unexplained. mAP and box-level TP/FP remain ml/evaluate.py's responsibility.",
+  "swaps_by_pair": {
+    "RAM->PCB": 1,
+    "CPU->RAM": 1,
+    "RAM->Connector": 1,
+    "RAM->CPU": 1
+  },
+  "unexplained_predictions_by_class": {
+    "RAM": 7,
+    "PCB": 5,
+    "Connector": 3,
+    "CPU": 2
+  },
+  "under_reported_by_class": {
+    "RAM": 58,
+    "Connector": 16,
+    "PCB": 6,
+    "CPU": 4
+  },
+  "false_positives_on_background_images": [
+    {
+      "image": "pc_components_proelect__PXL_20240623_161000840_jpg.rf.341e8a690236d19b04843333f2e1882a.jpg",
+      "class": "RAM",
+      "confidence": 0.6767
+    },
+    {
+      "image": "computer_parts__b184e3c5-fa5c-44aa-a8a8-c5f7dd5be5c1-_CR001464600_PT0_SX1464___jpg.rf.1b2a524c5d2e254effaefad7d42c1434.jpg",
+      "class": "RAM",
+      "confidence": 0.3614
+    },
+    {
+      "image": "pc_components_amin__IMG_20260510_173417_jpg.rf.16c2dbdbb239e8e36d5cb8b63dba10b2.jpg",
+      "class": "PCB",
+      "confidence": 0.3542
+    }
+  ],
+  "n_background_images_with_a_detection": 3,
+  "examples_by_pair": {
+    "RAM->PCB": [
+      {
+        "image": "pc_components_disassembly__pc203_jpg.rf.24d6704493b460bf31414cf1e8d88f58.jpg",
+        "confidence": 0.6129
+      }
+    ],
+    "CPU->RAM": [
+      {
+        "image": "pc_components_disassembly__pc23_jpg.rf.11f05be7c74a3e6023478dfade6f3efe.jpg",
+        "confidence": 0.3896
+      }
+    ],
+    "RAM->Connector": [
+      {
+        "image": "pc_components_proelect__PXL_20240623_162718795_jpg.rf.9895919335b15406cd02b65c074d1c65.jpg",
+        "confidence": 0.4464
+      }
+    ],
+    "RAM->CPU": [
+      {
+        "image": "pc_components_proelect__PXL_20240623_162831114_jpg.rf.13f66e1587b0e07d78e917ad4188eb30.jpg",
+        "confidence": 0.6512
+      }
+    ]
+  }
+}

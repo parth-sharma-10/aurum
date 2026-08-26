@@ -100,14 +100,14 @@ def main() -> int:
         desc = ", ".join(f"{k}×{v}" for k, v in sorted(counts.items())) or "nothing detected"
         print(f"  {p.name:45.45s} {desc}")
 
-    print(f"\n{'class':12s} {'detections':>11s} {'mean conf':>11s}")
+    print(f"\n{'class':12s} {'detections':>11s} {'mean conf':>11s} {'max conf':>11s}")
     for c in det.classes:
         cs = confs[c]
         mean = sum(cs) / len(cs) if cs else 0.0
         print(
-            f"{c:12s} {totals.get(c, 0):11d} {mean:11.3f}"
+            f"{c:12s} {totals.get(c, 0):11d} {mean:11.3f} {max(cs):11.3f}"
             if cs
-            else f"{c:12s} {totals.get(c, 0):11d} {'--':>11s}"
+            else f"{c:12s} {totals.get(c, 0):11d} {'--':>11s} {'--':>11s}"
         )
     print(f"\nImages with no detection: {n_empty}/{len(rows)}")
 
@@ -122,6 +122,10 @@ def main() -> int:
         "mean_confidence_per_class": {
             c: (round(sum(v) / len(v), 4) if v else None) for c, v in confs.items()
         },
+        # A mean over a handful of detections hides the worst case. On a
+        # false-positive check the single most confident wrong box is the number
+        # that decides whether the machine would have acted on it.
+        "max_confidence_per_class": {c: (round(max(v), 4) if v else None) for c, v in confs.items()},
         "mean_inference_ms": round(sum(r["inference_ms"] for r in rows) / max(1, len(rows)), 1),
         "per_image": rows,
         "caveat": (

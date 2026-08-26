@@ -1,0 +1,227 @@
+{
+  "weights": "models/aurum_vision_v0_1_best.pt",
+  "split": "test",
+  "imgsz": 512,
+  "n_images": 206,
+  "n_instances": {
+    "RAM": 139,
+    "Connector": 53,
+    "CPU": 79,
+    "PCB": 69
+  },
+  "conf_threshold_for_examples": 0.35,
+  "metrics_overall": {
+    "precision": 0.875616894843125,
+    "recall": 0.7239403521886076,
+    "mAP50": 0.8055073099143727,
+    "mAP50_95": 0.5944239350838316
+  },
+  "metrics_per_class": {
+    "PCB": {
+      "precision": 0.9127998719260358,
+      "recall": 0.8695652173913043,
+      "mAP50": 0.9331488425915506,
+      "mAP50_95": 0.7462188064123518
+    },
+    "RAM": {
+      "precision": 0.9009803340336833,
+      "recall": 0.5107913669064749,
+      "mAP50": 0.716829054428655,
+      "mAP50_95": 0.38980442504943313
+    },
+    "CPU": {
+      "precision": 0.9671922326019818,
+      "recall": 0.9493670886075949,
+      "mAP50": 0.9654288197210769,
+      "mAP50_95": 0.8305117022532593
+    },
+    "Connector": {
+      "precision": 0.7214951408107991,
+      "recall": 0.5660377358490566,
+      "mAP50": 0.6066225229162083,
+      "mAP50_95": 0.411160806620282
+    }
+  },
+  "artifacts": [
+    "confusion_matrix.png",
+    "confusion_matrix_normalized.png",
+    "BoxPR_curve.png",
+    "BoxF1_curve.png",
+    "BoxP_curve.png",
+    "BoxR_curve.png"
+  ],
+  "qualitative": {
+    "correct": [
+      {
+        "image": "computer_parts__20221018_141604_jpg.rf.4a6a2bfe82be7a7486e2524a6b6072b5.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_141810_jpg.rf.526997e1cf82944c8693d52821d79410.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_141821_jpg.rf.42da12b4a5cf5fe4fbb696c349646e6b.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_141900_jpg.rf.8fdd6c6baac68c7fafd72a7a48f03324.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_141902_jpg.rf.651e4c916141d220e9631776b0ac40ac.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_141914_jpg.rf.39821bf24f6989d966e0700ea6c8bf89.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 2,
+        "n_pred": 2
+      },
+      {
+        "image": "computer_parts__20221018_141952_jpg.rf.e3ef6046e7f38372db31fc8249b9e03d.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_142106-0-_jpg.rf.709a6b63a0990a5bf412c4bd99a32697.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_142116_jpg.rf.26edbe3447c47534d9db898e4e11b6cf.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_142117_jpg.rf.5f15a91c25ec4d6edd0cbd1f76c86445.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_142154_jpg.rf.19d2dc6a7f262e7f3f1bc668f133df6c.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "computer_parts__20221018_142355_jpg.rf.318d008944f7c44bbcc1e0a2dc7ed4cd.jpg",
+        "false_positives": 0,
+        "false_negatives": 0,
+        "n_gt": 1,
+        "n_pred": 1
+      }
+    ],
+    "failures": [
+      {
+        "image": "rc_components__201906041336-500x500_500x500_jpg.rf.0617b34911c296dc850b4d5e02a21157.jpg",
+        "false_positives": 0,
+        "false_negatives": 1,
+        "n_gt": 1,
+        "n_pred": 0
+      },
+      {
+        "image": "rc_components__bab9c05e9e167ec1_jpg.rf.2557a72f053689153d61b4185032cdb3.jpg",
+        "false_positives": 0,
+        "false_negatives": 1,
+        "n_gt": 1,
+        "n_pred": 0
+      },
+      {
+        "image": "rc_components__cd35f7009dfc8300_webp.rf.a442bcf3653f48d8729e901e68b901ca.jpg",
+        "false_positives": 0,
+        "false_negatives": 1,
+        "n_gt": 1,
+        "n_pred": 0
+      },
+      {
+        "image": "rc_components__d439718549fc2061_jpg.rf.016d8f1d80676f9c6700bf81031310a7.jpg",
+        "false_positives": 0,
+        "false_negatives": 1,
+        "n_gt": 1,
+        "n_pred": 0
+      },
+      {
+        "image": "pc_components_projeto__520997-1e44b354ac57850f696e172977a004c9-1600_jpg.rf.0a5432b3883c784bf95ed8f6ee3dc88f.jpg",
+        "false_positives": 3,
+        "false_negatives": 1,
+        "n_gt": 3,
+        "n_pred": 5
+      },
+      {
+        "image": "pc_components_projeto__531243-17d0b9794239b72879a0d7c5e1d4b938-1600_jpg.rf.c7421989d018a824c10cf564e161f187.jpg",
+        "false_positives": 2,
+        "false_negatives": 2,
+        "n_gt": 3,
+        "n_pred": 3
+      },
+      {
+        "image": "pc_components_amin__IMG_20260513_201449_jpg.rf.3e28093b5c3e9dbe513ab46e43fb2797.jpg",
+        "false_positives": 1,
+        "false_negatives": 1,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "pc_components_disassembly__pc203_jpg.rf.24d6704493b460bf31414cf1e8d88f58.jpg",
+        "false_positives": 1,
+        "false_negatives": 2,
+        "n_gt": 2,
+        "n_pred": 1
+      },
+      {
+        "image": "rc_components__1__68942_edf5b7bf-a4ac-4f7f-a8d1-274b4e7b2e05_700x700_jpg.rf.28119c1801ff10d28fddb66f0b29fedb.jpg",
+        "false_positives": 1,
+        "false_negatives": 2,
+        "n_gt": 2,
+        "n_pred": 1
+      },
+      {
+        "image": "rc_components__6cb17c6a999adf69_jpg.rf.65ef339f3d4a8fb7b8cf00424411e795.jpg",
+        "false_positives": 1,
+        "false_negatives": 1,
+        "n_gt": 1,
+        "n_pred": 1
+      },
+      {
+        "image": "pc_components_disassembly__pc23_jpg.rf.11f05be7c74a3e6023478dfade6f3efe.jpg",
+        "false_positives": 2,
+        "false_negatives": 1,
+        "n_gt": 1,
+        "n_pred": 2
+      },
+      {
+        "image": "rc_components__4__69349_700x700_jpg.rf.fddad4d1cc23799a9c801a64e80a769b.jpg",
+        "false_positives": 2,
+        "false_negatives": 2,
+        "n_gt": 2,
+        "n_pred": 2
+      }
+    ]
+  }
+}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -88,11 +89,17 @@ class AurumDetector:
         self.classes: list[str] = [self.model.names[i] for i in sorted(self.model.names)]
 
         self.meta: dict = {}
-        if DEFAULT_META.exists():
+        # The version label has to describe the weights actually loaded, not
+        # whichever model is the deployment default — a comparison run loads
+        # both, and mislabelled reports are worse than unlabelled ones.
+        meta_path = weights.with_name(re.sub(r"_(best|last)$", "", weights.stem) + "_meta.json")
+        if not meta_path.exists():
+            meta_path = DEFAULT_META
+        if meta_path.exists():
             # A malformed metadata file must not stop inference; the model
             # still works, it just reports itself as unversioned.
             with contextlib.suppress(json.JSONDecodeError):
-                self.meta = json.loads(DEFAULT_META.read_text())
+                self.meta = json.loads(meta_path.read_text())
         self.model_version = self.meta.get("model_version", "Aurum Vision (unversioned)")
 
         self._frame_times: deque[float] = deque(maxlen=30)
