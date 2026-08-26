@@ -251,6 +251,8 @@ class DemoSession:
         Starts the automatic pan machine once there is a cell to watch, unless
         `conveyor.weight.pan.auto` is off.
         """
+        if self.cfg["conveyor.runtime.simulation"]:
+            return self._connect_simulated_board()
         port = self.cfg["conveyor.arduino.port"]
         if not port:
             return {
@@ -268,11 +270,21 @@ class DemoSession:
             )
         state = self.link.connect()
         if self.link.connected:
-            self.link.configure_servos(
+            # Not fatal, but not silent either: unacknowledged, the paddles keep
+            # whatever angles the sketch booted with rather than the configured
+            # ones, and nothing downstream would ever say so.
+            if not self.link.configure_servos(
                 self.cfg["conveyor.servo.rest_angle_deg"],
                 self.cfg["conveyor.servo.push_angle_deg"],
                 self.cfg["conveyor.servo.actuation_ms"],
-            )
+                budget_s=self.cfg["conveyor.arduino.ack_timeout_ms"] / 1000,
+            ):
+                self.errors.record(
+                    ErrorCode.ARDUINO_ERROR,
+                    "board",
+                    self.link.last_error or "the servo configuration was not acknowledged",
+                    port=port,
+                )
             if self.controller is None:
                 self.controller = ArduinoController(
                     transport=self.link.transport, cfg=self.cfg, fault=self.fault
@@ -287,6 +299,42 @@ class DemoSession:
                 port=port,
             )
         return {"connected": self.link.connected, "state": str(state), **self.link.snapshot()}
+
+    def _connect_simulated_board(self) -> dict:
+        """HARDWARE_MODE=SIMULATION: there is no port, so there is nothing to open.
+
+        The controller builds its own `SimulatedTransport`, so the protocol,
+        the acknowledgement and the fault latch all run and no byte reaches a
+        wire. There is still no load cell, so the pan machine has nothing to
+        watch and the chain is driven by POST /session/measure.
+
+        Without this branch a simulated run could never actuate at all: the
+        session only ever built a controller off a real serial port, so the
+        whole decision-to-servo half of the machine was unreachable with no
+        hardware attached.
+        """
+        if self.controller is None:
+            self.controller = ArduinoController(cfg=self.cfg, fault=self.fault)
+        self.controller.connect()
+        self._ensure_actuator()
+        # The same loop the wired path starts. The pan half finds no cell and
+        # idles; the belt half is what fires a route when its moment arrives,
+        # and without it a scheduled item would sit in the queue for ever.
+        self.start_pan()
+        return {"connected": self.controller.connected, **self._board_snapshot()}
+
+    def _board_snapshot(self) -> dict:
+        """The link the dashboard shows. In SIMULATION the transport is the board."""
+        if self.link is not None:
+            return self.link.snapshot()
+        if self.controller is not None and self.controller.simulation:
+            return {
+                "connected": self.controller.connected,
+                "port": "simulated - no serial port is open",
+                "state": str(self.controller.state),
+                "last_error": None,
+            }
+        return {"connected": False}
 
     def _ensure_actuator(self) -> ServoActuator | None:
         """The bridge from a DUE route to a servo command, if there is a belt.
@@ -860,6 +908,30 @@ class DemoSession:
         self._route(assembly)
         return self._routed[assembly.assembly_id]
 
+    def reset(self) -> dict:
+        """Start a fresh run: new identities, nothing already handled.
+
+        This does NOT weaken one-item-one-action. That rule stops an impatient
+        second click from moving the same object twice; this is the operator
+        saying they have swapped the object on the bench. Item identity is only
+        meaningful within a run, so the tracker starts over rather than
+        carrying a confirmed id onto a different piece of hardware.
+
+        Deliberately not cleared: the EPR ledger and the error log. What the
+        machine did during the previous run remains true after it.
+        """
+        with self._lock:
+            self.pipeline.reset()
+            if self.scheduler is not None:
+                # ItemPipeline.reset() builds a NEW tracker, so without this the
+                # scheduler keeps reading a lifecycle nothing writes to again.
+                self.scheduler.lifecycle = self.pipeline.tracker
+                self.scheduler.reset()
+            self.zone.reset()
+            self._handled.clear()
+            self._routed.clear()
+        return {"status": "reset", "session_id": self.session_id}
+
     def _resolve(self, item_id: str | None):
         """The assembly to act on, or a refusal explaining why there is none."""
         if item_id:
@@ -950,7 +1022,12 @@ class DemoSession:
                 if mock
                 else _unavailable_reading(f"{why} Nothing is estimated in place of one.")
             )
-        if not self.calibration.present:
+        # `has_factor`, not `present`: an unverified factor still yields a real
+        # settled reading, which is better evidence than a fabricated one. It is
+        # labelled STABLE, and the concentration path refuses anything that is
+        # not MEASURED - so verification is enforced there, not by withholding
+        # the number here.
+        if not self.calibration.has_factor:
             why = "The load cell is not calibrated."
             return (
                 self._mock_mass(why, assembly)
@@ -996,7 +1073,14 @@ class DemoSession:
                 "automatic": bool(self.cfg["conveyor.weight.pan.auto"])
                 and self._pan_thread is not None
                 and self._pan_thread.is_alive(),
-                "current_item": current.as_dict() if current else None,
+                # The routed record wins over the live one. `assemblies` is
+                # regrouped on every read, so the object the camera can see is
+                # a fresh Assembly with no mass, decision or actuation on it -
+                # and showing that would blank the whole chain the moment an
+                # item finished, which is exactly when it is worth reading.
+                "current_item": (
+                    self._routed.get(current.assembly_id, current.as_dict()) if current else None
+                ),
                 "items": items[:25],
                 "confirmed_count": sum(
                     1
@@ -1004,7 +1088,7 @@ class DemoSession:
                     if a.root is not None and a.root.state is ItemState.CONFIRMED
                 ),
                 "calibration": self.calibration.as_dict(),
-                "board": self.link.snapshot() if self.link else {"connected": False},
+                "board": self._board_snapshot(),
                 "actuation": (
                     self.controller.snapshot()
                     if self.controller
@@ -1031,7 +1115,7 @@ class DemoSession:
                 "hardware": {
                     "mode": hardware_mode(self.cfg),
                     "fault": self.fault.snapshot(),
-                    "arduino_connected": bool(self.link and self.link.connected),
+                    "arduino_connected": bool(self._board_snapshot().get("connected")),
                     "actuation_enabled": bool(self.cfg["conveyor.arduino.enabled"]),
                     "servo": (
                         self.actuator.servo_settings

@@ -120,7 +120,10 @@ class TestTheChainWithNoBelt:
             assert prov["composition_db_schema"]
             assert prov["price_provider"]
             assert prov["hardware_mode"] in ("PHYSICAL", "SIMULATION")
-            assert prov["calibration"]["verified"] is False
+            # That the stamp CARRIES the verification flag, not what it happens
+            # to say: this rig's calibration state legitimately changes when the
+            # cell is calibrated, and a provenance test must survive that.
+            assert isinstance(prov["calibration"]["verified"], bool)
             assert prov["mock_mass_enabled"] is True
 
 
@@ -298,6 +301,60 @@ class TestFailureDoesNotProduceAFalseSort:
         assert totals["sort_failed"] == 1
 
 
+class TestTheSimulatedBoard:
+    """HARDWARE_MODE=SIMULATION has no port, and must still run the machine.
+
+    Without this path the whole decision-to-servo half was unreachable with no
+    hardware attached: the session only ever built a controller off a real
+    serial port, so a simulated run could detect, weigh, value and grade an
+    item and then never actuate it.
+    """
+
+    def session(self, **environ):
+        environ.setdefault("AURUM_SIMULATION", "true")
+        environ.setdefault("AURUM_CONVEYOR_MODE", "SIMULATION")
+        return DemoSession(cfg=cfg(**environ))
+
+    def test_connecting_needs_no_port(self):
+        run = self.session()
+        assert run.connect_board()["connected"] is True
+
+    def test_the_transport_is_simulated_not_serial(self):
+        run = self.session()
+        run.connect_board()
+        assert run.controller.transport.name == "simulated"
+
+    def test_a_configured_port_is_still_not_opened(self):
+        run = self.session(AURUM_ARDUINO_PORT="/dev/definitely-not-a-real-port")
+        run.connect_board()
+        assert run.controller.transport.name == "simulated"
+
+    def test_the_board_panel_says_there_is_no_serial_port(self):
+        run = self.session()
+        run.connect_board()
+        board = run.snapshot()["board"]
+        assert board["connected"] is True
+        assert "no serial port" in board["port"]
+
+    def test_a_physical_machine_with_no_port_still_refuses(self):
+        run = DemoSession(cfg=cfg(AURUM_SIMULATION="false"))
+        answer = run.connect_board()
+        assert answer["connected"] is False
+        assert "No board port is configured" in answer["reason"]
+
+    def test_the_chain_reaches_a_servo_result(self):
+        run = self.session()
+        run.connect_board()
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+        record = run.measure_and_route()
+
+        assert record["decision"]["decision"] == "A"
+        fire_at = record["actuation"]["route"]["execute_at"]
+        results = run.drain_routes(now=fire_at + 0.1)
+        assert [r["outcome"] for r in results] == ["ACTUATED"]
+        assert "SORT_CONFIRMED" in [e["event"] for e in epr.history(record["item_id"])]
+
+
 class TestTheDashboardPayload:
     def test_the_snapshot_carries_every_panel_the_dashboard_renders(self):
         session, _ = run()
@@ -307,6 +364,20 @@ class TestTheDashboardPayload:
         state = session.snapshot()
         for key in ("conveyor", "hardware", "pricing", "errors", "epr", "calibration", "pan"):
             assert key in state, key
+
+    def test_the_current_item_keeps_its_chain_after_it_is_routed(self):
+        """`assemblies` is regrouped on every read, so the object the camera
+        can still see is a fresh Assembly with no mass, decision or actuation
+        on it. Showing that blanked the whole chain the moment an item
+        finished - which is exactly when it is worth reading."""
+        session, _ = run()
+        show(session, det(1, "CPU", (10, 10, 90, 90)))
+        record = session.measure_and_route()
+
+        current = session.snapshot()["current_item"]
+        assert current["item_id"] == record["item_id"]
+        assert current["decision"]["decision"] == "A"
+        assert current["weight_status"] == "SIMULATED"
 
     def test_the_conveyor_panel_never_implies_a_measured_belt(self):
         session, _ = run(AURUM_CONVEYOR_MODE="SIMULATION")

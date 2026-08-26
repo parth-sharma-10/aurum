@@ -23,20 +23,44 @@ from __future__ import annotations
 import argparse
 import statistics
 import sys
+import time
 from datetime import UTC, datetime
 
 from app import config as config_module
 from app.weight import (
+    LIVE_FRAME_S,
     Calibration,
     HX711SerialReader,
     WeightSensor,
 )
 
 #: How far a verification reading may sit from the known mass and still pass.
-#: ENGINEERING APPROXIMATION — not research-derived. A tenth of a gram is
-#: comfortably inside what an HX711 and a bench load cell resolve, and tight
-#: enough that a wrong factor cannot slip through. Override with --tolerance.
-DEFAULT_VERIFY_TOLERANCE_G = 0.1
+#: MEASURED ON THIS RIG, 2026-08-26, not assumed. The previous 0.1 g was an
+#: assumption that a bench cell resolves a tenth of a gram; a repeatability
+#: experiment falsified it. Placing and re-placing the same mass moves the
+#: reading far more than the electronics do:
+#:
+#:     204 g  x2  sample sd 0.431 g   (max-min 0.610)
+#:     170 g  x3  sample sd 0.245 g   (max-min 0.488)
+#:     374 g      max-min 0.119 g     (a heavier mass seats more repeatably)
+#:     zero, warmed: 3.3 counts = 0.008 g
+#:
+#: The check derives a factor from ONE reference burst and tests it against ONE
+#: verification burst, so both placements contribute:
+#:
+#:     factor uncertainty 0.431 g at 204 g = 0.211%, at 170 g -> 0.359 g
+#:     verification placement scatter                        -> 0.245 g
+#:     combined in quadrature                                -> 0.435 g  (1 sigma)
+#:
+#: 3 sigma is 1.30 g, rounded up to 1.5 g so a sound calibration does not fail
+#: on placement luck. It stays far tighter than anything it exists to catch: a
+#: tare taken under a 5 g object, or a factor wrong by more than 0.9%.
+#:
+#: Nothing downstream needs better. At 170 g this is 0.88% relative; a CPU would
+#: need an 88% mass error to cross the 100 ppm Bin B threshold, and the tightest
+#: plausibility window (Connector, 0.5 g minimum) is governed by zero stability
+#: at 0.008 g, not by the slope. Override with --tolerance.
+DEFAULT_VERIFY_TOLERANCE_G = 1.5
 
 
 def derive_counts_per_gram(
@@ -92,6 +116,20 @@ def verify(
 
 
 def _average(sensor: WeightSensor, samples: int, label: str) -> float:
+    """Average a burst of readings taken NOW, not whatever was already queued.
+
+    The drain is the whole point. Each step of this workflow waits on a human
+    placing a mass, and the board streams at 10 Hz throughout; without
+    discarding that backlog every step reads the pan as it was before the
+    operator touched it, and all three averages come back nearly equal.
+    """
+    drain = getattr(sensor.reader, "drain", None)
+    if callable(drain):
+        discarded = drain()
+        if discarded:
+            print(f"  {label}: discarded {discarded} buffered frames from before this step")
+
+    started = time.monotonic()
     collected: list[float] = []
     while len(collected) < samples:
         sample = sensor.reader.read()
@@ -99,8 +137,23 @@ def _average(sensor: WeightSensor, samples: int, label: str) -> float:
             collected.append(sample.raw_counts)
         elif not getattr(sensor.reader, "connected", True):
             raise RuntimeError(f"the load cell disconnected while reading {label}")
+    elapsed = time.monotonic() - started
     spread = max(collected) - min(collected)
-    print(f"  {label}: {statistics.fmean(collected):.1f} counts (spread {spread:.1f})")
+    print(f"  {label}: {statistics.fmean(collected):.1f} counts (spread {spread:.1f}) "
+          f"in {elapsed:.1f} s")
+
+    # A board emitting at 10 Hz cannot deliver this burst appreciably faster
+    # than real time. If it did, the drain failed and these counts describe an
+    # earlier state of the pan - the exact fault that produced a 0.08 counts/g
+    # factor from a cell that responds at ~394. Refuse rather than average it:
+    # a calibration derived from the wrong moment is worse than none.
+    expected_s = samples * LIVE_FRAME_S
+    if elapsed < expected_s:
+        raise RuntimeError(
+            f"{label}: {samples} frames arrived in {elapsed:.2f} s, faster than the "
+            f"board can send them ({expected_s:.1f} s minimum). These are buffered "
+            "readings of an earlier pan, not a measurement of what is on it now."
+        )
     return statistics.fmean(collected)
 
 
