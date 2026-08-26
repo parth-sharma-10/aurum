@@ -283,6 +283,87 @@ class TestViews:
         assert board.configure_servos(0, 90, 700) is True
         assert not board._responses
 
+    def test_the_applied_angles_are_readable_from_the_snapshot(self):
+        """Otherwise nothing outside this method can say which angles are live."""
+        board = link()
+        assert board.snapshot()["servo_config_applied"] is False
+        board._serial = AckingSerial()
+        board.configure_servos(0, 90, 700)
+        assert board.snapshot()["servo_config"] == {
+            "rest_deg": 0,
+            "push_deg": 90,
+            "hold_ms": 700,
+        }
+
+    def test_reconnecting_forgets_the_angles_the_board_no_longer_holds(self):
+        board = link()
+        board._serial = AckingSerial()
+        board.configure_servos(0, 90, 700)
+        board.disconnect()
+        assert board.snapshot()["servo_config_applied"] is False
+
+
+class TestConfiguringABoardThatKeepsTalking:
+    """The bench condition, and the one that broke the backend.
+
+    A real sketch streams weight frames the whole time it is answering, so the
+    ACK is several reads deep rather than the first thing on the port. Polling
+    at `timeout_s` and quitting on the first empty poll capped the wait at one
+    read timeout however large a budget the caller passed.
+    """
+
+    def board(self, ack_after_reads: int = 20):
+        class TalkativeSerial(FakeSerial):
+            reads = 0
+            ack: str | None = None
+
+            def readline(self):
+                # Real time has to pass: the budget being tested is wall-clock.
+                time.sleep(0.005)
+                self.reads += 1
+                if self.ack is not None and self.reads >= ack_after_reads:
+                    line, self.ack = self.ack, None
+                    return line.encode()
+                return b"W,1,10432,-261605,OK\n"
+
+            def write(self, data):
+                FakeSerial.write(self, data)
+                frame = data.decode().strip().split()
+                if len(frame) >= 6 and frame[1] == "CFG":
+                    self.ack = f"AURUM/1 ACK {frame[5]}\n"
+                return len(data)
+
+        board = BoardLink("/dev/fake", timeout_s=0.02)
+        board._serial = TalkativeSerial()
+        board._state = LinkState.CONNECTED
+        return board
+
+    def test_a_late_acknowledgement_is_still_heard_inside_the_budget(self):
+        # 20 reads at 5 ms is ~0.1 s: far past `timeout_s`, far inside the
+        # budget. This returned False in 0.025 s before the fix.
+        board = self.board()
+        assert board.configure_servos(0, 90, 700, budget_s=1.0) is True
+
+    def test_the_weight_frames_read_while_waiting_are_kept_not_dropped(self):
+        board = self.board()
+        board.configure_servos(0, 90, 700, budget_s=1.0)
+        assert board.next_weight().raw_counts == -261605
+        assert board.dropped == 0
+
+    def test_it_still_gives_up_once_the_budget_really_is_spent(self):
+        board = self.board(ack_after_reads=10_000)
+        start = time.monotonic()
+        assert board.configure_servos(0, 90, 700, budget_s=0.2) is False
+        assert time.monotonic() - start < 1.0
+        assert "did not acknowledge" in board.last_error
+
+    def test_a_dry_port_is_not_waited_out_for_the_whole_budget(self):
+        """`break` was there for a reason: a silent port must not burn 4 s."""
+        board = link()
+        start = time.monotonic()
+        assert board.configure_servos(0, 90, 700, budget_s=5.0) is False
+        assert time.monotonic() - start < 1.0
+
 
 class TestFailure:
     def test_an_unconnected_link_refuses_to_send(self):

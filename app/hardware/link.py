@@ -60,6 +60,11 @@ class BoardLink:
         #: Lines that were neither a weight frame nor a protocol reply. Boot
         #: banners and line noise live here rather than being misread as data.
         self.dropped = 0
+        #: The angles the board ACKNOWLEDGED, or None while it is still running
+        #: whatever the sketch booted with. Read from the snapshot: an operator
+        #: measuring a throw needs to know which of the two is in force, and an
+        #: unapplied CFG is otherwise invisible from outside this method.
+        self.servo_config: tuple[int, int, int] | None = None
         self.weight_reader = _WeightView(self)
         self.transport = _CommandView(self)
 
@@ -106,6 +111,10 @@ class BoardLink:
         self._state = LinkState.DISCONNECTED
         self._weight.clear()
         self._responses.clear()
+        # Reopening the port resets the board, so the angles it acknowledged
+        # are gone with it. Keeping them would report a configuration that the
+        # bootloader has already thrown away.
+        self.servo_config = None
 
     close = disconnect
 
@@ -129,6 +138,14 @@ class BoardLink:
         how long we are willing to read rather than how long a single read
         blocks. Measured on the bench: one second was not enough, and the
         caller should pass `conveyor.arduino.ack_timeout_ms`.
+
+        Each poll gets what is LEFT of that budget, not `timeout_s`. Handing
+        `_next` the shorter figure capped the whole wait at one read timeout —
+        it returns None when its own budget ends just as it does when the port
+        runs dry, and this loop cannot tell those apart, so it gave up on a
+        board that was still streaming. Measured at 0.852 s in isolation against
+        a 1.0 s `timeout_s`, which is why it passed on the bench and failed
+        under the server.
         """
         from app.hardware.arduino import new_command_id, parse_response
 
@@ -138,12 +155,14 @@ class BoardLink:
         ):
             return False
         deadline = time.monotonic() + budget_s
-        while time.monotonic() < deadline:
-            line = self._next(self._responses, self.timeout_s)
+        while (remaining := deadline - time.monotonic()) > 0:
+            line = self._next(self._responses, remaining)
             if line is None:
                 break
             response = parse_response(line)
             if response is not None and response.command_id == command_id:
+                if response.verb == "ACK":
+                    self.servo_config = (int(rest_deg), int(push_deg), int(hold_ms))
                 return response.verb == "ACK"
         self.last_error = f"the board did not acknowledge the servo configuration ({command_id})"
         return False
@@ -230,6 +249,12 @@ class BoardLink:
             "queued_weight_frames": len(self._weight),
             "queued_responses": len(self._responses),
             "dropped_lines": self.dropped,
+            "servo_config_applied": self.servo_config is not None,
+            "servo_config": (
+                dict(zip(("rest_deg", "push_deg", "hold_ms"), self.servo_config, strict=True))
+                if self.servo_config
+                else None
+            ),
         }
 
 
