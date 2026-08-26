@@ -148,6 +148,53 @@ The following must **not** be claimed on the basis of this model:
 
 What can be said: *Aurum Vision identifies and counts visible e-waste component categories in real time, establishing a machine-readable record of what physically entered the workflow.*
 
+## v0.2 — trained, evaluated, NOT deployed
+
+A 20-epoch fine-tune from v0.1 (`AURUM_RUN=aurum_vision_v0_2`, `imgsz=512`)
+tested whether deployment-domain PCB/perfboard hard negatives would stop
+board-like scrap being called CPU. **It did not, and v0.1 remains the shipped
+model** — `app/detector.py` still points at `aurum_vision_v0_1_best.pt`.
+
+Both models measured on the same 230-image test split:
+
+| | v0.1 | v0.2 |
+|---|---|---|
+| CPU precision | 0.984 | 0.929 |
+| CPU recall | 0.918 | 0.906 |
+| CPU mAP50 | 0.920 | 0.920 |
+| CPU mAP50-95 | 0.817 | 0.791 |
+| PCB recall | 0.906 | 0.925 |
+| RAM recall | 0.687 | 0.686 |
+| Connector recall | 0.745 | 0.745 |
+
+Deployment-domain captures, at the shipped 0.35 threshold:
+
+| set | v0.1 CPU FP | v0.2 CPU FP | |
+|---|---|---|---|
+| perfboard (12) | 12 | **0** | ⚠ all 12 are v0.2 **training** images |
+| broken PCB (15) | 9 | 6 | 5 train, 2 valid, 8 held out |
+| **held-out board-like (12)** | **0** | **6** | in **no** split — the only clean evidence |
+| empty scene (15) | 0 | 0 | |
+| real CPU (4) | 0 detected | 1 detected | |
+
+**The perfboard result is not evidence.** Those images are in v0.2's training
+set. On the contamination-free set, CPU false positives went **up**, 0 → 6.
+
+Split by pose, v0.2 is correct on every broken-PCB pose it saw at least one
+frame of, and wrong on every pose it saw none of — pose memorisation, not a
+learned CPU/board distinction. The falling CPU precision (0.984 → 0.929) says
+the same thing: v0.2 is *more* willing to say CPU, the opposite of the goal.
+
+Two contributors worth separating before another run: the hard-negative set is
+~37 images of ~2 physical objects, so more frames of the same objects will
+deepen the memorisation rather than fix it; and the run inherited `lr0=0.01`
+with warmup from `RELEASE_CONFIG`, which is the from-scratch schedule and
+aggressive for a fine-tune off converged weights.
+
+A future attempt needs more distinct physical objects, several viewpoints each,
+and a split held out **by pose or object** rather than by frame — otherwise this
+failure mode stays invisible behind a contaminated evaluation.
+
 ## Reproduction
 
 See [`training.md`](training.md). The full chain is `ml.ingest` → `ml.prepare` → `ml.validate` → `ml.train` → `ml.evaluate`.

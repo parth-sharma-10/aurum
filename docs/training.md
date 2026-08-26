@@ -133,7 +133,17 @@ Augmentation is mild and deliberate: horizontal flip and ±15° rotation, but
 restrained HSV jitter (green board and gold contacts are real class signal).
 
 Outputs: `runs/<name>/` with weights, curves and plots; `best.pt` and `last.pt`
-are copied to `models/` alongside `aurum_vision_v0_1_meta.json`.
+are copied to `models/` **named after the run**, alongside a matching
+`_meta.json`. `AURUM_RUN=aurum_vision_v0_2` therefore writes
+`models/aurum_vision_v0_2_{best,last}.pt` and `aurum_vision_v0_2_meta.json`, and
+the version label inside that metadata is derived from the run name too.
+
+This matters when fine-tuning from a released checkpoint. The artifact names
+were previously hardcoded to `v0_1`, so a second run overwrote the very weights
+it had been started from — destroying the baseline it was meant to be compared
+against. `app/detector.py` resolves the metadata file beside the weights it
+loads, so a report generated from v0.2 weights is not stamped with v0.1's
+version string.
 
 ## 5. Evaluate on the held-out test split
 

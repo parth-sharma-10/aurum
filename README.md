@@ -9,7 +9,7 @@ invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-836%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-1267%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
 
 > **The weights are a release asset, not a tracked file.** `models/*.pt` is
 > gitignored, so a fresh clone has no model until you download one. One command
@@ -517,10 +517,20 @@ The measurement path (`WeightSensor`) has been run against real hardware: an
 Arduino streams raw HX711 counts, Python owns the calibration, and a reading
 only becomes `MEASURED` on a factor verified against a *second* known mass.
 
-**The load cell is currently mechanically bypassed.** 180 g moves it 2.2 counts
-against a 64-count noise floor; 400 g moves it backwards. The cell converts
-correctly and sees no strain, so `configs/calibration.yaml` stays `UNMEASURED`
-and no reading can reach `MEASURED`. Measurements and the mounting fix are in
+**The load cell is calibrated and verified (2026-08-26).** The mounting fault is
+fixed; the cell responds at **392.2167 counts/g**, linear through the tare
+(fitted offset +80 ± 223 counts, consistent with zero), with 0.008 g of zero
+drift once warmed. The second-mass check predicted 171.130 g for the nominal
+170 g reference — an error of **+1.130 g against a 1.5 g tolerance**.
+
+That tolerance is measured, not assumed: placement repeatability is ~0.5 g
+max−min, giving 0.435 g combined 1σ and 1.30 g at 3σ. The original 0.1 g was an
+assumption that a bench cell resolves a tenth of a gram, and repeated placement
+falsified it.
+
+Readings now reach `MEASURED`. **Both masses are uncertified**, so this
+establishes the ratio and the linearity, not absolute accuracy — fine for
+sorting, not a claim to be a scale. Derivation and evidence in
 [docs/hardware.md](docs/hardware.md).
 
 ### The mock-mass fallback
@@ -988,8 +998,9 @@ Aurum
 
 **Aurum is a working software pipeline driving real hardware.** Both servos have
 been moved by Aurum's own command over a real serial link, and watched doing it.
-The load cell is mechanically bypassed, so no mass has ever been measured. There
-is no conveyor, and the operator carries components between stages.
+The load cell is mounted, calibrated and verified against a second known mass, so
+readings reach `MEASURED`. There is no conveyor, and the operator carries
+components between stages.
 
 | Phase | Status | Software | Hardware | Validation |
 |---|---|---|---|---|
@@ -1011,9 +1022,11 @@ is no conveyor, and the operator carries components between stages.
 `PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
 
 The actuation path reaches **level 3** — both paddles moved by Aurum's command
-and watched. **Level 4 is not reached**: the load cell is mechanically bypassed,
-so nothing has been physically calibrated. Level 5 needs a conveyor, which does
-not exist and is out of scope for this demonstration.
+and watched. **Level 4 is reached with one qualification**: the cell carries a
+calibration verified against a second known mass, but both masses are
+uncertified, so the factor is verified self-consistently rather than traceably.
+Level 5 needs a conveyor, which does not exist and is out of scope for this
+demonstration.
 
 ### Hardware, as built
 
@@ -1027,8 +1040,10 @@ streaming, `PING`→`PONG` over the real port, Servo A acknowledged in 709 ms an
 Servo B acknowledged, a replayed command id answered `ACK … DUP` without moving
 anything twice, and Bin C wrote no bytes at all.
 
-**Not verified: the load cell under load.** It is mechanically bypassed, so
-`configs/calibration.yaml` stays UNMEASURED and no reading can reach `MEASURED`.
+**Verified 2026-08-26: the load cell under load, and its calibration.**
+392.2167 counts/g, linear through the tare, 0.008 g zero drift, second-mass error
++1.130 g within the 1.5 g tolerance. Readings reach `MEASURED`. Not established:
+absolute traceability — both reference masses are uncertified.
 
 **Close the Arduino IDE Serial Monitor before flashing or running.** It
 reopens itself whenever the board enumerates and holds the port exclusively.

@@ -32,10 +32,29 @@ runs/
 # or rebuild them; yolo11n.pt is auto-downloaded by Ultralytics on first train.
 *.pt
 
-# Generated inference outputs
+# Generated inference outputs. The annotated JPEGs are rebuilt by re-running
+# ml.realworld / ml.evaluate against the weights named in the summary; the
+# *_summary.json and *_metrics.json files beside them ARE tracked, because they
+# are the evidence and they are small.
 reports/realworld/
 reports/realworld_relaxed/
+reports/realworld_v1/
+reports/realworld_v2/
 reports/test_predictions/
+reports/test_predictions_v0_1/
+reports/bench_perfboard/
+reports/bench_perfboard_v0_1/
+reports/bench_perfboard_v0_2/
+reports/bench_broken_pcb_v0_1/
+reports/bench_broken_pcb_v0_2/
+reports/bench_empty_v0_1/
+reports/bench_empty_v0_2/
+reports/bench_heldout_boardlike_v0_1/
+reports/bench_heldout_boardlike_v0_2/
+reports/bench_real_cpu_v0_1/
+reports/bench_real_cpu_v0_2/
+reports/bench_labels/
+reports/hardneg_review/
 
 .DS_Store
 node_modules/
