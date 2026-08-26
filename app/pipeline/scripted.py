@@ -51,7 +51,7 @@ SCRIPT: tuple[ScriptedObject, ...] = (
     ScriptedObject("PCB", 0.88, "the bulk class: large mass, low precious fraction"),
     ScriptedObject("RAM", 0.91, "gold-plated edge contacts on a small mass"),
     ScriptedObject("Connector", 0.76, "the smallest mass in the set"),
-    ScriptedObject("CPU", 0.58, "the same class the model is much less sure about"),
+    ScriptedObject("CPU", 0.38, "the same class the model is much less sure about"),
     ScriptedObject("Heatsink", 0.85, "a class the composition database cannot cite"),
 )
 

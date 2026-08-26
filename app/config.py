@@ -326,7 +326,7 @@ SPEC: dict[str, tuple] = {
         1000.0,
         "AURUM_BIN_A_MIN_PRECIOUS_PPM",
     ),
-    "grading.bin_a.minimum_confidence": (_fraction, 0.75, "AURUM_BIN_A_MIN_CONFIDENCE"),
+    "grading.bin_a.minimum_confidence": (_fraction, 0.50, "AURUM_BIN_A_MIN_CONFIDENCE"),
     "grading.bin_a.minimum_precious_value": (
         _non_negative,
         UNMEASURED,
@@ -342,7 +342,7 @@ SPEC: dict[str, tuple] = {
         100.0,
         "AURUM_BIN_B_MIN_PRECIOUS_PPM",
     ),
-    "grading.bin_b.minimum_confidence": (_fraction, 0.60, "AURUM_BIN_B_MIN_CONFIDENCE"),
+    "grading.bin_b.minimum_confidence": (_fraction, 0.40, "AURUM_BIN_B_MIN_CONFIDENCE"),
     "grading.fallback": (_one_of("A", "B", "C"), "C", "AURUM_GRADING_FALLBACK"),
     # ------------------------------------------------------------------
     # MASS PLAUSIBILITY - is this mass possible for this class at all?

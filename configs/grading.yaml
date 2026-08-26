@@ -38,9 +38,18 @@ grading:
     minimum_precious_fraction_ppm: 1000
 
     # ENGINEERING APPROXIMATION — no source.
-    # Well above the model's 0.35 operating threshold: firing a servo needs a
-    # stronger detection than merely drawing a box.
-    minimum_confidence: 0.75
+    # Still above the model's 0.35 operating threshold, so a servo is never
+    # fired on a box the detector itself barely believes — but no longer so far
+    # above it that ordinary bench detections are refused. Lowered from 0.75 on
+    # 2026-08-26: a RAM read at 0.432 on the rig, which is a real component in
+    # plain view, and refusing it as UNKNOWN made the machine look broken when
+    # it was being careful.
+    #
+    # THE TRADE IS REAL. A lower gate routes on weaker evidence, so a
+    # misclassification is likelier to reach a bin instead of being refused
+    # into C. Raise it back for a run where a wrong bin costs more than a
+    # missed one; AURUM_BIN_A_MIN_CONFIDENCE overrides it without an edit.
+    minimum_confidence: 0.50
 
     # Currency per item. UNMEASURED until a real price provider is configured;
     # while unmeasured, the price-independent fraction rule decides alone. No
@@ -60,7 +69,11 @@ grading:
     minimum_precious_fraction_ppm: 100
 
     # ENGINEERING APPROXIMATION — no source.
-    minimum_confidence: 0.60
+    # Lowered from 0.60 on 2026-08-26 for the same reason as bin_a, and kept
+    # below it: B is the evidence-led stream, so it should not demand a
+    # stronger detection than the premium one. 0.40 is still above the model's
+    # 0.35 floor. AURUM_BIN_B_MIN_CONFIDENCE overrides it.
+    minimum_confidence: 0.40
 
   # Where anything unjustified goes. C has no servo: an item reaching the end
   # of the belt falls into it. C does not mean worthless; it means Aurum

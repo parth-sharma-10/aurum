@@ -195,8 +195,9 @@ class TestDuplicatePrevention:
 
 
 class TestConfidence:
-    def test_confidence_is_the_mean_over_observations(self, tracker):
-        """Documented meaning: a lucky frame must not promote an item."""
+    def test_confidence_is_the_mean_over_recent_observations(self, tracker):
+        """Documented meaning: a lucky frame must not promote an item. Three
+        observations is inside the window, so this is still a plain mean."""
         for frame_id, value in enumerate((0.5, 0.7, 0.9)):
             tracker.update([det(confidence=value)], frame_id=frame_id, now=NOW)
         item = tracker.active[0]
@@ -206,7 +207,23 @@ class TestConfidence:
 
     def test_the_basis_is_stated_in_the_output(self, tracker):
         item = tracker.update([det()], frame_id=0, now=NOW)[0]
-        assert item.as_dict()["confidence_basis"] == "mean over all observations"
+        basis = item.as_dict()["confidence_basis"]
+        assert "mean over the last" in basis
+        assert str(item.CONFIDENCE_WINDOW) in basis
+
+    def test_the_placement_frames_stop_dragging_a_settled_item_down(self, tracker):
+        """The rig's load cell sits UNDER the camera, so the tracker starts
+        observing while the object is still being put down — hand over it,
+        moving, half out of frame. A lifetime mean never forgot those, so a
+        component that then sat still and read 0.9 kept a mean of 0.43 and was
+        refused as UNKNOWN. A RAM did exactly that on 2026-08-26."""
+        placement = [0.2] * 10  # being put down
+        settled = [0.9] * 20  # sitting still, in plain view
+        for frame_id, value in enumerate(placement + settled):
+            tracker.update([det(confidence=value)], frame_id=frame_id, now=NOW)
+        item = tracker.active[0]
+        assert item.confidence == pytest.approx(0.9), "the recent view is the evidence"
+        assert item.lifetime_confidence < 0.7, "the lifetime mean is still recorded"
 
     def test_an_unobserved_item_has_no_confidence(self):
         from app.vision.tracker import TrackedItem
