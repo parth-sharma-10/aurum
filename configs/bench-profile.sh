@@ -33,9 +33,17 @@
 #
 # This line is load-bearing and not interchangeable with AURUM_SIMULATION. The
 # real geometry block is UNMEASURED, and an unmeasured machine refuses to
-# schedule rather than guessing — so without a SIMULATION belt no route is ever
-# scheduled and the servo never fires, board or no board.
-AURUM_CONVEYOR_MODE=SIMULATION
+# schedule rather than guessing.
+#
+# NONE, not SIMULATION. There is no belt on this bench: the operator carries
+# the object from the camera to the pan. With SIMULATION the scheduler models
+# a 60 cm travel at 10 cm/s and holds every paddle for ~5.8 s after the
+# decision, which on a bench with no belt is 5.8 s of the machine looking
+# broken. With NONE there is no scheduler and routing is immediate, which is
+# what actually happens here.
+#
+# Set this back to SIMULATION only to demonstrate the belt timing model.
+AURUM_CONVEYOR_MODE=NONE
 
 # 10 cm/s = 0.10 m/s. Stated rather than defaulted, so the bench says out loud
 # what speed it is pretending to run at.
@@ -60,12 +68,13 @@ AURUM_ARDUINO_PORT=/dev/cu.usbmodem1101
 # and no frame is written, which looks exactly like a dead servo.
 AURUM_ARDUINO_ENABLED=true
 
-# STALE AS WRITTEN: the cell is no longer bypassed. The mounting was corrected
-# on 2026-08-26 and it now carries a calibration verified against a second
-# known mass (docs/hardware.md). Leave this true only to run the servo half of
-# the bench without touching the cell — an item that cannot be weighed then
-# gets a per-class stand-in mass (CPU 25 g, PCB 180 g, RAM 30 g, Connector 5 g),
-# SIMULATED and never `usable`, and every figure derived from it says so.
-# Set it false to exercise the real cell. Calibrating is still not a
-# prerequisite for moving a servo.
-AURUM_DEMO_MOCK_MASS=true
+# FALSE, so the pan drives the machine. The cell is mounted and carries a
+# calibration verified against a second known mass (392.2167 counts/g,
+# docs/hardware.md), and with a stand-in mass in play the load cell is not in
+# the loop at all: `PanMachine` never sees an arrival, so nothing is ever
+# triggered and the servo never fires on its own. Mock mass is for a bench
+# with no working cell.
+#
+# Set it true to run the vision and decision halves without touching the cell.
+# Every figure derived from a stand-in is stamped SIMULATED and never `usable`.
+AURUM_DEMO_MOCK_MASS=false
