@@ -720,3 +720,40 @@ details.controls > summary {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* Where the run's items went. Four across on a wide screen, wrapping to two
+   on a narrow one rather than scrolling horizontally. */
+.bin-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.bin-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.bin-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bin-count {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
+}
+
+.bin-mass {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--faint);
+}

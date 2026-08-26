@@ -389,6 +389,64 @@ function HardwarePanel({ hardware, board, actuation, onReset, busy }) {
   );
 }
 
+/** Where this run's items actually went, and how much mass went with them.
+ *
+ * Derived from the items already on the page rather than a new endpoint: the
+ * dashboard polls the whole session anyway, and a per-bin count is a sum.
+ *
+ * Grouped by `physical_bin`, not by grade. An item graded UNKNOWN is routed to
+ * C, so it is counted in C — and shown again in its own card, because "how
+ * much did the machine refuse to grade" is a different question from "what is
+ * in bin C". A total is stamped SIMULATED unless every mass in it was measured.
+ */
+function BinCards({ items }) {
+  const routed = (items ?? []).filter((i) => i.decision);
+  const bin = (b) => routed.filter((i) => (i.decision.physical_bin ?? i.decision.decision) === b);
+  const cards = [
+    { key: "A", label: "BIN A", rows: bin("A"), cls: "badge-a" },
+    { key: "B", label: "BIN B", rows: bin("B"), cls: "badge-b" },
+    { key: "C", label: "BIN C", rows: bin("C"), cls: "badge-c" },
+    {
+      key: "U",
+      label: "UNGRADED",
+      rows: routed.filter((i) => i.decision.decision === "UNKNOWN"),
+      cls: "badge-c",
+      note: "refused a grade — routed to C",
+    },
+  ];
+  return (
+    <section className="glass-panel">
+      <h2 className="section-title">Bins</h2>
+      <p className="section-note">
+        Where this run's {routed.length} item{routed.length === 1 ? "" : "s"}{" "}
+        went. Counted by the bin the item physically reaches.
+      </p>
+      <div className="bin-cards">
+        {cards.map((c) => {
+          const mass = c.rows.reduce((t, i) => t + (i.weight_g ?? 0), 0);
+          const measured =
+            c.rows.length > 0 && c.rows.every((i) => i.weight_status === "MEASURED");
+          return (
+            <div key={c.key} className="bin-card">
+              <div className="bin-card-head">
+                <span className={c.cls}>{c.label}</span>
+                <span className="bin-count">{c.rows.length}</span>
+              </div>
+              <div className="bin-mass mono">
+                {c.rows.length === 0 ? "--" : grams(mass)}
+                {c.rows.length > 0 && !measured && (
+                  <span className="muted small"> SIMULATED</span>
+                )}
+              </div>
+              {c.note && <div className="muted small">{c.note}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function UpcomingQueue({ routing }) {
   // Null means there is no belt, which is the shipped configuration. An empty
   // queue panel on a machine that can never queue anything is furniture.
@@ -1067,6 +1125,8 @@ export default function App() {
           onReset={() => act("fault", "/hardware/fault/reset")}
         />
       </div>
+
+      <BinCards items={state?.items} />
 
       <section className="glass-panel">
         <h2 className="section-title">Routed this run</h2>
