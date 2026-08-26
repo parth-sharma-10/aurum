@@ -1072,7 +1072,12 @@ export default function App() {
         <h2 className="section-title">Routed this run</h2>
         <p className="section-note">
           One physical item, one identity, one movement. {processed.length}{" "}
-          processed.
+          processed.{" "}
+          {processed.length > 0 && (
+            <a className="mono small" href={`${API}/session/report.csv`}>
+              Download CSV
+            </a>
+          )}
         </p>
         <table className="ledger">
           <thead>

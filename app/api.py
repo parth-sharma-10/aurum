@@ -25,7 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
 from app import config as config_module
-from app import epr, ledger, pricing
+from app import epr, ledger, pricing, report
 from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.decision import engine as decision_engine
@@ -384,6 +384,21 @@ def session_measure(item_id: str | None = None) -> dict:
     route can be requested through this endpoint.
     """
     return demo_session().measure_and_route(item_id)
+
+
+@app.get("/session/report.csv")
+def session_report_csv() -> Response:
+    """The run as a file. Every figure paired with the status of what backs it.
+
+    CSV only: a PDF would need a dependency this project does not have, and a
+    spreadsheet opens this.
+    """
+    snapshot = demo_session().snapshot()
+    return Response(
+        report.to_csv(snapshot),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{report.filename(snapshot)}"'},
+    )
 
 
 @app.post("/session/calibration/reload")
