@@ -190,6 +190,12 @@ def get_weight_source(mode: str = "auto", port: str | None = None) -> WeightSour
 PROTOCOL_VERSION = 1
 PROTOCOL = "W,<version>,<board_millis>,<raw_counts>,<status>"
 
+#: The sketch emits every 100 ms. A frame that arrives in appreciably less than
+#: that came out of a buffer rather than off the wire, so half a period is the
+#: line between replayed history and the present. It is a property of the
+#: firmware's emit rate, not a tuning knob.
+LIVE_FRAME_S = 0.05
+
 CALIBRATION_FILE = ROOT / "configs" / "calibration.yaml"
 
 
@@ -231,13 +237,40 @@ class Calibration:
     notes: str | None = None
 
     @property
-    def present(self) -> bool:
-        """A factor and a tare exist. Says nothing about whether they are right."""
+    def has_factor(self) -> bool:
+        """A factor and a tare exist, so counts can be converted at all.
+
+        Says nothing about whether they are right. This is what the arithmetic
+        needs; `present` is what the machine needs, and they are not the same
+        question.
+        """
         return bool(self.counts_per_gram) and self.tare_counts is not None
 
+    @property
+    def present(self) -> bool:
+        """Calibrated AND verified against a second known mass.
+
+        The gate every consumer that drives the machine checks. A factor is
+        derived FROM the reference mass, so that mass always reads back
+        correctly and an unverified factor can be arbitrarily wrong for every
+        other load - a failed run once left 0.078 counts/g here, which reads an
+        empty pan as -2033 g and would have opened this gate.
+
+        `app.calibrate` deliberately records a failed attempt rather than
+        discarding it, because knowing the factor was tried and missed is worth
+        more than an empty file. This is what stops that record from being
+        mistaken for a calibration.
+        """
+        return self.has_factor and self.verified
+
     def grams(self, raw_counts: float) -> float | None:
-        """Convert raw counts to grams. None when uncalibrated."""
-        if not self.present:
+        """Convert raw counts to grams. None when there is no factor.
+
+        Deliberately gated on `has_factor`, not `present`: an unverified factor
+        still produces the number behind a STABLE reading, which is displayable
+        and is explicitly not a measurement.
+        """
+        if not self.has_factor:
             return None
         return (raw_counts - self.tare_counts) / self.counts_per_gram
 
@@ -352,6 +385,16 @@ class RawReader:
     def read(self) -> RawSample | None:  # pragma: no cover - interface
         raise NotImplementedError
 
+    def drain(self) -> None:
+        """Discard anything buffered, so the next read is of the pan NOW.
+
+        A no-op for readers that hold no buffer. It matters for a serial cell:
+        the board streams unprompted at 10 Hz, so a caller that pauses - to let
+        an operator place a mass - returns to a queue of frames describing the
+        pan before they touched it.
+        """
+        return None
+
     def close(self) -> None:
         return None
 
@@ -390,6 +433,38 @@ class HX711SerialReader:
             return None
         return parse_weight_line(line)
 
+    def drain(self, budget_s: float = 30.0) -> int:
+        """Read forward until the stream is live, and return frames discarded.
+
+        The sketch emits every 100 ms whether or not anyone listens, and the OS
+        keeps the whole backlog. A caller that paused - to let an operator place
+        a mass - is handed that history from the beginning, instantly, in order.
+        Twenty such frames average to the pan as it was BEFORE the mass landed,
+        which is how a calibration derived 0.08 counts/g from a cell that
+        actually responds at ~394.
+
+        Flushing the buffer is not enough, because the kernel refills it from
+        the backlog immediately. What separates history from now is arrival
+        time: a queued frame returns instantly, a live one makes the reader wait
+        for the board to send it. So read forward until a frame has to be waited
+        for. That needs no clock shared with the board.
+        """
+        if not self.connected:
+            return 0
+        with contextlib.suppress(Exception):
+            self._ser.reset_input_buffer()
+        discarded = 0
+        deadline = time.monotonic() + budget_s
+        while time.monotonic() < deadline:
+            started = time.monotonic()
+            line = self.read()
+            if line is None:
+                continue
+            if time.monotonic() - started >= LIVE_FRAME_S:
+                return discarded  # we waited for it, so it is of the present
+            discarded += 1
+        return discarded
+
     def close(self) -> None:
         with contextlib.suppress(Exception):
             self._ser.close()
@@ -417,7 +492,9 @@ class SimulatedRawReader:
         grams = self.grams + drift
         cal = self._calibration
         counts = (
-            grams * cal.counts_per_gram + cal.tare_counts if cal and cal.present else grams * 1000.0
+            grams * cal.counts_per_gram + cal.tare_counts
+            if cal and cal.has_factor
+            else grams * 1000.0
         )
         return RawSample(raw_counts=counts)
 
@@ -481,7 +558,10 @@ class WeightSensor:
     def read(self, now=None) -> WeightReading:
         """Collect samples until the reading settles, or say why it did not."""
         clock = time.monotonic if now is None else now
-        if not self.simulated and not self.calibration.present:
+        # `has_factor`, not `present`: an unverified factor may still produce a
+        # settled reading, which `_settled` labels STABLE and never MEASURED.
+        # Gating on `present` here would delete that tier.
+        if not self.simulated and not self.calibration.has_factor:
             return self._unavailable(
                 "The load cell is not calibrated. Run `python -m app.calibrate` to "
                 "record a factor, then verify it with a second known mass."
@@ -574,7 +654,7 @@ class WeightSensor:
         )
 
     def _to_grams(self, raw: float) -> float | None:
-        if self.simulated and not self.calibration.present:
+        if self.simulated and not self.calibration.has_factor:
             # The simulation encodes grams at a nominal 1000 counts/g so the
             # whole path runs before any cell is calibrated.
             return raw / 1000.0

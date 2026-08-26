@@ -358,8 +358,9 @@ class TestFailures:
         record = cycle(run)
 
         assert record["weight_status"] == "UNSTABLE"
-        assert record["decision"]["decision"] == "C"
-        assert record["decision"]["reason_code"] == "C_UNMEASURED_WEIGHT"
+        assert record["decision"]["decision"] == "UNKNOWN"
+        assert record["decision"]["physical_bin"] == "C"
+        assert record["decision"]["reason_code"] == "UNKNOWN_WEIGHT"
 
     def test_the_cell_disconnecting_mid_weigh_is_reported_not_raised(self):
         cell = ScriptedCell(0.0)
@@ -396,8 +397,9 @@ class TestFailures:
         record = cycle(run)
 
         assert record["weight_status"] == "UNAVAILABLE"
-        assert record["decision"]["decision"] == "C"
-        assert record["decision"]["reason_code"] == "C_UNMEASURED_WEIGHT"
+        assert record["decision"]["decision"] == "UNKNOWN"
+        assert record["decision"]["physical_bin"] == "C"
+        assert record["decision"]["reason_code"] == "UNKNOWN_WEIGHT"
         assert record["actuation"]["commanded"] is False
 
     def test_a_disconnected_cell_releases_rather_than_holding_an_object_forever(self):
@@ -686,12 +688,19 @@ class TestTheThread:
         assert run.start_pan() is True
         try:
             cell.place(42.7)
+            # Wait for the ACTUATION, not merely for the record. `_process`
+            # publishes the item as soon as the decision is taken and `_route`
+            # fills in the movement afterwards, so polling for the record alone
+            # can catch it between the two.
             deadline = time.monotonic() + 5.0
-            while not run._routed and time.monotonic() < deadline:
+            while time.monotonic() < deadline:
+                if any(r.get("actuation") for r in run._routed.values()):
+                    break
                 time.sleep(0.02)
 
             assert run._routed, f"nothing was sorted; pan is {run.pan.state} ({run.pan.reason})"
             [record] = run._routed.values()
+            assert record["actuation"], f"decided but never routed; pan is {run.pan.state}"
             assert record["weight_status"] == "MEASURED"
             assert transport.movements == [("A", record["actuation"]["command_id"])]
 

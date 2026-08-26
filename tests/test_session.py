@@ -25,9 +25,12 @@ each leave a reason on the item.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from app import config
+from app.errors import ErrorCode
 from app.hardware import ArduinoController, FakeTransport
 from app.pipeline.session import DemoSession
 from app.vision.tracker import TrackedDetection
@@ -161,8 +164,9 @@ class TestTheChain:
 
         result = run.measure_and_route()
 
-        assert result["decision"]["decision"] == "C"
-        assert result["decision"]["reason_code"] == "C_UNKNOWN_CLASS"
+        assert result["decision"]["decision"] == "UNKNOWN"
+        assert result["decision"]["physical_bin"] == "C"
+        assert result["decision"]["reason_code"] == "UNKNOWN_CLASS"
         assert result["actuation"]["commanded"] is False
         assert result["actuation"]["servo"] is None
         assert transport.sent == []
@@ -226,6 +230,60 @@ class TestOperatorRules:
         assert second["error"] == "ALREADY_PROCESSED"
         assert len(transport.movements) == 1
 
+
+class TestStartingAFreshRun:
+    """`reset()` is the operator saying they swapped the object on the bench.
+
+    Without it, a rig whose object never leaves the camera's view can route
+    exactly once and then refuse forever - which reads as a broken button
+    rather than as the safety rule it actually is.
+    """
+
+    def test_a_reset_run_can_route_the_next_object(self):
+        transport = FakeTransport(connected=True)
+        run = session(transport=transport)
+        present(run, "CPU")
+        run.measure_and_route()
+        assert run.measure_and_route()["error"] == "ALREADY_PROCESSED"
+
+        run.reset()
+        present(run, "CPU")
+        assert "error" not in run.measure_and_route()
+        assert len(transport.movements) == 2
+
+    def test_the_new_object_gets_its_own_identity(self):
+        """One physical object cannot inherit the previous one's ledger row."""
+        run = session()
+        present(run, "CPU")
+        first = run.measure_and_route()["item_id"]
+        run.reset()
+        present(run, "CPU")
+        assert run.measure_and_route()["item_id"] != first
+
+    def test_a_reset_forgets_what_was_on_the_pan(self):
+        """A stale latch would short-circuit refresh() and block every item."""
+        run = session()
+        present(run, "CPU")
+        run.zone.latch()
+        run.reset()
+        assert run.zone.held is None
+
+    def test_a_reset_keeps_the_audit_identity_and_the_error_log(self):
+        """The run's bookkeeping restarts; the record of what happened does not.
+
+        The EPR ledger is written through `epr.record` and is not the session's
+        to clear. What the session does own is the error log and the id every
+        row was filed under, and a reset must leave both standing.
+        """
+        run = session()
+        run.errors.record(ErrorCode.ARDUINO_ERROR, "board", "a failure worth keeping")
+        session_id, before = run.session_id, run.errors.snapshot()["count"]
+
+        run.reset()
+
+        assert run.session_id == session_id
+        assert run.errors.snapshot()["count"] == before
+
     def test_two_components_each_get_their_own_identity_and_movement(self):
         transport = FakeTransport(connected=True)
         run = session(transport=transport)
@@ -252,7 +310,7 @@ class TestFailsClosed:
         present(run, "PCB")
         result = run.measure_and_route()
         assert result["weight_status"] == "STABLE"
-        assert result["decision"]["decision"] == "C"
+        assert result["decision"]["physical_bin"] == "C"
         assert result["valuation"]["pmdi"]["available"] is False
 
     def test_an_uncalibrated_cell_reports_unavailable_not_zero(self):
@@ -275,7 +333,8 @@ class TestFailsClosed:
         present(run, "PCB")
         result = run.measure_and_route()
         assert result["weight_status"] == "UNAVAILABLE"
-        assert result["decision"]["decision"] == "C"
+        assert result["decision"]["decision"] == "UNKNOWN"
+        assert result["decision"]["physical_bin"] == "C"
 
     def test_a_disconnected_board_leaves_the_decision_and_drops_the_movement(self):
         """The decision is not rewritten to express "I could not move it"."""
@@ -322,8 +381,12 @@ class TestSnapshot:
         """The demonstration must not imply a belt it does not have."""
         conveyor = session().snapshot()["conveyor"]
         assert conveyor["present"] is False
-        assert "No conveyor exists" in conveyor["note"]
+        assert conveyor["mode"] == "NONE"
+        assert "No belt exists" in conveyor["note"]
         assert "not scheduled" in conveyor["note"]
+        # And no speed is offered in place of one.
+        assert conveyor["speed"]["cm_s"] is None
+        assert conveyor["speed"]["status"] == "UNAVAILABLE"
 
     def test_the_snapshot_reports_calibration_verification_honestly(self):
         assert session(calibration=UNVERIFIED).snapshot()["calibration"]["verified"] is False
@@ -403,8 +466,9 @@ class TestMockMassFallback:
         run = self.mock_session(transport=transport)
         present(run, "GPU")
         result = run.measure_and_route()
-        assert result["decision"]["decision"] == "C"
-        assert result["decision"]["reason_code"] == "C_UNKNOWN_CLASS"
+        assert result["decision"]["decision"] == "UNKNOWN"
+        assert result["decision"]["physical_bin"] == "C"
+        assert result["decision"]["reason_code"] == "UNKNOWN_CLASS"
         assert transport.movements == []
 
     def test_with_the_flag_off_a_pcb_still_reaches_c(self):
@@ -412,8 +476,9 @@ class TestMockMassFallback:
         run = session(board=False)
         present(run, "PCB")
         result = run.measure_and_route()
-        assert result["decision"]["decision"] == "C"
-        assert result["decision"]["reason_code"] == "C_UNMEASURED_WEIGHT"
+        assert result["decision"]["decision"] == "UNKNOWN"
+        assert result["decision"]["physical_bin"] == "C"
+        assert result["decision"]["reason_code"] == "UNKNOWN_WEIGHT"
 
     def test_an_unmarked_simulated_mass_is_still_refused(self):
         """The permission rides on the reading, so it cannot be forged by config."""
@@ -489,3 +554,37 @@ class TestPerClassMockMass:
         cfg = self.mock_cfg()
         per_class = DemoSession(cfg=cfg).snapshot()["mock_mass"]["per_class"]
         assert per_class == {"CPU": 25.0, "PCB": 180.0, "RAM": 30.0, "Connector": 5.0}
+
+
+class TestCalibrationReload:
+    """Confirmed stale on 2026-08-26: editing calibration.yaml under a live
+    session changed nothing until uvicorn was restarted, and nothing said so."""
+
+    @staticmethod
+    def recalibrated(monkeypatch, counts_per_gram: float) -> Calibration:
+        """Stand in for somebody having calibrated the cell and saved the file."""
+        swapped = dataclasses.replace(VERIFIED, counts_per_gram=counts_per_gram)
+        monkeypatch.setattr(Calibration, "load", classmethod(lambda cls: swapped))
+        return swapped
+
+    def test_a_changed_factor_reaches_the_session(self, monkeypatch):
+        run = session()
+        self.recalibrated(monkeypatch, 999.0)
+
+        out = run.reload_calibration()
+        assert out["changed"] is True
+        assert out["before"]["counts_per_gram"] == VERIFIED.counts_per_gram
+        assert run.calibration.counts_per_gram == 999.0
+
+    def test_reloading_an_unchanged_file_says_nothing_changed(self, monkeypatch):
+        run = session()
+        self.recalibrated(monkeypatch, VERIFIED.counts_per_gram)
+        assert run.reload_calibration()["changed"] is False
+
+    def test_the_new_factor_is_what_the_next_reading_uses(self, monkeypatch):
+        """Reassigning the attribute has to be enough — a cached sensor would
+        keep the old factor and make the reload a lie."""
+        run = session()
+        self.recalibrated(monkeypatch, 999.0)
+        run.reload_calibration()
+        assert run.snapshot()["calibration"]["counts_per_gram"] == 999.0

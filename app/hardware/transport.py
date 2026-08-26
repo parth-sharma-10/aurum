@@ -64,7 +64,9 @@ class SerialTransport(Transport):
 
     name = "serial"
 
-    def __init__(self, port: str, baudrate: int = 9600, timeout_s: float = 1.0) -> None:
+    # 115200 to match the sketch (hardware/arduino/aurum_sorter/aurum_sorter.ino)
+    # and BoardLink. A mismatched default reads as line noise, not as an error.
+    def __init__(self, port: str, baudrate: int = 115200, timeout_s: float = 1.0) -> None:
         self.port = port
         self.baudrate = baudrate
         self.timeout_s = timeout_s
@@ -235,3 +237,15 @@ class FakeTransport(Transport):
         self._state = LinkState.DISCONNECTED
 
     close = disconnect
+
+
+class SimulatedTransport(FakeTransport):
+    """HARDWARE_MODE=SIMULATION: the whole protocol, none of the wire.
+
+    Distinct from `FakeTransport` only in its name, and the name is the point:
+    a snapshot showing `transport: simulated` says the ACKs on screen came from
+    software. A test fixture and a deliberately simulated run should not look
+    identical in a report.
+    """
+
+    name = "simulated"

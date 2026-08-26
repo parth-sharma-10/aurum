@@ -6,3 +6,25 @@
 pytest==9.1.1
 ruff==0.16.3
 httpx==0.28.1              # used by starlette's TestClient in tests/test_api.py
+
+# ---------------------------------------------------------------------------
+# VISION QA - optional, and deliberately not pinned into the runtime set.
+#
+# FiftyOne turns the failure frames the pipeline captures into a browsable,
+# evaluable dataset (tools/fiftyone/, docs/evaluation.md). It is a large
+# install with its own database server, so it is NOT installed by default and
+# nothing in app/ imports it. The tests for the dataset layer skip when it is
+# absent; the capture layer is tested unconditionally.
+#
+#   pip install fiftyone==1.21.0
+#
+# Version pinned rather than required, so `-r requirements-dev.txt` stays a
+# small install. Installing it runs the full suite at 1289 passed / 0 skipped
+# instead of 1284 / 5 — the six TestTheDataset cases only execute with it
+# present, so a change to tools/fiftyone/ is untested without it.
+#
+# KNOWN SIDE EFFECT, verified 2026-08-26: pip resolves starlette DOWN from
+# 1.6.0 to 1.3.1 to satisfy fiftyone and fastapi 0.141.1 together. The API and
+# its TestClient tests pass on 1.3.1. Worth knowing before blaming an
+# unrelated web-layer change on this install.
+# ---------------------------------------------------------------------------

@@ -6,11 +6,58 @@
 
 | | |
 |---|---|
-| Branch | `feat/demo-mock-mass` |
-| Phases 0-9 | **COMPLETE** for the demonstration's scope |
-| Tests | **836 passing**, ruff clean, frontend builds |
+| Branch | `feat/final-integration` |
+| Phases 0-11 | **COMPLETE** |
+| Tests | **1267 passing**, 5 skipped (FiftyOne absent), ruff clean, frontend builds |
 | Hardware | Board, both sketches, both servos: **PHYSICALLY VERIFIED** 2026-08-22 |
-| Blocking | **The load cell is mechanically bypassed.** Nothing else |
+| Blocking | **The load cell is mechanically bypassed. Nothing else.** |
+
+### THE ONLY REMAINING TASK IS PHYSICAL
+
+Mount the load cell as a cantilever — one end fixed, the free end able to bend
+— then:
+
+```bash
+python -m app.calibrate --port <PORT> --reference-mass 180 --verify-mass 100
+```
+
+until `verified: true`. Then unset `AURUM_DEMO_MOCK_MASS`. A working mount
+shows ~65 000 counts under 180 g, visible immediately in the `tare` vs `loaded`
+lines. **Nothing in software can substitute for this and nothing has tried.**
+`configs/calibration.yaml` stays UNMEASURED until the workflow records it.
+
+Everything else that could be solved in software has been.
+
+### Phase 11 — what closed, 2026-08-26
+
+| Area | Was | Is |
+|---|---|---|
+| Live pricing | provider abstraction with nothing live in it | `app/valuation/metalprice.py`, MetalpriceAPI, troy-ounce and INR conversion, 900 s cache, LIVE→REFERENCE fallback, key never in `Config` |
+| Belt speed | a config constant read once; `UNMEASURED` blocked the layer for ever | `app/routing/conveyor.py` — SIMULATION / ENCODER / MANUAL / NONE, each labelled on every reading |
+| ETA | static | re-read on every schedule, so changing the belt speed changes the next firing time |
+| Scheduler + servo bridge | written in Phases 6-7, never called | wired into `DemoSession`; the machine loop drains due routes |
+| Decision states | "cannot judge" and "does not qualify" both rendered C | `Bin.UNKNOWN` with `physical_bin: C`, six reason codes renamed `C_*` → `UNKNOWN_*` |
+| Mass anomaly | nothing checked a mass against its class | a wide plausibility window per class; an odd mass is `UNKNOWN_MASS_ANOMALY`, and no composition is ever inferred from a weight |
+| Hardware fault | a failed ACK left the machine willing to try the next item | `app/hardware/fault.py`, latched until reset, with `POST /hardware/fault/reset` |
+| Simulation mode | a configured port could still be written to | `SimulatedTransport` — the protocol runs, no byte reaches a port |
+| EPR | per-item history lived in memory and died with the run | `app/epr.py` — 11 events per object in SQLite, provenance stamped per event |
+| Errors | free text on whatever object failed | `app/errors.py` — code, stage, item, timestamp, secrets redacted |
+| Vision QA | no path from a production miss to the dataset | `tools/fiftyone/` — capture at run time, evaluate offline |
+| Dashboard | item chain and four pills | conveyor, pricing, hardware, errors and EPR panels; UNKNOWN and its destination as separate columns |
+
+**Three things ship OFF, on purpose, and each is one variable away:**
+`conveyor.mode: NONE` (there is no belt), `demo.mock_mass.enabled: false`
+(a stand-in mass is not a measurement), `tracking.capture.enabled: false`
+(a demonstration should not quietly fill a disk).
+
+### SCOPE NOTE — the belt is modelled, not present
+
+The 2026-08-22 note below said conveyor timing was out of scope and told the
+next session not to wire it in. That was right while the demonstration had no
+belt and no way to model one honestly. Phase 11 reversed it: `app/routing/` is
+now joined to the session, and `conveyor.mode` decides whether it is used.
+`NONE` is the default and is still the truth about this machine — the operator
+carries the object and routing is immediate. See `docs/conveyor.md`.
 
 ### HARDWARE STATE — 2026-08-22 bench session
 
@@ -31,7 +78,7 @@ must be a cantilever with one end fixed and the free end able to bend. No
 software change substitutes for it, and none was made.
 
 Until it is fixed `configs/calibration.yaml` stays UNMEASURED, so a PCB routes
-to Bin C on `C_UNMEASURED_WEIGHT`. That is the fail-closed design working.
+to Bin C on `UNKNOWN_WEIGHT`. That is the fail-closed design working.
 
 ### THE ARDUINO IDE WILL STEAL THE PORT
 

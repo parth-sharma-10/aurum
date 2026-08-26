@@ -9,7 +9,7 @@ invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-836%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-1267%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
 
 > **The weights are a release asset, not a tracked file.** `models/*.pt` is
 > gitignored, so a fresh clone has no model until you download one. One command
@@ -517,10 +517,20 @@ The measurement path (`WeightSensor`) has been run against real hardware: an
 Arduino streams raw HX711 counts, Python owns the calibration, and a reading
 only becomes `MEASURED` on a factor verified against a *second* known mass.
 
-**The load cell is currently mechanically bypassed.** 180 g moves it 2.2 counts
-against a 64-count noise floor; 400 g moves it backwards. The cell converts
-correctly and sees no strain, so `configs/calibration.yaml` stays `UNMEASURED`
-and no reading can reach `MEASURED`. Measurements and the mounting fix are in
+**The load cell is calibrated and verified (2026-08-26).** The mounting fault is
+fixed; the cell responds at **392.2167 counts/g**, linear through the tare
+(fitted offset +80 ± 223 counts, consistent with zero), with 0.008 g of zero
+drift once warmed. The second-mass check predicted 171.130 g for the nominal
+170 g reference — an error of **+1.130 g against a 1.5 g tolerance**.
+
+That tolerance is measured, not assumed: placement repeatability is ~0.5 g
+max−min, giving 0.435 g combined 1σ and 1.30 g at 3σ. The original 0.1 g was an
+assumption that a bench cell resolves a tenth of a gram, and repeated placement
+falsified it.
+
+Readings now reach `MEASURED`. **Both masses are uncertified**, so this
+establishes the ratio and the linearity, not absolute accuracy — fine for
+sorting, not a claim to be a scale. Derivation and evidence in
 [docs/hardware.md](docs/hardware.md).
 
 ### The mock-mass fallback
@@ -816,14 +826,38 @@ stated date, being used deliberately after that date.
 | Cu | ₹1,385.80 / kg | MCX near-month futures | 2026-08-21 |
 | Pd | $1,331.00 / ozt | Kitco spot bid, converted at ECB USD/INR 95.70 | 2026-08-23 |
 
-**No live feed ships, and the difference is never blurred.** `REFERENCE` is not
-`LIVE`, and it is not `STALE` either — age does not degrade a price that was
-published on a date and is being read as such, so only a live feed that goes
-quiet is ever called stale. No keyless market-data source exists to point a live
-provider at (LBMA's tabulated data is behind an ICE Benchmark Administration
-licence; the metals APIs all need keys), so `FallbackProvider` composes
-LIVE → REFERENCE for the day one is configured, and the pipeline cannot be taken
-down by a feed outage.
+**The reference snapshot is the default, and the difference is never blurred.**
+`REFERENCE` is not `LIVE`, and it is not `STALE` either — age does not degrade a
+price that was published on a date and is being read as such, so only a live
+feed that goes quiet is ever called stale.
+
+**A live feed exists and needs a key.** `app/valuation/metalprice.py` reads spot
+gold, silver and palladium from MetalpriceAPI, which quotes them per **troy
+ounce** (31.1034768 g, never the avoirdupois 28.3495 g). The INR conversion
+rides the same request, so a USD metal price and the rate it is converted at
+share an instant and a provenance rather than being pulled from two sources an
+hour apart.
+
+```bash
+export AURUM_METALPRICE_API_KEY=...        # free key from metalpriceapi.com
+export AURUM_PRICE_PROVIDER=metalprice
+```
+
+One request answers for every metal and every item for 900 s, so an assembly of
+four components does not issue twelve identical calls. `FallbackProvider`
+composes LIVE → REFERENCE: a feed that times out, errors, hits its monthly
+allowance or answers with nothing degrades to the dated snapshot instead of
+taking the pipeline down, and the quote says which one answered. A cached
+snapshot past `pricing.max_age_seconds` is served and marked `STALE` — which is
+exactly what STALE means. **No failure path produces a price of zero.**
+
+The key is read straight from the environment by `config.secret()` and never
+enters the `Config` object, so it cannot be serialised out through a debug dump
+or an endpoint. It is redacted out of every message this layer can produce.
+
+MetalpriceAPI is used for Au, Ag, Pd and Pt only — the metals it quotes per troy
+ounce. Copper is quoted per tonne and would be wrong by 32,150× if converted on
+the same factor, so the live provider declines it and the snapshot answers.
 
 Set `pricing.provider: unavailable` to run on grams and ppm alone, with no
 currency figure anywhere.
@@ -881,9 +915,10 @@ currency, timestamp and source, plus a `calculation_version`.
 quote, a unit mismatch (grams priced per troy ounce would be wrong by 31× and
 look plausible), or mixed currencies all produce `available: false`.
 
-**Live prices are not implemented.** The `PriceProvider` protocol exists and the
-shipped implementation reads a pinned snapshot from configuration; nothing polls
-a market feed.
+**Live prices are implemented and are not the default.** The shipped
+configuration reads the dated snapshot; `pricing.provider: metalprice` plus a
+key polls a market feed. Both go through the same `quote()` protocol, and
+nothing in `app/valuation/pmdi.py` changes between them.
 
 Every batch record names these quantities so they cannot be confused:
 
@@ -902,9 +937,11 @@ knowing before reading a result.
 Its units are currency, not a density — nothing in it is divided by mass — so
 Aurum reports the concept document's figure as `pmdi_value` and the true
 density separately as `precious_mass_fraction_ppm`. Only the second works
-without a price, and **no live price provider is approved for this project**, so
-`pmdi_value` is `UNAVAILABLE` in the shipped configuration rather than a number
-nobody can attribute.
+without a price. In the shipped configuration `pmdi_value` is computed from the
+dated `REFERENCE` snapshot and is labelled as such; with a MetalpriceAPI key it
+is computed from a `LIVE` quote. With `pricing.provider: unavailable` it is
+`UNAVAILABLE` rather than a number nobody can attribute, and the
+price-independent fraction keeps the machine sorting either way.
 
 `Y_estimated` is called a *yield* in the formula. Aurum holds *contained
 composition* and never renames one into the other; every amount is labelled
@@ -961,14 +998,15 @@ Aurum
 
 **Aurum is a working software pipeline driving real hardware.** Both servos have
 been moved by Aurum's own command over a real serial link, and watched doing it.
-The load cell is mechanically bypassed, so no mass has ever been measured. There
-is no conveyor, and the operator carries components between stages.
+The load cell is mounted, calibrated and verified against a second known mass, so
+readings reach `MEASURED`. There is no conveyor, and the operator carries
+components between stages.
 
 | Phase | Status | Software | Hardware | Validation |
 |---|---|---|---|---|
 | 0 Checkpoint | COMPLETE | repo protected, research committed | n/a | n/a |
 | 1 Configuration | COMPLETE | `app/config.py`, 35 settings | n/a | software-tested |
-| 2 PMDI + pricing | COMPLETE | `app/valuation/` | n/a | software-tested; **REFERENCE prices, no live feed** |
+| 2 PMDI + pricing | COMPLETE | `app/valuation/` | n/a | software-tested; REFERENCE prices by default, **LIVE MetalpriceAPI feed available with a key** |
 | 3 A/B/C decision | COMPLETE | `app/decision/` | n/a | software-tested |
 | 4 Tracking | COMPLETE | `app/vision/`, `app/pipeline/` | camera | software-tested + real model |
 | 5 HX711 | COMPLETE (software) | `app/weight.py`, `app/calibrate.py` | HX711 responds | **calibration NOT verified** |
@@ -984,9 +1022,11 @@ is no conveyor, and the operator carries components between stages.
 `PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
 
 The actuation path reaches **level 3** — both paddles moved by Aurum's command
-and watched. **Level 4 is not reached**: the load cell is mechanically bypassed,
-so nothing has been physically calibrated. Level 5 needs a conveyor, which does
-not exist and is out of scope for this demonstration.
+and watched. **Level 4 is reached with one qualification**: the cell carries a
+calibration verified against a second known mass, but both masses are
+uncertified, so the factor is verified self-consistently rather than traceably.
+Level 5 needs a conveyor, which does not exist and is out of scope for this
+demonstration.
 
 ### Hardware, as built
 
@@ -1000,8 +1040,10 @@ streaming, `PING`→`PONG` over the real port, Servo A acknowledged in 709 ms an
 Servo B acknowledged, a replayed command id answered `ACK … DUP` without moving
 anything twice, and Bin C wrote no bytes at all.
 
-**Not verified: the load cell under load.** It is mechanically bypassed, so
-`configs/calibration.yaml` stays UNMEASURED and no reading can reach `MEASURED`.
+**Verified 2026-08-26: the load cell under load, and its calibration.**
+392.2167 counts/g, linear through the tare, 0.008 g zero drift, second-mass error
++1.130 g within the 1.5 g tolerance. Readings reach `MEASURED`. Not established:
+absolute traceability — both reference masses are uncertified.
 
 **Close the Arduino IDE Serial Monitor before flashing or running.** It
 reopens itself whenever the board enumerates and holds the port exclusively.
@@ -1047,7 +1089,12 @@ Full detail: [docs/hardware.md](docs/hardware.md) ·
 | A/B/C decision engine (`app/decision/engine.py`) | **implemented** — auditable, fail-closed |
 | Grading thresholds | **implemented as engineering approximations**, configurable, not scientific cutoffs |
 | Routing geometry + scheduler (`app/routing/`) | **implemented** — software-tested against TEST geometry |
-| Mock conveyor demonstration mode | **implemented, unused** — the demo has no conveyor and routes immediately |
+| Mock conveyor demonstration mode | **implemented and wired, ships off** — `conveyor.mode: SIMULATION` runs the belt at 0.10 m/s, computes a per-item ETA and fires through the scheduler. `NONE` is the default because there is no belt |
+| Belt speed sources | **implemented** — SIMULATION / ENCODER / MANUAL / NONE, each labelled on every reading |
+| Live metal prices | **implemented, needs a key** — MetalpriceAPI, composed over the dated snapshot |
+| Latched hardware fault | **implemented** — a failed write, an unacknowledged command or a board error stops all actuation until reset |
+| Per-item EPR ledger | **implemented** — eleven events per object in SQLite, each stamped with model, evidence, price, policy, calibration and hardware mode |
+| Vision QA / FiftyOne | **implemented, ships off** — `tools/fiftyone/`; capture writes JPEG + JSONL, evaluation happens offline |
 | Routing geometry measurements | **UNMEASURED** — all six; not needed without a conveyor |
 | Demonstration session (`app/pipeline/session.py`) | **implemented** — the one object joining every stage |
 | Sorting console (live feed, chain, hardware pills) | **implemented** — verified in the browser |
@@ -1105,6 +1152,9 @@ figure.
 | [docs/dataset.md](docs/dataset.md) | Every source dataset, license, label mapping and exclusion reason |
 | [docs/training.md](docs/training.md) | Reproducing the model end to end |
 | [docs/architecture.md](docs/architecture.md) | How the runtime pieces fit together |
+| [docs/conveyor.md](docs/conveyor.md) | Belt modes, speed sources, geometry, the dynamic ETA, and what to measure when a belt arrives |
+| [docs/vision-qa.md](docs/vision-qa.md) | Capturing production vision failures and evaluating them in FiftyOne |
+| [docs/hardware.md](docs/hardware.md) | Wiring, protocol, bench results, the latched hardware fault |
 | [docs/demo.md](docs/demo.md) | Presentation runbook — setup, sequence, failure recovery, Q&A |
 | [docs/material-reference.md](docs/material-reference.md) | Material database: sources, evidence table, units, composition vs recovery, gaps |
 

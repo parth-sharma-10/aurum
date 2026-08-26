@@ -103,6 +103,12 @@ def client(tmp_path, monkeypatch):
     stub = StubDetector()
     monkeypatch.setattr(api_mod, "detector", lambda: stub)
     api_mod._sessions.clear()
+    # `_demo` is a process-wide global and `_sessions.clear()` does not touch
+    # it, so the DemoSession — its latched hardware fault included — used to
+    # survive into every later test in this file. Nothing noticed until a test
+    # latched a fault: after that the machine was stopped for everything that
+    # ran afterwards, and which tests failed depended on collection order.
+    monkeypatch.setattr(api_mod, "_demo", None)
     with TestClient(api_mod.app) as c:
         yield c
 
@@ -456,8 +462,21 @@ class TestPricesEndpoint:
         assert quote.status.value == "UNAVAILABLE"
         assert "AURUM_PRICE_PROVIDER" in quote.reason
 
-    def test_it_says_no_live_source_is_approved(self, client):
-        assert "No live market data source" in client.get("/prices").json()["note"]
+    def test_it_distinguishes_a_reference_price_from_a_live_one(self, client):
+        """Re-pointed 2026-08-26: a live provider now exists.
+
+        The claim this guarded - "no live market data source is approved" -
+        became false when app/valuation/metalprice.py shipped. What it was
+        really protecting is that a figure which is not a current market quote
+        can never be read as one, and that survives the change.
+        """
+        body = client.get("/prices").json()
+        assert "Only LIVE is a current market price" in body["note"]
+        assert body["configured_provider"] == "reference"
+        for metal, quote in body["prices"].items():
+            if quote["price_per_gram"] is not None:
+                assert quote["status"] == "REFERENCE", metal
+                assert "not a live market quote" in quote["reason"], metal
 
 
 class TestDecisionIsExposed:
@@ -466,7 +485,8 @@ class TestDecisionIsExposed:
     def test_the_valuation_endpoint_carries_a_decision(self, client):
         batch_id = _closed_batch(client, weight_mode="simulated")
         decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
-        assert decision["decision"] in ("A", "B", "C")
+        assert decision["decision"] in ("A", "B", "C", "UNKNOWN")
+        assert decision["physical_bin"] in ("A", "B", "C")
         assert decision["reason_code"]
         assert decision["reason"]
 
@@ -487,13 +507,14 @@ class TestDecisionIsExposed:
         batch_id = _closed_batch(client, weight_mode="simulated")
         decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
         if decision["signals"]["component_class"] is None:
-            assert decision["decision"] == "C"
-            assert decision["reason_code"] == "C_UNKNOWN_CLASS"
+            assert decision["decision"] == "UNKNOWN"
+            assert decision["physical_bin"] == "C"
+            assert decision["reason_code"] == "UNKNOWN_CLASS"
 
     def test_bin_c_names_no_servo(self, client):
         batch_id = _closed_batch(client, weight_mode="simulated")
         decision = client.get(f"/batches/{batch_id}/valuation").json()["decision"]
-        if decision["decision"] == "C":
+        if decision["physical_bin"] == "C":
             assert decision["servo"] is None
 
 
@@ -552,10 +573,114 @@ class TestRoutingEndpoint:
         assert body["geometry"]["belt_speed_cm_s"] is None
 
     def test_the_belt_speed_is_not_described_as_measured(self, client):
+        """The basis string names where the speed came from, always.
+
+        Re-pointed 2026-08-26. The claim it used to assert - "this machine has
+        no encoder" - is now something app/routing/conveyor.py decides rather
+        than something this string can state. On the shipped configuration
+        there is no belt at all, and that is what it must say.
+        """
         basis = client.get("/routing").json()["geometry"]["belt_speed_basis"]
-        assert "no encoder" in basis
+        assert "UNAVAILABLE" in basis
+        assert "no belt" in basis.lower()
+
+    def test_the_endpoint_carries_the_belt(self, client):
+        conveyor = client.get("/routing").json()["conveyor"]
+        assert conveyor["mode"] == "NONE"
+        assert conveyor["present"] is False
 
     def test_the_queue_starts_empty(self, client):
         body = client.get("/routing").json()
         assert body["pending"] == []
         assert body["due"] == []
+
+
+class TestEmergencyStop:
+    """The operator's halt. It latches the same fault a lost ACK does, because
+    after either one nobody can be sure where a paddle is."""
+
+    def test_it_latches_the_machine(self, client):
+        assert client.get("/hardware").json()["fault"]["active"] is False
+        body = client.post("/hardware/estop").json()
+        assert body["stopped"] is True
+        assert body["fault"]["code"] == "EMERGENCY_STOP"
+        assert client.get("/hardware").json()["fault"]["active"] is True
+
+    def test_a_latched_machine_refuses_to_actuate(self, client):
+        """The point of the button, and the only test that proves it works."""
+        client.post("/hardware/estop")
+        session = api_mod.demo_session()
+        assert session.fault.refusal() is not None
+
+    def test_it_does_not_release_the_camera_or_the_port(self, client):
+        """`/session/stop` does that. An e-stop that closes the link takes away
+        the ability to command a paddle back to rest."""
+        client.post("/hardware/estop")
+        assert client.get("/session").json()["running"] is False
+        # Distinct endpoints, distinct effects: the fault is what stopped it.
+        assert client.get("/hardware").json()["fault"]["code"] == "EMERGENCY_STOP"
+
+    def test_pressing_it_twice_stays_latched_on_the_first_press(self, client):
+        first = client.post("/hardware/estop").json()["fault"]["at"]
+        client.post("/hardware/estop")
+        fault = client.get("/hardware").json()["fault"]
+        assert fault["since"] == first
+        assert fault["faults"] == 2
+
+    def test_it_records_who_stopped_the_machine(self, client):
+        body = client.post("/hardware/estop", params={"by": "bench operator"}).json()
+        assert "bench operator" in body["fault"]["reason"]
+
+    def test_resetting_clears_it_and_the_reset_is_recorded(self, client):
+        client.post("/hardware/estop")
+        cleared = client.post("/hardware/fault/reset").json()
+        assert cleared["cleared"]["code"] == "EMERGENCY_STOP"
+        assert cleared["fault"]["active"] is False
+        assert cleared["fault"]["resets"][0]["by"] == "dashboard"
+
+
+class TestReadiness:
+    """`/health` says the service started. `/ready` says the machine can be
+    demonstrated, which is a different and larger question."""
+
+    def test_a_missing_camera_blocks_readiness(self, client):
+        body = client.get("/ready").json()
+        assert body["ready"] is False
+        assert "camera" in body["blocked_by"]
+
+    def test_no_board_is_advisory_not_blocking(self, client):
+        """The shipped configuration. Calling it 'not ready' would make the
+        honest state look like a broken one."""
+        body = client.get("/ready").json()
+        assert "board link" in body["advisory"]
+        assert "board link" not in body["blocked_by"]
+
+    def test_a_latched_fault_blocks_readiness(self, client):
+        assert "no latched fault" not in client.get("/ready").json()["blocked_by"]
+        client.post("/hardware/estop")
+        body = client.get("/ready").json()
+        assert body["ready"] is False
+        assert "no latched fault" in body["blocked_by"]
+
+    def test_clearing_the_fault_unblocks_that_check(self, client):
+        client.post("/hardware/estop")
+        client.post("/hardware/fault/reset")
+        assert "no latched fault" not in client.get("/ready").json()["blocked_by"]
+
+    def test_every_check_explains_itself(self, client):
+        """A check that fails without saying why is a check nobody can act on."""
+        for check in client.get("/ready").json()["checks"]:
+            assert check["detail"], check["name"]
+            assert isinstance(check["blocking"], bool)
+
+    def test_the_detail_agrees_with_the_verdict(self, client):
+        """The board detail used to read 'linked' while reporting not ready."""
+        by_name = {c["name"]: c for c in client.get("/ready").json()["checks"]}
+        board = by_name["board link"]
+        assert board["ready"] is False
+        assert "not connected" in board["detail"]
+
+    def test_it_does_not_claim_anything_about_physical_movement(self, client):
+        names = [c["name"] for c in client.get("/ready").json()["checks"]]
+        assert not any("moved" in n or "physical" in n for n in names)
+        assert "bench_check" in client.get("/ready").json()["note"]

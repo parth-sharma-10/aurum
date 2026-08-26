@@ -1,0 +1,129 @@
+{
+  "model_version": "Aurum Vision v0.1",
+  "weights": "models/aurum_vision_v0_1_best.pt",
+  "conf_threshold": 0.35,
+  "source": "data/bench_capture/perfboard",
+  "n_images": 12,
+  "images_with_no_detection": 0,
+  "total_detections": {
+    "CPU": 12
+  },
+  "mean_confidence_per_class": {
+    "PCB": null,
+    "RAM": null,
+    "CPU": 0.8506,
+    "Connector": null
+  },
+  "mean_inference_ms": 16.0,
+  "per_image": [
+    {
+      "image": "perfboard_0000.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8513,
+      "inference_ms": 16.6
+    },
+    {
+      "image": "perfboard_0001.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8608,
+      "inference_ms": 16.5
+    },
+    {
+      "image": "perfboard_0002.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8591,
+      "inference_ms": 15.5
+    },
+    {
+      "image": "perfboard_0003.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8752,
+      "inference_ms": 16.1
+    },
+    {
+      "image": "perfboard_0004.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8494,
+      "inference_ms": 16.1
+    },
+    {
+      "image": "perfboard_0005.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8245,
+      "inference_ms": 16.1
+    },
+    {
+      "image": "perfboard_0006.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8653,
+      "inference_ms": 16.5
+    },
+    {
+      "image": "perfboard_0007.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8396,
+      "inference_ms": 15.3
+    },
+    {
+      "image": "perfboard_0008.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8234,
+      "inference_ms": 15.3
+    },
+    {
+      "image": "perfboard_0009.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8523,
+      "inference_ms": 15.9
+    },
+    {
+      "image": "perfboard_0010.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8485,
+      "inference_ms": 16.1
+    },
+    {
+      "image": "perfboard_0011.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8583,
+      "inference_ms": 15.9
+    }
+  ],
+  "caveat": "Detections only. These images have no ground-truth annotations, so nothing here is an accuracy measurement and no figure from this run may be quoted as model accuracy."
+}

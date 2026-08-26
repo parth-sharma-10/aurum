@@ -78,6 +78,14 @@ class Geometry:
     camera_to_servo_b_cm: float | None = None
     servo_actuation_delay_ms: float | None = None
     timing_offset_ms: float = 0.0
+    #: Where the belt speed came from, in words. Defaults to the configured
+    #: constant this class reads for itself; `app.routing.conveyor` replaces it
+    #: with the speed source's own account when a belt is attached, so a
+    #: measured speed and a configured one never carry the same explanation.
+    belt_speed_basis: str = (
+        "configured constant - an engineering approximation. No speed source is "
+        "attached, so nothing here measures belt velocity."
+    )
 
     @property
     def simulated(self) -> bool:
@@ -116,10 +124,7 @@ class Geometry:
             "camera_to_servo_b_cm": self.camera_to_servo_b_cm,
             "servo_actuation_delay_ms": self.servo_actuation_delay_ms,
             "timing_offset_ms": self.timing_offset_ms,
-            "belt_speed_basis": (
-                "configured constant - an engineering approximation. This "
-                "machine has no encoder, so nothing here measures belt velocity."
-            ),
+            "belt_speed_basis": self.belt_speed_basis,
             "distance_origin": "camera field-of-view centre, along the belt",
         }
 
@@ -133,7 +138,13 @@ class Geometry:
         production geometry.
         """
         cfg = config_module.load() if cfg is None else cfg
-        section = "conveyor.simulation" if cfg["conveyor.runtime.simulation"] else None
+        # Two ways to be on the demonstration profile, and both are explicit.
+        # `conveyor.runtime.simulation` is the whole machine in simulation;
+        # `conveyor.mode: SIMULATION` is a demonstration BELT on an otherwise
+        # real machine. Either way the mode returned is SIMULATED, so nothing
+        # downstream can present these distances as measured.
+        simulated = cfg["conveyor.runtime.simulation"] or cfg["conveyor.mode"] == "SIMULATION"
+        section = "conveyor.simulation" if simulated else None
         if section is None:
             return cls(
                 mode=RoutingMode.REAL,

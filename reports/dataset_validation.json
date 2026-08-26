@@ -1,11 +1,11 @@
 {
   "images": {
-    "train": 4878,
-    "valid": 412,
-    "test": 206
+    "train": 5523,
+    "valid": 465,
+    "test": 230
   },
-  "boxes": 7887,
-  "clusters": 2154,
+  "boxes": 7909,
+  "clusters": 2588,
   "clusters_spanning_splits": 0,
   "exact_duplicates_across_splits": 0,
   "near_duplicates_train_to_heldout": 0,

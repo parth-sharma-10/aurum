@@ -1,0 +1,28 @@
+{
+  "model_version": "Aurum Vision v0.2",
+  "architecture": "models/aurum_vision_v0_1_best.pt",
+  "framework": "ultralytics 8.4.120",
+  "torch": "2.13.0",
+  "classes": [
+    "PCB",
+    "RAM",
+    "CPU",
+    "Connector"
+  ],
+  "image_size": 512,
+  "epochs_requested": 20,
+  "batch": 32,
+  "patience": 15,
+  "seed": 1337,
+  "device": "mps",
+  "trained_at": "2026-08-26 08:30:35 UTC",
+  "dataset": "data/aurum (see reports/dataset_stats.json)",
+  "run_dir": "runs/aurum_vision_v0_2",
+  "weights": "models/aurum_vision_v0_2_best.pt",
+  "artifact": {
+    "filename": "aurum_vision_v0_2_best.pt",
+    "sha256": "0c900dbd0b16eb649a022b89fb759b212d37976ebbe4d11154ef258f448fcd3b",
+    "size_bytes": 5450714
+  },
+  "metrics": "reports/test_metrics.json (regenerate with `python -m ml.evaluate`)"
+}

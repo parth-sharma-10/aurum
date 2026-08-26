@@ -24,13 +24,16 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
-from app import ledger, pricing
+from app import config as config_module
+from app import epr, ledger, pricing, report
 from app.batch import BatchSession
 from app.dashboard import draw_detections
 from app.decision import engine as decision_engine
 from app.detector import DEFAULT_WEIGHTS, AurumDetector
+from app.hardware import verification
+from app.hardware.fault import FaultCode
 from app.pipeline import DemoSession, ItemPipeline
-from app.routing import RoutingScheduler
+from app.routing import Conveyor, RoutingScheduler
 from app.valuation import prices as prices_module
 from app.valuation import valuation as valuation_module
 from app.weight import get_weight_source
@@ -40,8 +43,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Create the batch ledger before the first request is served."""
+    """Create both ledgers before the first request is served."""
     ledger.init_db()
+    epr.init_db()
     yield
 
 
@@ -73,6 +77,7 @@ _detector: AurumDetector | None = None
 _sessions: dict[str, BatchSession] = {}
 _pipeline: ItemPipeline | None = None
 _routing: RoutingScheduler | None = None
+_belt: Conveyor | None = None
 _demo: DemoSession | None = None
 
 
@@ -88,11 +93,19 @@ def demo_session() -> DemoSession:
     return _demo
 
 
+def _conveyor() -> Conveyor:
+    """The belt for this process, whatever `conveyor.mode` says it is."""
+    global _belt
+    if _belt is None:
+        _belt = Conveyor.from_config()
+    return _belt
+
+
 def _scheduler() -> RoutingScheduler:
     """The routing queue for this process, sharing the tracker's identities."""
     global _routing
     if _routing is None:
-        _routing = RoutingScheduler(lifecycle=pipeline().tracker)
+        _routing = RoutingScheduler(lifecycle=pipeline().tracker, conveyor=_conveyor())
     return _routing
 
 
@@ -147,6 +160,116 @@ def health() -> dict:
     }
 
 
+def _check(name: str, ready: bool, blocking: bool, detail: str) -> dict:
+    return {"name": name, "ready": ready, "blocking": blocking, "detail": detail}
+
+
+@app.get("/ready")
+def readiness() -> dict:
+    """Is this machine fit to demonstrate right now, and if not, what is missing.
+
+    `/health` answers whether the service started. This answers the question an
+    operator actually has thirty seconds before a demonstration, which needs
+    the camera, the board, the calibration and the fault latch read together.
+
+    **Blocking and advisory are not the same failure.** Without weights or a
+    camera there is nothing to identify and the pipeline cannot run at all.
+    Without a board, a calibration or actuation it runs perfectly well and
+    stamps every affected figure SIMULATED or UNMEASURED — that is the shipped
+    configuration, and calling it "not ready" would make the honest state look
+    like a broken one.
+    """
+    session = demo_session()
+    state = session.snapshot()
+    board = state["board"]
+    cal = state["calibration"]
+    hardware = state["hardware"]
+    fault = hardware["fault"]
+    weights = DEFAULT_WEIGHTS.exists()
+    simulated = hardware["mode"] == "SIMULATION"
+    movement = verification.snapshot()
+
+    checks = [
+        _check(
+            "vision model",
+            weights,
+            True,
+            f"{_rel(DEFAULT_WEIGHTS)}" if weights else f"missing: {_rel(DEFAULT_WEIGHTS)}",
+        ),
+        _check(
+            "camera",
+            bool(state["running"]),
+            True,
+            state["camera"]["error"]
+            or (state["camera"]["source"] or "not started — POST /session/start"),
+        ),
+        _check(
+            "no latched fault",
+            not fault["active"],
+            True,
+            fault["reason"] or "clear",
+        ),
+        _check(
+            "board link",
+            bool(board.get("connected")),
+            False,
+            board.get("last_error")
+            or (
+                "simulated — no serial port"
+                if simulated
+                else "linked"
+                if board.get("connected")
+                else "not connected — POST /session/board/connect"
+            ),
+        ),
+        _check(
+            "servo angles applied",
+            bool(board.get("servo_config_applied")),
+            False,
+            "the board is running the angles in conveyor.yaml"
+            if board.get("servo_config_applied")
+            else "unapplied — the board is running whatever the sketch booted with",
+        ),
+        _check(
+            "load cell calibrated",
+            bool(cal.get("verified")),
+            False,
+            cal.get("notes") or "no factor verified against a second known mass",
+        ),
+        _check(
+            "paddle movement verified",
+            bool(movement["verified"]),
+            False,
+            f"SERVO_{'/'.join(movement['verified'])} watched moving"
+            if movement["verified"]
+            else "no paddle has been watched moving — " + movement["how"],
+        ),
+        _check(
+            "actuation enabled",
+            bool(hardware["actuation_enabled"]),
+            False,
+            "enabled"
+            if hardware["actuation_enabled"]
+            else "off — the shipped state; set AURUM_ARDUINO_ENABLED=true to move a servo",
+        ),
+    ]
+    blocked = [c["name"] for c in checks if c["blocking"] and not c["ready"]]
+    return {
+        "ready": not blocked,
+        "blocked_by": blocked,
+        "advisory": [c["name"] for c in checks if not c["blocking"] and not c["ready"]],
+        "checks": checks,
+        "hardware_mode": hardware["mode"],
+        "movement_verification": movement,
+        "note": (
+            "Advisory failures are not defects. A machine with no board and no "
+            "calibration runs the whole pipeline and marks every figure that "
+            "depends on them. Physical servo movement is not checked here at "
+            "all: run scripts/bench_check.py and watch the paddle."
+        ),
+    }
+
+
 @app.get("/model")
 def model_info() -> dict:
     d = detector()
@@ -197,12 +320,21 @@ async def detect_annotated(file: UploadFile = File(...)) -> Response:
 def routing_status() -> dict:
     """The routing queue: what is scheduled, what is due, and what was refused.
 
-    A route is a time, not a movement. Nothing in this phase actuates a servo;
-    a DUE route is one Phase 7 will act on.
+    A route is a time, not a movement. A DUE route is one the actuation layer
+    will act on; nothing here moves a servo.
     """
-    import time as _time
+    return {**_scheduler().snapshot(now=time.monotonic()), "conveyor": _conveyor().snapshot()}
 
-    return _scheduler().snapshot(now=_time.monotonic())
+
+@app.get("/conveyor")
+def conveyor_status() -> dict:
+    """The belt: mode, speed, where that speed came from, and the ETAs it implies.
+
+    `mode: NONE` is the shipped answer and is a fact about this machine, not a
+    missing configuration: there is no conveyor. `SPEED ... (SIMULATED)` is a
+    demonstration value and says so on every reading.
+    """
+    return _conveyor().snapshot()
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +384,74 @@ def session_measure(item_id: str | None = None) -> dict:
     route can be requested through this endpoint.
     """
     return demo_session().measure_and_route(item_id)
+
+
+@app.get("/session/report.csv")
+def session_report_csv() -> Response:
+    """The run as a file. Every figure paired with the status of what backs it.
+
+    CSV only: a PDF would need a dependency this project does not have, and a
+    spreadsheet opens this.
+    """
+    snapshot = demo_session().snapshot()
+    return Response(
+        report.to_csv(snapshot),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{report.filename(snapshot)}"'},
+    )
+
+
+@app.post("/session/calibration/reload")
+def session_calibration_reload() -> dict:
+    """Re-read configs/calibration.yaml. Calibrating no longer needs a restart.
+
+    The factor was read once when the session was built, so a cell calibrated
+    against a live server kept weighing with the old one until uvicorn was
+    restarted, and nothing on screen said which factor was in force.
+    """
+    return demo_session().reload_calibration()
+
+
+@app.post("/session/demo/step")
+def session_demo_step() -> dict:
+    """Run the next scripted object through the machine. No camera required.
+
+    The stage fallback: a webcam that will not open otherwise takes the whole
+    demonstration with it. Only the detections are scripted — identity, mass,
+    composition, value, bin and actuation are the code a camera-seen item runs.
+
+    One object per call, so each can be narrated. `POST /track/reset` restarts
+    the script.
+    """
+    from app.pipeline import scripted
+
+    return scripted.step(demo_session())
+
+
+@app.get("/session/demo/script")
+def session_demo_script() -> dict:
+    """What the scripted run will do, before it does any of it."""
+    from app.pipeline import scripted
+
+    session = demo_session()
+    return {
+        "objects": [
+            {
+                "index": i,
+                "component_class": o.component_class,
+                "confidence": o.confidence,
+                "shows": o.shows,
+            }
+            for i, o in enumerate(scripted.SCRIPT)
+        ],
+        "next_index": session.scripted_index,
+        "remaining": max(0, len(scripted.SCRIPT) - session.scripted_index),
+        "note": (
+            "No bin appears in the script. The decision engine is given a class "
+            "and a mass and reaches its own conclusion, so a scripted run can be "
+            "wrong in front of an audience."
+        ),
+    }
 
 
 @app.get("/session/pan")
@@ -319,6 +519,88 @@ def arduino_status() -> dict:
     }
 
 
+@app.get("/hardware")
+def hardware_status() -> dict:
+    """The machine's physical state: mode, link, fault, servo geometry."""
+    return demo_session().snapshot()["hardware"]
+
+
+@app.post("/hardware/estop")
+def hardware_emergency_stop(by: str = "dashboard") -> dict:
+    """Stop the machine actuating, now, because a human said so.
+
+    This latches the same fault the machine latches on a lost ACK, and for the
+    same reason: after it, nobody can be sure where a paddle is or what is in
+    the way. Every servo command is refused until it is explicitly reset.
+
+    It deliberately does NOT release the camera or the serial port — that is
+    `POST /session/stop`. An emergency stop that closes the link takes away the
+    ability to command anything at all, including a paddle back to rest, and
+    the port reopening resets the board.
+
+    Idempotent: pressing it twice records two events and stays latched once.
+    """
+    session = demo_session()
+    fault = session.fault.latch(
+        FaultCode.EMERGENCY_STOP,
+        f"Emergency stop by {by}. Nothing will actuate until it is reset.",
+    )
+    return {"stopped": True, "fault": fault.as_dict(), "hardware": session.fault.snapshot()}
+
+
+@app.post("/hardware/fault/reset")
+def hardware_fault_reset() -> dict:
+    """Clear a latched hardware fault. Nothing does this automatically.
+
+    A fault latches because a command that went unacknowledged may have left a
+    paddle in a position nobody knows. Clearing it is a statement that somebody
+    has looked at the rig, so it is a deliberate call and it is recorded.
+    """
+    session = demo_session()
+    cleared = session.fault.reset(by="dashboard")
+    return {
+        "cleared": cleared.as_dict() if cleared else None,
+        "fault": session.fault.snapshot(),
+    }
+
+
+@app.get("/errors")
+def error_log() -> dict:
+    """Failures this run recorded, newest first, by code.
+
+    A recorded failure is not a crash. Aurum keeps running and routes what it
+    cannot read to Bin C; this is where the reason for that ends up.
+    """
+    return demo_session().errors.snapshot(limit=50)
+
+
+@app.get("/epr")
+def epr_items(limit: int = 50) -> dict:
+    """One summary row per physical item the EPR ledger has heard of."""
+    return {"items": epr.items(limit), "aggregates": epr.aggregates()}
+
+
+@app.get("/epr/{item_id}")
+def epr_item(item_id: str) -> dict:
+    """One item's whole trail: every event, with the provenance of each.
+
+    This is the Extended Producer Responsibility record. It answers, for one
+    physical object: what was it, what did it weigh, was that weighed or
+    assumed, what was it worth, which bin did it reach, and on what model,
+    evidence database, price snapshot and grading policy.
+    """
+    trail = epr.history(item_id)
+    if not trail:
+        raise HTTPException(404, f"No EPR record for {item_id}")
+    return {
+        "item_id": item_id,
+        "events": trail,
+        "sort_confirmed": any(e["event"] == "SORT_CONFIRMED" for e in trail),
+        "simulated_inputs": any(e["simulated"] for e in trail),
+        "provenance": trail[-1]["provenance"],
+    }
+
+
 @app.post("/track")
 async def track(file: UploadFile = File(...)) -> dict:
     """One frame of a tracking run: detections folded into item lifecycles.
@@ -360,8 +642,15 @@ def current_item() -> dict:
 
 @app.post("/track/reset")
 def reset_tracking() -> dict:
-    """Start a fresh run: new identities, tracker numbering restarted."""
+    """Start a fresh run: new identities, tracker numbering restarted.
+
+    Resets BOTH tracking runs this process holds. `/track` drives a standalone
+    pipeline and the dashboard drives its own inside `DemoSession`, and an
+    operator asking for a new item means the one in front of them - not
+    whichever of the two this endpoint happened to own first.
+    """
     pipeline().reset()
+    demo_session().reset()
     return {"status": "reset", "frames_processed": 0}
 
 
@@ -442,21 +731,29 @@ def get_batch(batch_id: str) -> dict:
 
 @app.get("/prices")
 def metal_prices() -> dict:
-    """What each metal costs, and whether that figure can be trusted.
+    """What each metal costs, whether that figure is current, and where it came from.
 
-    Aurum ships no market data source. With `pricing.provider: unavailable`
-    every entry comes back UNAVAILABLE with the setting that would change it,
-    rather than a number nobody can attribute.
+    Every quote carries its own status. LIVE is a market feed answering now;
+    REFERENCE is a real published price being used deliberately after its date;
+    STALE is a feed that should have been current and was not; UNAVAILABLE is
+    an explicit absence. No path here produces a number without a source, and
+    none produces a zero for a price that could not be fetched.
+
+    The API key is never in this payload. See app/valuation/metalprice.py.
     """
-    service = prices_module.PriceService.from_config()
+    cfg = config_module.load()
+    service = prices_module.PriceService.from_config(cfg)
     quotes = service.prices(prices_module.materials.METAL_NAMES)
     return {
         "provider": getattr(service.provider, "name", "unknown"),
+        "configured_provider": cfg["pricing.provider"],
+        "currency": cfg["pricing.currency"],
         "max_age_seconds": service.max_age_seconds,
         "prices": {metal: quote.as_dict() for metal, quote in sorted(quotes.items())},
         "note": (
-            "No live market data source is approved for this project. A price "
-            "labelled TEST is fixture data and is not a market quote."
+            "A price labelled TEST is fixture data. A price labelled REFERENCE is "
+            "a real published figure being used after its date, never a live quote. "
+            "Only LIVE is a current market price."
         ),
     }
 

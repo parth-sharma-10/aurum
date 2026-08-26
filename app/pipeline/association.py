@@ -119,6 +119,18 @@ class SingleObjectZone:
     def handled(self, assembly_id: str) -> bool:
         return assembly_id in self._handled
 
+    def reset(self) -> None:
+        """Forget the object on the pan, and everything already handled.
+
+        For a new run, not for a new object: `release()` is what ends one
+        object's turn. Clearing `_held` here matters because `refresh()`
+        short-circuits on it, so a latched assembly left over from the
+        previous run would block every item that followed it.
+        """
+        self._candidate = None
+        self._held = None
+        self._handled.clear()
+
     def snapshot(self) -> dict:
         return {
             "strategy": self.strategy,

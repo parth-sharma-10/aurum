@@ -30,10 +30,20 @@ from app.hardware import (
     new_command_id,
     parse_response,
 )
+from app.hardware.fault import FaultCode
 from app.routing import RouteStatus, RoutingScheduler
 from app.routing.geometry import Geometry, RoutingMode
 
 T0 = 10.0
+
+#: The moment each paddle's route actually fires, from the TEST geometry
+#: below: 60 cm and 90 cm at 20 cm/s, less a 150 ms actuation delay. Named
+#: rather than padded to "comfortably past it", because a route reached long
+#: after its moment is refused as EXPIRED now - the item has gone by, and a
+#: catch-up strikes whatever is behind it. "Some seconds later" stopped
+#: being a physical thing for a test to ask for.
+DUE_A = T0 + 2.85
+DUE_B = T0 + 4.35
 
 
 def cfg(**env):
@@ -248,14 +258,30 @@ class TestLinkLifecycle:
         )
         assert ctl.ping() is False
 
-    def test_reconnecting_allows_a_later_command(self):
+    def test_reconnecting_alone_does_not_allow_a_later_command(self):
+        """Changed 2026-08-26 by app/hardware/fault.py, deliberately.
+
+        This used to assert that a reconnect was enough. It is not: a link that
+        dropped mid-command left the paddle in a position nobody knows, and the
+        latch exists so that the next item is not commanded into that. The
+        cable coming back is not somebody having looked at the rig.
+        """
         board = FakeTransport(connected=True)
         ctl = controller(board)
         board.unplug()
         assert ctl.move("A", "AUR-ITEM-1").error_code == "NOT_CONNECTED"
         ctl.connect()
-        assert ctl.move("A", "AUR-ITEM-2").state is CommandState.ACKED
+        assert ctl.move("A", "AUR-ITEM-2").error_code == "HARDWARE_FAULT"
         assert board.connects >= 1
+
+    def test_reconnecting_and_resetting_the_fault_allows_a_later_command(self):
+        board = FakeTransport(connected=True)
+        ctl = controller(board)
+        board.unplug()
+        ctl.move("A", "AUR-ITEM-1")
+        ctl.connect()
+        ctl.fault.reset(by="test")
+        assert ctl.move("A", "AUR-ITEM-2").state is CommandState.ACKED
 
 
 class TestServoConfiguration:
@@ -288,7 +314,7 @@ class TestActuator:
     def test_a_due_a_route_is_actuated_and_marked_executed(self):
         scheduler, actuator, board = rig()
         scheduler.schedule("AUR-ITEM-1", "A", T0)
-        results = actuator.execute_due(now=T0 + 5)
+        results = actuator.execute_due(now=DUE_A)
         assert [r.outcome for r in results] == [ActuationOutcome.ACTUATED]
         assert scheduler.get("AUR-ITEM-1").status is RouteStatus.EXECUTED
         assert board.movements[0][0] == "A"
@@ -296,7 +322,7 @@ class TestActuator:
     def test_a_due_b_route_is_actuated(self):
         scheduler, actuator, board = rig()
         scheduler.schedule("AUR-ITEM-2", "B", T0)
-        assert actuator.execute_due(now=T0 + 6)[0].outcome is ActuationOutcome.ACTUATED
+        assert actuator.execute_due(now=DUE_B)[0].outcome is ActuationOutcome.ACTUATED
         assert board.movements[0][0] == "B"
 
     def test_bin_c_sends_no_frame(self):
@@ -332,31 +358,46 @@ class TestActuator:
         board = FakeTransport(connected=True, fail_with="STALLED")
         scheduler, actuator, _ = rig(board)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
-        assert actuator.execute_due(now=T0 + 5)[0].outcome is ActuationOutcome.FAILED
+        assert actuator.execute_due(now=DUE_A)[0].outcome is ActuationOutcome.FAILED
         assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
 
     def test_a_timeout_does_not_mark_the_route_executed(self):
         board = FakeTransport(connected=True, silent=True)
         scheduler, actuator, _ = rig(board, AURUM_ARDUINO_ACK_TIMEOUT_MS=20)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
-        assert actuator.execute_due(now=T0 + 5)[0].outcome is ActuationOutcome.FAILED
+        assert actuator.execute_due(now=DUE_A)[0].outcome is ActuationOutcome.FAILED
         assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
 
     def test_a_failure_is_not_retried_on_the_next_tick(self):
+        """A failed route stays SCHEDULED, so `due()` keeps offering it.
+
+        The loop must drop it silently rather than produce a SKIPPED result
+        every tick: the machine loop runs at 20 Hz and each result became an
+        EPR failure row and an error-log entry for the same one item.
+        """
         board = FakeTransport(connected=True, fail_with="STALLED")
         scheduler, actuator, _ = rig(board)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
-        actuator.execute_due(now=T0 + 5)
-        again = actuator.execute_due(now=T0 + 6)
-        assert [r.outcome for r in again] == [ActuationOutcome.SKIPPED]
-        assert "not a licence to move the paddle again" in again[0].reason
+        actuator.execute_due(now=DUE_A)
+        for tick in range(6, 12):
+            assert actuator.execute_due(now=T0 + tick) == []
+        assert len(board.movements) == 0
+
+    def test_actuating_a_failed_route_directly_still_refuses(self):
+        board = FakeTransport(connected=True, fail_with="STALLED")
+        scheduler, actuator, _ = rig(board)
+        route = scheduler.schedule("AUR-ITEM-1", "A", T0)
+        actuator.execute_due(now=DUE_A)
+        again = actuator.actuate(route, now=DUE_A + 1)
+        assert again.outcome is ActuationOutcome.SKIPPED
+        assert "not a licence to move the paddle again" in again.reason
         assert len(board.movements) == 0
 
     def test_draining_twice_moves_nothing_twice(self):
         scheduler, actuator, board = rig()
         scheduler.schedule("AUR-ITEM-1", "A", T0)
-        actuator.execute_due(now=T0 + 5)
-        actuator.execute_due(now=T0 + 6)
+        actuator.execute_due(now=DUE_A)
+        actuator.execute_due(now=DUE_B)
         assert len(board.movements) == 1
 
     def test_several_items_actuate_independently(self):
@@ -364,7 +405,10 @@ class TestActuator:
         scheduler.schedule("AUR-ITEM-1", "A", T0)
         scheduler.schedule("AUR-ITEM-2", "B", T0)
         scheduler.schedule("AUR-ITEM-3", "C", T0)
-        results = actuator.execute_due(now=T0 + 10)
+        # Two drains, because the paddles fire 1.5 s apart and the machine
+        # loop runs at 20 Hz. One call catching both would mean one of them
+        # fired a second and a half after the item went past it.
+        results = actuator.execute_due(now=DUE_A) + actuator.execute_due(now=DUE_B)
         assert {r.outcome for r in results} == {ActuationOutcome.ACTUATED}
         assert len(results) == 2
         assert scheduler.get("AUR-ITEM-3").status is RouteStatus.NO_ACTION
@@ -373,7 +417,7 @@ class TestActuator:
         board = FakeTransport(connected=False)
         scheduler, actuator, _ = rig(board)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
-        assert actuator.execute_due(now=T0 + 5)[0].outcome is ActuationOutcome.FAILED
+        assert actuator.execute_due(now=DUE_A)[0].outcome is ActuationOutcome.FAILED
         assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
 
 
@@ -381,15 +425,29 @@ class TestReporting:
     def test_the_snapshot_carries_link_and_command_state(self):
         scheduler, actuator, _ = rig()
         scheduler.schedule("AUR-ITEM-1", "A", T0)
-        actuator.execute_due(now=T0 + 5)
+        actuator.execute_due(now=DUE_A)
         snapshot = actuator.snapshot()
         assert snapshot["arduino"]["connected"] is True
         assert snapshot["last_actuation"]["outcome"] == "ACTUATED"
         assert snapshot["servo"]["push_angle_deg"] == 90.0
 
-    def test_the_snapshot_says_no_servo_has_moved_by_aurum_code(self):
+    def test_the_snapshot_reports_verification_as_a_state_not_a_paragraph(
+        self, tmp_path, monkeypatch
+    ):
+        """It used to be prose claiming no servo had ever been commanded, which
+        stopped being true on 2026-08-26 and which nothing could check. The
+        claim now has a shape, and an ACK still cannot produce it.
+
+        Pointed at a temporary record: reading the repository's own would make
+        this test's result depend on whether anybody has been to the bench."""
+        from app.hardware import verification
+
+        monkeypatch.setattr(verification, "RECORD", tmp_path / "none.json")
         _, actuator, _ = rig()
-        assert "pending a user bench test" in actuator.snapshot()["note"]
+        claim = actuator.snapshot()["movement_verification"]
+        assert set(claim["servos"]) == {"A", "B"}
+        assert all(s["state"] == "VERIFICATION_UNAVAILABLE" for s in claim["servos"].values())
+        assert claim["verified"] == []
 
     def test_the_controller_snapshot_explains_what_an_ack_means(self):
         assert "never inferred from here" in controller().snapshot()["note"]
@@ -397,3 +455,100 @@ class TestReporting:
     def test_the_configured_baudrate_matches_the_hardware(self):
         """115200 is what the physical board runs at; a mismatch is garbage."""
         assert config.load(environ={})["conveyor.arduino.baudrate"] == 115200
+
+
+class TestCloselySpacedItems:
+    """Two items due together, and a board that blocks for the whole stroke.
+
+    The scheduler refuses to SCHEDULE a route whose moment has passed. Nothing
+    refused to ACTUATE one, and every command blocks: three routes due together
+    were commanded 1.2 s apart, and the last fired 45 cm of belt past its bin
+    reporting ACTUATED.
+    """
+
+    class Clock:
+        """A clock the board advances, the way a real 1.212 s stroke does."""
+
+        def __init__(self, t=T0):
+            self.t = t
+
+        def __call__(self):
+            return self.t
+
+    def rig_with_a_slow_board(self, stroke_s=1.212, **env):
+        clock = self.Clock()
+
+        class SlowBoard(FakeTransport):
+            def send(self, line):
+                sent = super().send(line)
+                if " MOVE " in line:
+                    clock.t += stroke_s
+                return sent
+
+        board = SlowBoard(connected=True)
+        configuration = cfg(**env)
+        scheduler = RoutingScheduler(geometry=geometry(), cfg=configuration)
+        ctl = ArduinoController(transport=board, cfg=configuration, clock=clock)
+        actuator = ServoActuator(scheduler, controller=ctl, cfg=configuration, clock=clock)
+        return scheduler, actuator, board, clock
+
+    def test_the_first_of_two_still_actuates(self):
+        scheduler, actuator, board, clock = self.rig_with_a_slow_board()
+        scheduler.schedule("AUR-ITEM-1", "A", T0)
+        scheduler.schedule("AUR-ITEM-2", "A", T0)
+        clock.t = DUE_A
+        results = actuator.execute_due(now=DUE_A)
+        assert results[0].outcome is ActuationOutcome.ACTUATED
+        assert board.movements[0][0] == "A"
+
+    def test_the_second_is_refused_rather_than_fired_a_stroke_late(self):
+        scheduler, actuator, board, clock = self.rig_with_a_slow_board()
+        scheduler.schedule("AUR-ITEM-1", "A", T0)
+        scheduler.schedule("AUR-ITEM-2", "A", T0)
+        clock.t = DUE_A
+        results = actuator.execute_due(now=DUE_A)
+        assert results[1].outcome is ActuationOutcome.EXPIRED
+        assert "Refusing to fire late" in results[1].reason
+        assert len(board.movements) == 1
+
+    def test_a_refused_route_is_never_marked_executed(self):
+        """It was not sorted. A record saying otherwise is the worst outcome."""
+        scheduler, actuator, _, clock = self.rig_with_a_slow_board()
+        scheduler.schedule("AUR-ITEM-1", "A", T0)
+        scheduler.schedule("AUR-ITEM-2", "A", T0)
+        clock.t = DUE_A
+        actuator.execute_due(now=DUE_A)
+        assert scheduler.get("AUR-ITEM-2").status is not RouteStatus.EXECUTED
+
+    def test_a_fast_board_gets_both_through(self):
+        """The guard must not refuse work the machine can actually do."""
+        scheduler, actuator, board, clock = self.rig_with_a_slow_board(stroke_s=0.01)
+        scheduler.schedule("AUR-ITEM-1", "A", T0)
+        scheduler.schedule("AUR-ITEM-2", "A", T0)
+        clock.t = DUE_A
+        results = actuator.execute_due(now=DUE_A)
+        assert {r.outcome for r in results} == {ActuationOutcome.ACTUATED}
+        assert len(board.movements) == 2
+
+    def test_the_tolerance_is_configurable_because_a_bin_mouth_is_physical(self):
+        scheduler, actuator, board, clock = self.rig_with_a_slow_board(
+            AURUM_ROUTING_LATE_TOLERANCE_MS=5_000
+        )
+        scheduler.schedule("AUR-ITEM-1", "A", T0)
+        scheduler.schedule("AUR-ITEM-2", "A", T0)
+        clock.t = DUE_A
+        results = actuator.execute_due(now=DUE_A)
+        assert {r.outcome for r in results} == {ActuationOutcome.ACTUATED}
+
+    def test_bin_c_is_never_expired_it_has_no_moment(self):
+        scheduler, actuator, _, clock = self.rig_with_a_slow_board()
+        route = scheduler.schedule("AUR-ITEM-3", "C", T0)
+        assert actuator.actuate(route, now=T0 + 600).outcome is ActuationOutcome.NO_ACTION
+
+    def test_a_latched_fault_is_reported_before_lateness(self):
+        """BLOCKED keeps the item retryable; EXPIRED spends it. A latched
+        machine is the operator's problem to fix, and the bigger fact."""
+        scheduler, actuator, _, clock = self.rig_with_a_slow_board()
+        route = scheduler.schedule("AUR-ITEM-1", "A", T0)
+        actuator.fault.latch(FaultCode.ACK_TIMEOUT, "an earlier item")
+        assert actuator.actuate(route, now=T0 + 600).outcome is ActuationOutcome.BLOCKED

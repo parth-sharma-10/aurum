@@ -164,7 +164,40 @@ SPEC: dict[str, tuple] = {
         UNMEASURED,
         "AURUM_CAMERA_TO_SERVO_B_CM",
     ),
+    # Where the belt speed comes from, and whether there is a belt at all.
+    #   NONE        no belt. The operator carries the object. THE DEFAULT,
+    #               because that is what this machine is.
+    #   SIMULATION  the demonstration belt: configured speed and configured
+    #               distances, every figure derived from them stamped SIMULATED.
+    #   ENCODER     roller pulses differentiated into a real speed.
+    #   MANUAL      a speed somebody measured by hand and entered.
+    # See app/routing/conveyor.py.
+    "conveyor.mode": (
+        _one_of("NONE", "SIMULATION", "ENCODER", "MANUAL"),
+        "NONE",
+        "AURUM_CONVEYOR_MODE",
+    ),
     "conveyor.timing.offset_ms": (_float, 0.0, "AURUM_TIMING_OFFSET_MS"),
+    # A hand-measured belt speed, for a real belt with no encoder.
+    "conveyor.manual.belt_speed_cm_s": (
+        _non_negative,
+        UNMEASURED,
+        "AURUM_MANUAL_BELT_SPEED_CM_S",
+    ),
+    # Rotary encoder on the roller. No encoder model is assumed: nobody has
+    # bought one, so both numbers are configuration. An UNMEASURED
+    # circumference makes every reading UNAVAILABLE rather than papering over
+    # a missing tape measurement with a plausible default.
+    "conveyor.encoder.pulses_per_revolution": (_int, 20, "AURUM_ENCODER_PULSES_PER_REV"),
+    "conveyor.encoder.roller_circumference_cm": (
+        _non_negative,
+        UNMEASURED,
+        "AURUM_ENCODER_ROLLER_CIRCUMFERENCE_CM",
+    ),
+    "conveyor.encoder.sample_interval_s": (_non_negative, 0.25, "AURUM_ENCODER_SAMPLE_INTERVAL_S"),
+    # Past this with no sample, the encoder reads STALE and the scheduler
+    # refuses. A belt nobody can hear is not a belt whose speed is known.
+    "conveyor.encoder.timeout_s": (_non_negative, 2.0, "AURUM_ENCODER_TIMEOUT_S"),
     "conveyor.timing.servo_actuation_delay_ms": (
         _non_negative,
         UNMEASURED,
@@ -199,6 +232,22 @@ SPEC: dict[str, tuple] = {
         "AURUM_WEIGHT_CALIBRATION_FACTOR",
     ),
     "conveyor.weight.hx711_port": (_optional_text, None, "AURUM_HX711_PORT"),
+    # How late a route may fire and still be worth firing. The scheduler
+    # refuses to SCHEDULE a route whose moment has passed; without this nothing
+    # refused to ACTUATE one, and the board blocks for the whole stroke, so the
+    # second of two routes due together was commanded a stroke-length late and
+    # reported ACTUATED.
+    #
+    # 200 ms is not invented: configs/conveyor.yaml already puts the timing
+    # error from Python, serial latency and inference jitter at roughly
+    # +/-200 ms, which is +/-2 cm at the 10 cm/s demonstration speed. MEASURE
+    # THIS against a real bin mouth before trusting it on a real belt - the
+    # honest figure is how long the item stays in front of the paddle.
+    "conveyor.routing.late_tolerance_ms": (
+        _non_negative,
+        200.0,
+        "AURUM_ROUTING_LATE_TOLERANCE_MS",
+    ),
     "conveyor.arduino.port": (_optional_text, None, "AURUM_ARDUINO_PORT"),
     # Actuation ships OFF. Nothing moves until someone turns this on with the
     # board connected and bench-verified.
@@ -217,7 +266,11 @@ SPEC: dict[str, tuple] = {
     "conveyor.servo.actuation_ms": (_non_negative, 700.0, "AURUM_SERVO_ACTUATION_MS"),
     # The demonstration profile. TEST values, used ONLY when
     # conveyor.runtime.simulation is true. See configs/conveyor.yaml.
-    "conveyor.simulation.belt_speed_cm_s": (_non_negative, 20.0, "AURUM_SIM_BELT_SPEED_CM_S"),
+    # 10 cm/s = 0.10 m/s. A DEMONSTRATION VALUE, not a measurement of any
+    # belt. Slow on purpose: timing error from Python, serial latency and
+    # inference jitter is roughly +/-200 ms, which is +/-2 cm here and
+    # +/-10 cm at 50 cm/s.
+    "conveyor.simulation.belt_speed_cm_s": (_non_negative, 10.0, "AURUM_SIM_BELT_SPEED_CM_S"),
     "conveyor.simulation.camera_to_load_cell_cm": (
         _non_negative,
         25.0,
@@ -291,21 +344,73 @@ SPEC: dict[str, tuple] = {
     ),
     "grading.bin_b.minimum_confidence": (_fraction, 0.60, "AURUM_BIN_B_MIN_CONFIDENCE"),
     "grading.fallback": (_one_of("A", "B", "C"), "C", "AURUM_GRADING_FALLBACK"),
+    # ------------------------------------------------------------------
+    # MASS PLAUSIBILITY - is this mass possible for this class at all?
+    #
+    # ENGINEERING APPROXIMATIONS, deliberately wide. This catches a 5 kg
+    # "RAM module" and a 0.1 g "motherboard" - a mis-detection, an item that
+    # rolled off the pan, a calibration factor that is out by a decade. It is
+    # NOT a second opinion on the class, and nothing infers composition from
+    # a mass: an implausible mass makes the decision UNKNOWN and sends the
+    # item for manual inspection.
+    #
+    # The upper bounds are for a whole ASSEMBLY, because one mass covers every
+    # component on the object: a board carrying two modules and a processor
+    # weighs what all of it weighs.
+    # ------------------------------------------------------------------
+    "grading.mass_plausibility.enabled": (_bool, True, "AURUM_MASS_PLAUSIBILITY"),
+    "grading.mass_plausibility.cpu_min_g": (_non_negative, 5.0, "AURUM_MASS_MIN_CPU_G"),
+    "grading.mass_plausibility.cpu_max_g": (_non_negative, 500.0, "AURUM_MASS_MAX_CPU_G"),
+    "grading.mass_plausibility.ram_min_g": (_non_negative, 3.0, "AURUM_MASS_MIN_RAM_G"),
+    "grading.mass_plausibility.ram_max_g": (_non_negative, 200.0, "AURUM_MASS_MAX_RAM_G"),
+    "grading.mass_plausibility.pcb_min_g": (_non_negative, 20.0, "AURUM_MASS_MIN_PCB_G"),
+    "grading.mass_plausibility.pcb_max_g": (_non_negative, 5000.0, "AURUM_MASS_MAX_PCB_G"),
+    "grading.mass_plausibility.connector_min_g": (
+        _non_negative,
+        0.5,
+        "AURUM_MASS_MIN_CONNECTOR_G",
+    ),
+    "grading.mass_plausibility.connector_max_g": (
+        _non_negative,
+        200.0,
+        "AURUM_MASS_MAX_CONNECTOR_G",
+    ),
     "grading.policy.class_aware": (_bool, True, "AURUM_GRADING_CLASS_AWARE"),
     "grading.policy.price_unavailable_policy": (
         _one_of("mass_fraction_only", "route_to_c"),
         "mass_fraction_only",
         "AURUM_PRICE_UNAVAILABLE_POLICY",
     ),
+    # metalprice: the live MetalpriceAPI feed, composed over the reference
+    # snapshot so an outage degrades rather than stops. Needs a key; without
+    # one every live quote is UNAVAILABLE and the snapshot answers instead.
     # reference: a dated snapshot of real published prices, labelled REFERENCE
     # and never reported as current. The shipped default - see
-    # configs/pricing.yaml for why there is no live feed.
+    # configs/pricing.yaml.
     "pricing.provider": (
-        _one_of("reference", "unavailable", "static"),
+        _one_of("reference", "unavailable", "static", "metalprice"),
         "reference",
         "AURUM_PRICE_PROVIDER",
     ),
     "pricing.max_age_seconds": (_non_negative, 900.0, "AURUM_PRICE_MAX_AGE_SECONDS"),
+    #: The single currency every quote is normalised into before anything is
+    #: added. Changing it changes what the dashboard's money figures mean.
+    "pricing.currency": (_text, "INR", "AURUM_PRICE_CURRENCY"),
+    # A live feed that stops answering must fall back to the dated snapshot
+    # rather than take the pipeline down. Off makes an outage UNAVAILABLE.
+    "pricing.fallback_to_reference": (_bool, True, "AURUM_PRICE_FALLBACK_TO_REFERENCE"),
+    # MetalpriceAPI. THE KEY IS NOT HERE - see config.secret() below.
+    "pricing.metalprice.base": (_text, "USD", "AURUM_METALPRICE_BASE"),
+    "pricing.metalprice.base_url": (
+        _text,
+        "https://api.metalpriceapi.com/v1",
+        "AURUM_METALPRICE_BASE_URL",
+    ),
+    "pricing.metalprice.timeout_s": (_non_negative, 5.0, "AURUM_METALPRICE_TIMEOUT_S"),
+    # One request answers for every metal and every item until it expires.
+    # Matched to pricing.max_age_seconds by default: refreshing more often
+    # than a quote can go stale spends quota for nothing.
+    "pricing.metalprice.cache_seconds": (_non_negative, 900.0, "AURUM_METALPRICE_CACHE_SECONDS"),
     "tracking.tracker": (_text, "bytetrack.yaml", "AURUM_TRACKER"),
     "tracking.max_missing_frames": (_int, 15, "AURUM_TRACK_MAX_MISSING_FRAMES"),
     "tracking.min_detections_to_confirm": (_int, 3, "AURUM_TRACK_MIN_DETECTIONS"),
@@ -317,6 +422,22 @@ SPEC: dict[str, tuple] = {
         ["PCB"],
         "AURUM_ASSEMBLY_CONTAINER_CLASSES",
     ),
+    # ------------------------------------------------------------------
+    # VISION FAILURE CAPTURE - frames worth looking at again.
+    #
+    # Ships OFF. With it on, the camera loop writes a JPEG and a JSONL line
+    # for each frame it can justify calling a failure, and tools/fiftyone
+    # turns that directory into a FiftyOne dataset afterwards. Nothing in the
+    # live pipeline imports FiftyOne.
+    # ------------------------------------------------------------------
+    "tracking.capture.enabled": (_bool, False, "AURUM_VISION_CAPTURE"),
+    "tracking.capture.directory": (_text, "data/vision_errors", "AURUM_VISION_CAPTURE_DIR"),
+    # A detection above the model's operating confidence but below this is
+    # worth a second look. ENGINEERING APPROXIMATION.
+    "tracking.capture.low_confidence": (_fraction, 0.5, "AURUM_VISION_LOW_CONFIDENCE"),
+    # A cap per category, so a demonstration cannot quietly fill a disk with
+    # a thousand near-identical frames of the same problem.
+    "tracking.capture.per_category_limit": (_int, 50, "AURUM_VISION_CAPTURE_LIMIT"),
     # ENGINEERING APPROXIMATION - how much of a component's box must fall
     # inside a container's before it counts as sitting on it.
     "tracking.assembly.containment_ratio": (
@@ -395,6 +516,23 @@ def _dig(tree: dict[str, Any], key: str) -> tuple[bool, Any]:
             return False, None
         node = node[part]
     return True, node
+
+
+def secret(env_var: str, environ: dict[str, str] | None = None) -> str | None:
+    """A credential, read from the environment and NEVER stored in `Config`.
+
+    Everything else in this module resolves through `SPEC` into an object that
+    a future `/config` endpoint, a debug dump or a dashboard could serialise
+    wholesale. An API key must not be reachable that way, so it is read at the
+    point of use and held only by the object that needs it.
+
+    Absent and empty are the same answer: a variable exported as an empty
+    string is not a key, and treating it as one produces a 101 from the
+    provider instead of the clear "no key configured" this returns.
+    """
+    environ = os.environ if environ is None else environ
+    value = (environ.get(env_var) or "").strip()
+    return value or None
 
 
 def load(config_dir: Path | None = None, environ: dict[str, str] | None = None) -> Config:

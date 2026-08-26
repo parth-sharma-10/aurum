@@ -96,8 +96,10 @@ must not let a resend swing the paddle into whatever is now in front of it.
 in firmware would be the single most misleading thing this repository could do.
 
 **The ACK follows the stroke, not the frame.** It means the board completed its
-movement routine — which is why `conveyor.arduino.ack_timeout_ms` is 2 s
-against a 700 ms hold. It is still not proof a servo physically moved: a
+movement routine — which is why `conveyor.arduino.ack_timeout_ms` is 4 s
+against a 700 ms hold: a MOVE was measured at 1.212 s on the attached board,
+and 2 s produced false timeouts on a board that was answering correctly. It is
+still not proof a servo physically moved: a
 stripped horn or a dead supply rail acknowledges identically.
 
 ### Serial protocol
@@ -162,20 +164,101 @@ cell, or a tare taken with something still on the pan. The workflow refuses if
 both masses are the same.
 
 `verified` becomes true only when the prediction for the second mass lands
-within `--tolerance` (default **0.1 g**, an engineering approximation, not
-research-derived).
+within `--tolerance`, default **1.5 g**. That default is measured on this rig,
+not assumed — see *Why 1.5 g* below.
 
-### Current state: NOT CALIBRATED
+### The reading must be of the present, not of the backlog
 
-`configs/calibration.yaml` ships `UNMEASURED`.
+The board streams a frame every 100 ms whether or not anyone is reading, and the
+OS keeps the whole backlog. Each step of this workflow waits on a human placing
+a mass, so by the time `_average` reads, `readline()` replays the stream **from
+the beginning**, instantly, in order.
 
-A bench experiment on 2026-08-22 with a 180 g reference mass produced roughly
-**361.9 counts/g** (empty ≈ −261 600 counts, loaded ≈ −196 470). That is
-evidence the hardware responds correctly and is recorded in the file's notes.
-**It is not a calibration:** it was not produced by this workflow, and it was
-never checked against a second known mass. The software therefore continues to
-report `UNMEASURED`, and no reading can reach `MEASURED` until the workflow is
-run on the machine.
+That produced three calibrations in a row that derived ~0.08, ~1.07 and
+~1.57 counts/g from a cell that actually responds at ~392: every step averaged
+the pan as it was before the mass landed, so all three bursts returned the same
+empty-pan value.
+
+`HX711SerialReader.drain()` fixes it, and flushing the buffer alone does not —
+the kernel refills it from the backlog immediately. What separates history from
+now is arrival time: a queued frame returns in 0 ms, a live one makes the reader
+wait for the board to send it. `drain()` reads forward until a frame has to be
+waited for, and `_average` **raises** if a burst completes faster than the board
+could physically have sent it.
+
+### Why 1.5 g
+
+Measured 2026-08-26 by placing and re-placing the same masses. Placement moves
+the reading far more than the electronics do:
+
+| load | n | sample sd | max−min |
+|---|---|---|---|
+| 204 g | 2 | 0.431 g | 0.610 g |
+| 170 g | 3 | 0.245 g | 0.488 g |
+| 374 g (stacked) | 2 | — | 0.119 g |
+| zero, warmed | 4 | — | 3.3 counts = 0.008 g |
+
+The check derives a factor from **one** reference burst and tests it against
+**one** verification burst, so both placements contribute:
+
+```
+factor uncertainty  0.431 g at 204 g = 0.211%, at 170 g -> 0.359 g
+verification burst placement scatter              -> 0.245 g
+combined in quadrature                            -> 0.435 g  (1 sigma)
+```
+
+3σ is 1.30 g, rounded to 1.5 g so a sound calibration does not fail on placement
+luck. It stays far tighter than anything it exists to catch — a tare taken under
+a 5 g object, or a factor wrong by more than 0.9%.
+
+Nothing downstream needs better. At 170 g this is 0.88% relative; a CPU would
+need an **88% mass error** to cross the 100 ppm Bin B threshold, and the tightest
+plausibility window (Connector, 0.5 g minimum) is governed by zero stability at
+0.008 g, not by the slope.
+
+### Linearity: the response passes through the tare
+
+The 204 g and 170 g bursts first disagreed by 0.53% on counts/g, which two
+models fit equally: a mislabelled mass, or a constant offset on loading. Two
+points cannot separate two-parameter models, so a third load was made by
+stacking both masses — 374 g, no new hardware.
+
+The fitted offset is **+80 ± 223 counts (~0.203 g), consistent with zero**. The
+response is linear through the tare, the existing single-point model is sound,
+and **two-point calibration is not needed**. The residual 0.53% is in the masses:
+the nominal 170 g mass weighs approximately **170.70 g** if the 204 g mass is
+taken as exact. Both are uncertified, so only their ratio is established —
+absolute accuracy awaits a traceable mass.
+
+### Current state: CALIBRATED AND VERIFIED, 2026-08-26
+
+```yaml
+counts_per_gram:      392.2166666666667
+tare_counts:          -263078.25
+reference_mass_g:     204.0
+verified:             true
+verification_mass_g:  170.0
+verification_error_g: +1.1297752092806093   # tolerance 1.5 g
+```
+
+`has_factor: true`, `verified: true`, `present: true`. Readings can now reach
+`MEASURED`, which is what lets a concentration-based metal estimate run and what
+opens the pan machine's arrival gate.
+
+**Read the margin honestly.** The +1.130 g error sits 0.37 g inside the 1.5 g
+tolerance, and most of it is not cell error: the nominal 170 g mass weighs
+approximately 170.7–171.1 g by the ratio measurement above. The cell's own
+contribution is the ~0.435 g placement scatter.
+
+**Both masses are uncertified**, so this establishes the *ratio* and the
+linearity, not absolute accuracy. Every mass this rig reports inherits whatever
+the 204 g reference actually weighs. That is fine for sorting — a CPU would need
+an 88% mass error to change bins — and is not fine for anything claiming to be a
+scale. A traceable mass would settle it.
+
+A failed run still writes its record — deliberately, so a factor that was tried
+and missed is not lost. Such a record has `has_factor: true` and
+`present: false`, and cannot drive the machine.
 
 ## Weight states
 
@@ -191,6 +274,23 @@ run on the machine.
 `app/materials.py` accepts only `MEASURED` for concentration-based estimates.
 A PCB weighed on an unverified calibration therefore produces no metal figure —
 it routes to Bin C instead, which is the correct fail-closed behaviour.
+
+### Three questions a calibration record answers
+
+`Calibration` keeps them apart, because they are not the same question and
+collapsing them either deletes the `STABLE` tier or lets a failed run drive the
+machine:
+
+| property | means | gates |
+|---|---|---|
+| `has_factor` | a factor and a tare exist, so counts convert | the arithmetic: `grams()`, `WeightSensor.read()`, pan arrival detection |
+| `verified` | the second-mass check passed | `MEASURED` vs `STABLE` in `_settled()` |
+| `present` | `has_factor` **and** `verified` | anything treating the cell as a trusted calibrated instrument |
+
+A factor is derived *from* the reference mass, so that mass always reads back
+correctly and an unverified factor can be arbitrarily wrong for every other
+load. One failed run left 0.078 counts/g on disk, which reads an empty pan as
+−2033 g; `present` is what stops such a record being mistaken for a calibration.
 
 The first reading is never accepted: a cell settles, a bench vibrates, and a
 hand leaving the pan takes a moment, so whichever number arrives first is the
@@ -227,17 +327,17 @@ Bench session of **2026-08-22**, on an Arduino Uno at `/dev/cu.usbmodem101`.
 | Duplicate suppression on the board | **VERIFIED** — replayed id answered `ACK … DUP`, no second stroke |
 | Bin C writes nothing | **VERIFIED** — no bytes reached the board |
 | Corrected power wiring | **WORKING** after the earlier short |
-| **Load cell under load** | **FAILED** — see below. The cell converts; it sees no strain |
-| **Calibration** | **NOT VERIFIED** — blocked by the above |
+| **Load cell under load** | **VERIFIED 2026-08-26** — responds at ~392 counts/g, linear through the tare |
+| **Calibration** | **VERIFIED 2026-08-26** — 392.2167 counts/g, second-mass error +1.130 g within 1.5 g |
 | Physical conveyor | **DOES NOT EXIST** |
 
 The 709 ms matters: the sketch blocks for `holdMs` during a stroke, so the
 round-trip time is evidence the movement routine actually ran rather than an
 ACK being echoed back.
 
-### The load cell is mechanically bypassed
+### The load cell was mechanically bypassed, and no longer is
 
-Measured on the bench, with the cell wired and converting normally:
+**2026-08-22 — no signal.** With the cell wired and converting normally:
 
 | Load | Mean counts | Shift from tare | Expected shift |
 |---|---|---|---|
@@ -245,20 +345,27 @@ Measured on the bench, with the cell wired and converting normally:
 | **180 g** | −261 276.6 | **+2.2** | ~**+65 100** |
 | **400 g** | −261 289.3 | **−10.5** | ~**+144 800** |
 
-The noise floor is 64–104 counts, so a 2.2-count shift is thirty times smaller
-than the noise, and 400 g moved it in the **opposite** direction. That is not a
-weak signal, it is no signal: the mass is not reaching the cell.
+A 2.2-count shift against a 64–104 count noise floor, and 400 g moving it the
+**opposite** way. Not a weak signal — no signal. A bar cell must be a
+cantilever: one end bolted rigidly to a base, the other carrying the pan, with
+an air gap beneath the free end so it can bend.
 
-**This is a mounting fault, not a wiring or software fault.** A bar cell must be
-a cantilever — one end bolted rigidly to a base, the other carrying the pan,
-with an air gap beneath the free end so it can bend. Check whether the pan rests
-on the frame or table, whether both ends are screwed down, and whether the mass
-lands on the pan or beside it.
+**2026-08-26 — the mounting was corrected and the cell responds.**
 
-Until it is fixed, no reading can reach `MEASURED`, so a PCB routes to Bin C on
-`C_UNMEASURED_WEIGHT`. That is the fail-closed design working. The demonstration
-fallback in `demo.mock_mass` exists to work around it, and is labelled
-SIMULATED throughout — see the README.
+| Load | Mean counts | Shift from tare | counts/g |
+|---|---|---|---|
+| empty (tare, warmed) | −262 856.8 | — | — |
+| **204 g** | −183 117.8 | **+79 739** | 390.9 |
+| **170 g** | −196 051.0 | **+66 806** | 393.0 |
+| **374 g** (stacked) | — | — | — |
+
+Zero stability once warmed is 3.3 counts (0.008 g) across four bursts. The first
+burst after the port opens sits ~60 counts low — the cell needs a moment, and
+pairing a load against that warm-up zero skews the factor, so discard it.
+
+`demo.mock_mass` remains available for a bench with no working cell, and is
+labelled SIMULATED throughout — see the README. It is no longer the only option
+here.
 
 Software status, which is a different claim:
 
@@ -274,11 +381,39 @@ Software status, which is a different claim:
 `SOFTWARE-TESTED` · `SIMULATION-VERIFIED` · `HARDWARE-BENCH-VERIFIED` ·
 `PHYSICALLY-CALIBRATED` · `PHYSICAL-CONVEYOR-VALIDATED`
 
-The actuation path reaches **level 3**: both paddles have been moved by Aurum's
-own command, over a real serial link, and watched doing it. **Level 4 is not
-reached** — the load cell is mechanically bypassed, so nothing has been
-physically calibrated. Level 5 needs a conveyor that does not exist and is out
-of the demonstration's scope.
+The actuation path has **not** reached level 3. A paddle has been commanded by
+Aurum's own code over a real serial link and the board acknowledged, which is
+level 3's first half. Its second half — a human watching the paddle move — has
+never been done: there is no camera on the bench, and no observation is on
+record.
+
+That claim is no longer prose. `app/hardware/verification.py` holds two states
+and the machine reports which one it is in:
+
+| State | Means |
+|---|---|
+| `VERIFICATION_UNAVAILABLE` | Nobody has recorded watching this servo move. The shipped state, and the state after any ACK. Says "nobody knows", never "it did not move". |
+| `PHYSICAL_MOVEMENT_VERIFIED` | A human watched it throw and said so. |
+
+**No software path produces the second.** There is no encoder, no limit switch
+and no camera on the paddle, so the only thing that can is a person answering:
+
+```
+python -m scripts.bench_check --port /dev/cu.usbmodem101 --move A --move B
+```
+
+The answer — either answer — is appended to `reports/movement_verification.json`
+with the throw that was verified, and surfaces on the dashboard's Hardware
+panel and at `GET /ready`. A paddle that acknowledged and did **not** move is
+recorded too: that is the most valuable observation the bench can produce, and
+discarding it would leave a known-broken rig looking merely untested.
+
+**Level 4 is reached, with one qualification.** The cell is mounted, responds
+linearly through the tare, and carries a calibration verified against a second
+known mass by the project's own workflow. The qualification is traceability:
+both masses are uncertified, so the factor is verified *self-consistently* and
+inherits whatever the 204 g reference actually weighs. Level 5 needs a conveyor
+that does not exist and is out of the demonstration's scope.
 
 A passing test suite says the software is right about what it would send, never
 that a paddle moved. Those are now separate claims with separate evidence, and
@@ -356,3 +491,48 @@ one always gets quoted.
 
 The demonstration runs on the simulated conveyor profile. That is a model of a
 machine, not a machine.
+
+---
+
+## The latched hardware fault
+
+Once something physical goes wrong, **nothing moves until a human resets it**.
+
+| Latches | Does not latch |
+|---|---|
+| the frame could not be written | bin C — no frame is sent, and that is normal |
+| no ACK inside `ack_timeout_ms` | actuation disabled — the shipped state |
+| the board answered `ERR` | a decision the engine could not make |
+| the link was gone when a command was due | a price that was unavailable |
+| servo angles outside 0–180°, or equal | |
+| a route reached the boundary with no paddle | |
+
+**Latched, not transient.** A link that recovers between two items does not
+clear it. A command that went unacknowledged may have moved a paddle, may have
+left it half out, may have jammed it against something — the next command
+would be issued into a machine whose physical state nobody knows. Reconnecting
+is not somebody having looked at the rig.
+
+```
+GET  /hardware              mode, link, fault, servo geometry
+POST /hardware/fault/reset  clear it — deliberate, and recorded
+```
+
+The dashboard puts an active fault at the top of the page with the reset
+button, because it is the reason nothing is moving and nothing else on screen
+explains that.
+
+The first fault is kept as `current` even when later ones are recorded: the
+first is the one that explains everything after it, and overwriting it loses
+the cause in favour of a consequence. `history` and `resets` survive the reset,
+so "why did nothing move for six items" has an answer afterwards.
+
+## HARDWARE_MODE=SIMULATION sends nothing to a port
+
+With `conveyor.runtime.simulation` true, `ArduinoController` builds a
+`SimulatedTransport` **regardless of `conveyor.arduino.port`**. The full
+protocol runs and the board acknowledges, so the whole chain can be
+demonstrated — and no byte reaches a real board however the rest is
+configured. `GET /arduino` reports `transport: simulated` and
+`hardware_mode: SIMULATION`, so a simulated ACK on screen is never mistaken
+for a physical one.

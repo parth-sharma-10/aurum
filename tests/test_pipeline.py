@@ -125,19 +125,30 @@ class TestDemoBatchReachesTheLedger:
         assert path.exists(), "the JSON must survive a ledger failure"
         assert "ledger write failed" in capsys.readouterr().out
 
-    def test_the_ledger_has_exactly_one_insert_in_the_codebase(self):
-        """Guards the single-persistence-path rule against a future second INSERT."""
+    def test_each_store_has_exactly_one_insert_in_the_codebase(self):
+        """Guards the single-persistence-path rule against a future second INSERT.
+
+        Two stores now, not one: `app/ledger.py` holds closed BATCHES and
+        `app/epr.py` holds per-item EPR events. They answer different questions
+        and neither writes to the other's table. What the rule forbids is
+        unchanged - a second INSERT into either, somewhere a reader would not
+        think to look - so the check is now per module rather than global.
+        """
         import re
         from pathlib import Path
 
         app_dir = Path(ledger_mod.__file__).parent
         statement = re.compile(r"INSERT\s+(OR\s+\w+\s+)?INTO", re.IGNORECASE)
+        writers = {"ledger.py", "epr.py"}
         offenders = [
             p.name
             for p in app_dir.glob("*.py")
-            if p.name != "ledger.py" and statement.search(p.read_text())
+            if p.name not in writers and statement.search(p.read_text())
         ]
-        assert offenders == [], f"SQL INSERT outside app/ledger.py: {offenders}"
+        assert offenders == [], f"SQL INSERT outside {sorted(writers)}: {offenders}"
+        for name in writers:
+            found = statement.findall((app_dir / name).read_text())
+            assert len(found) == 1, f"app/{name} has {len(found)} INSERTs, expected exactly 1"
 
 
 # ---------------------------------------------------------------------------

@@ -9,14 +9,26 @@
     "Connector"
   ],
   "grouping": {
-    "images_hashed": 17193,
-    "stem_groups": 5146,
-    "clusters": 4353,
-    "merges": 310
+    "images_hashed": 17245,
+    "stem_groups": 5198,
+    "clusters": 4373,
+    "merges": 319
   },
-  "background_images_dropped": 8464,
-  "augmented_copies_dropped_from_heldout": 3233,
+  "background_images_dropped": 7646,
+  "augmented_copies_dropped_from_heldout": 3381,
   "per_dataset": {
+    "aurum_bench_bg": {
+      "images": 15,
+      "boxes_kept": 0,
+      "license": "internal",
+      "url": ""
+    },
+    "aurum_hardneg": {
+      "images": 37,
+      "boxes_kept": 37,
+      "license": "internal",
+      "url": ""
+    },
     "computer_parts": {
       "images": 10369,
       "boxes_kept": 3867,
@@ -61,8 +73,8 @@
     "connector": 935,
     "ram_stick": 709,
     "Motherboard": 442,
+    "PCB": 355,
     "ram": 322,
-    "PCB": 318,
     "ram_slot": 167,
     "gpu_slot": 165,
     "rear_io": 58,
@@ -98,57 +110,61 @@
   },
   "splits": {
     "train": {
-      "images": 4878,
-      "background": 487,
+      "images": 5523,
+      "background": 1104,
       "boxes": {
-        "RAM": 3256,
+        "PCB": 1249,
         "CPU": 1470,
-        "PCB": 1223,
+        "RAM": 3256,
         "Connector": 927
       },
       "datasets": {
-        "computer_parts": 2663,
-        "pc_components_amin": 648,
-        "pc_components_disassembly": 190,
-        "pc_components_proelect": 320,
-        "pc_components_projeto": 376,
-        "rc_components": 681
+        "aurum_hardneg": 28,
+        "computer_parts": 3054,
+        "pc_components_amin": 666,
+        "pc_components_disassembly": 221,
+        "pc_components_proelect": 321,
+        "pc_components_projeto": 380,
+        "rc_components": 851,
+        "aurum_bench_bg": 2
       }
     },
     "valid": {
-      "images": 412,
-      "background": 41,
+      "images": 465,
+      "background": 93,
       "boxes": {
-        "RAM": 254,
-        "Connector": 107,
-        "PCB": 138,
-        "CPU": 172
+        "RAM": 269,
+        "PCB": 139,
+        "Connector": 109,
+        "CPU": 164
       },
       "datasets": {
-        "computer_parts": 160,
-        "rc_components": 75,
-        "pc_components_projeto": 28,
-        "pc_components_amin": 83,
-        "pc_components_proelect": 47,
-        "pc_components_disassembly": 19
+        "computer_parts": 187,
+        "rc_components": 83,
+        "pc_components_projeto": 27,
+        "pc_components_amin": 80,
+        "pc_components_proelect": 60,
+        "aurum_hardneg": 3,
+        "pc_components_disassembly": 25
       }
     },
     "test": {
-      "images": 206,
-      "background": 20,
+      "images": 230,
+      "background": 46,
       "boxes": {
-        "RAM": 139,
-        "Connector": 53,
-        "CPU": 79,
-        "PCB": 69
+        "Connector": 51,
+        "PCB": 68,
+        "RAM": 122,
+        "CPU": 85
       },
       "datasets": {
-        "computer_parts": 83,
-        "rc_components": 35,
-        "pc_components_projeto": 19,
-        "pc_components_amin": 37,
-        "pc_components_proelect": 22,
-        "pc_components_disassembly": 10
+        "rc_components": 42,
+        "computer_parts": 105,
+        "pc_components_projeto": 12,
+        "pc_components_amin": 39,
+        "pc_components_proelect": 24,
+        "pc_components_disassembly": 7,
+        "aurum_hardneg": 1
       }
     }
   }

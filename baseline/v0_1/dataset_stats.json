@@ -1,0 +1,155 @@
+{
+  "seed": 1337,
+  "hamming": 5,
+  "label_map_version": "0.1",
+  "classes": [
+    "PCB",
+    "RAM",
+    "CPU",
+    "Connector"
+  ],
+  "grouping": {
+    "images_hashed": 17193,
+    "stem_groups": 5146,
+    "clusters": 4353,
+    "merges": 310
+  },
+  "background_images_dropped": 8464,
+  "augmented_copies_dropped_from_heldout": 3233,
+  "per_dataset": {
+    "computer_parts": {
+      "images": 10369,
+      "boxes_kept": 3867,
+      "license": "Public Domain",
+      "url": "https://universe.roboflow.com/computer-parts/computer-parts-zbh2e"
+    },
+    "pc_components_amin": {
+      "images": 1131,
+      "boxes_kept": 1719,
+      "license": "CC BY 4.0",
+      "url": "https://universe.roboflow.com/amins-personal-workspace/pc-components-tuimj"
+    },
+    "pc_components_disassembly": {
+      "images": 693,
+      "boxes_kept": 545,
+      "license": "CC BY 4.0",
+      "url": "https://universe.roboflow.com/disassembly/pc-components-2ugi7"
+    },
+    "pc_components_proelect": {
+      "images": 978,
+      "boxes_kept": 1366,
+      "license": "CC BY 4.0",
+      "url": "https://universe.roboflow.com/pro-elect-4-6fbgr/pc-components-mvkie"
+    },
+    "pc_components_projeto": {
+      "images": 511,
+      "boxes_kept": 1073,
+      "license": "CC BY 4.0",
+      "url": "https://universe.roboflow.com/projeto-ia-plfah/pc-components-detection"
+    },
+    "rc_components": {
+      "images": 3511,
+      "boxes_kept": 1253,
+      "license": "CC BY 4.0",
+      "url": "https://universe.roboflow.com/robot-pose-annotation/components-zx3kz"
+    }
+  },
+  "kept_source_labels": {
+    "RAM": 3592,
+    "cpu": 2070,
+    "motherboard": 987,
+    "connector": 935,
+    "ram_stick": 709,
+    "Motherboard": 442,
+    "ram": 322,
+    "PCB": 318,
+    "ram_slot": 167,
+    "gpu_slot": 165,
+    "rear_io": 58,
+    "CPU": 30,
+    "memory": 28
+  },
+  "dropped_source_labels": {
+    "GPU": 4618,
+    "SSD": 2343,
+    "cable": 1551,
+    "HDD": 1413,
+    "propeller": 1112,
+    "motor": 700,
+    "disk_drive": 672,
+    "camera": 649,
+    "battery": 575,
+    "gpu": 508,
+    "CPU Cooler": 490,
+    "radio_controller": 471,
+    "antenna": 447,
+    "Cooler": 422,
+    "PSU": 369,
+    "Fan": 284,
+    "esc": 283,
+    "Panel": 244,
+    "psu": 228,
+    "DVD": 225,
+    "Storage": 186,
+    "cpu_cooler": 186,
+    "receiver": 47,
+    "front_panel": 35,
+    "optical_drive": 28
+  },
+  "splits": {
+    "train": {
+      "images": 4878,
+      "background": 487,
+      "boxes": {
+        "RAM": 3256,
+        "CPU": 1470,
+        "PCB": 1223,
+        "Connector": 927
+      },
+      "datasets": {
+        "computer_parts": 2663,
+        "pc_components_amin": 648,
+        "pc_components_disassembly": 190,
+        "pc_components_proelect": 320,
+        "pc_components_projeto": 376,
+        "rc_components": 681
+      }
+    },
+    "valid": {
+      "images": 412,
+      "background": 41,
+      "boxes": {
+        "RAM": 254,
+        "Connector": 107,
+        "PCB": 138,
+        "CPU": 172
+      },
+      "datasets": {
+        "computer_parts": 160,
+        "rc_components": 75,
+        "pc_components_projeto": 28,
+        "pc_components_amin": 83,
+        "pc_components_proelect": 47,
+        "pc_components_disassembly": 19
+      }
+    },
+    "test": {
+      "images": 206,
+      "background": 20,
+      "boxes": {
+        "RAM": 139,
+        "Connector": 53,
+        "CPU": 79,
+        "PCB": 69
+      },
+      "datasets": {
+        "computer_parts": 83,
+        "rc_components": 35,
+        "pc_components_projeto": 19,
+        "pc_components_amin": 37,
+        "pc_components_proelect": 22,
+        "pc_components_disassembly": 10
+      }
+    }
+  }
+}

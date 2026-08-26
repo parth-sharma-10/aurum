@@ -65,7 +65,41 @@ grading:
   # Where anything unjustified goes. C has no servo: an item reaching the end
   # of the belt falls into it. C does not mean worthless; it means Aurum
   # cannot justify routing the item into A or B.
+  #
+  # This is also the PHYSICAL FALLBACK for a decision of UNKNOWN. UNKNOWN is
+  # what Aurum concludes when it cannot judge an item at all - an unreadable
+  # detection, a class with no cited composition, a mass it could not measure
+  # or that is not plausible. UNKNOWN is a decision state, not a destination,
+  # and the item physically reaches this bin.
   fallback: C
+
+  # ==========================================================================
+  # MASS PLAUSIBILITY - is this mass possible for this class at all?
+  #
+  # ENGINEERING APPROXIMATIONS, deliberately wide. Nothing was weighed to get
+  # these and they are not a claim about what any component weighs. They catch
+  # a 5 kg "RAM module" and a 0.1 g "motherboard": a mis-detection, an item
+  # that rolled off the pan, a calibration factor out by a decade.
+  #
+  # An implausible mass makes the decision UNKNOWN with reason
+  # UNKNOWN_MASS_ANOMALY and sends the item for manual inspection. NO
+  # COMPOSITION IS EVER INFERRED FROM A MASS - an odd weight says the
+  # identity or the calibration is wrong, and says nothing about the metal.
+  #
+  # The upper bounds are for a whole ASSEMBLY: one mass covers every component
+  # on the object, so a board carrying two modules and a processor weighs what
+  # all of it weighs.
+  # ==========================================================================
+  mass_plausibility:
+    enabled: true
+    cpu_min_g: 5.0
+    cpu_max_g: 500.0
+    ram_min_g: 3.0
+    ram_max_g: 200.0
+    pcb_min_g: 20.0
+    pcb_max_g: 5000.0
+    connector_min_g: 0.5
+    connector_max_g: 200.0
 
   policy:
     # Allow bin_a.preferred_classes to apply. Set false for a purely

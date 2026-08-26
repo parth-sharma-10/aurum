@@ -136,12 +136,24 @@ class TestCalibrationRecord:
         assert Calibration().present is False
         assert Calibration().grams(1000.0) is None
 
-    def test_the_shipped_calibration_is_unmeasured(self):
-        """Guard: shipping a guessed factor would make every mass a guess."""
+    def test_the_shipped_calibration_is_never_an_unverified_guess(self):
+        """Guard: shipping a guessed factor would make every mass a guess.
+
+        The rig was uncalibrated when this guard was written, so it asserted an
+        absent factor. The invariant it was really protecting is narrower and
+        survives the rig being calibrated: whatever ships must either have no
+        factor at all, or have one checked against a second known mass. An
+        unverified factor on disk is the dangerous case - `app.calibrate`
+        records failed attempts deliberately, and such a record must never
+        reach `present`.
+        """
         shipped = Calibration.load()
-        assert shipped.counts_per_gram is None
-        assert shipped.present is False
-        assert shipped.verified is False
+        if shipped.has_factor:
+            assert shipped.verified is True, "an unverified factor must not ship"
+            assert shipped.verification_mass_g is not None
+            assert shipped.present is True
+        else:
+            assert shipped.present is False
 
     def test_a_factor_converts_counts_to_grams(self):
         assert calibration().grams(counts_for(180.0)) == pytest.approx(180.0)
@@ -169,6 +181,27 @@ class TestCalibrationRecord:
 
     def test_a_missing_file_is_uncalibrated(self, tmp_path):
         assert Calibration.load(tmp_path / "absent.yaml").present is False
+
+    def test_an_unverified_factor_is_not_present(self):
+        """A failed calibration run must not open a gate a verified one opens.
+
+        `app.calibrate` records a failed attempt rather than discarding it. One
+        such run left 0.078 counts/g on disk, which reads an empty pan as
+        -2033 g; `present` is what stops that record driving the machine.
+        """
+        unverified = Calibration(
+            counts_per_gram=0.0784313725490196, tare_counts=-262685.55, verified=False
+        )
+        assert unverified.has_factor is True
+        assert unverified.present is False
+
+    def test_an_unverified_factor_still_converts_counts(self):
+        """The arithmetic is `has_factor`, so the STABLE tier keeps its number."""
+        unverified = Calibration(
+            counts_per_gram=BENCH_COUNTS_PER_GRAM, tare_counts=BENCH_TARE, verified=False
+        )
+        assert unverified.present is False
+        assert unverified.grams(counts_for(180.0)) == pytest.approx(180.0)
 
 
 class TestCalibrationWorkflow:
@@ -207,17 +240,25 @@ class TestCalibrationWorkflow:
         assert result.recorded_at is not None
 
     @pytest.mark.parametrize(
-        ("error_g", "expected"),
-        [(0.05, True), (0.1, True), (0.15, False), (-0.05, True), (-0.15, False)],
+        ("fraction", "expected"),
+        [(0.5, True), (1.0, True), (1.5, False), (-0.5, True), (-1.5, False)],
     )
-    def test_the_tolerance_boundary(self, error_g, expected):
+    def test_the_tolerance_boundary(self, fraction, expected):
         """Inclusive at the tolerance, on both sides of it.
+
+        Expressed as a fraction of the tolerance rather than in grams, because
+        the behaviour under test is the comparison - inclusive, and symmetric
+        about zero - not whatever number the tolerance currently holds. Hard
+        gram values made this fail when the tolerance was re-derived from
+        measured repeatability, which is the tolerance changing, not the
+        comparison breaking.
 
         The error is driven directly rather than through a counts round trip:
         solving for a mass that lands exactly on the tolerance goes through a
         float division that misses by an ulp, which would test the fixture's
         arithmetic instead of the comparison.
         """
+        error_g = fraction * DEFAULT_VERIFY_TOLERANCE_G
         cal = Calibration(counts_per_gram=1.0, tare_counts=0.0, reference_mass_g=180.0)
         result = verify(cal, 100.0 + error_g, 100.0, tolerance_g=DEFAULT_VERIFY_TOLERANCE_G)
         assert result.verified is expected

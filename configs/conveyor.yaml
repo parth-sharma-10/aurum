@@ -24,11 +24,44 @@ conveyor:
     confidence: 0.35
     iou: 0.5
 
+  # Where the belt speed comes from, and whether there is a belt at all.
+  #
+  #   NONE        no belt. The operator carries the object from the camera to
+  #               the pan and routing is immediate. THE SHIPPED DEFAULT,
+  #               because that is what this machine physically is.
+  #   SIMULATION  the demonstration belt: the simulation profile below, with
+  #               every derived figure stamped SIMULATED. Also switches the
+  #               routing layer onto the TEST distances.
+  #   ENCODER     roller pulses differentiated into a real speed.
+  #   MANUAL      a real belt with no encoder, at a hand-measured speed.
+  #
+  # See app/routing/conveyor.py. Turning this on without a belt makes the
+  # machine wait several seconds and fire a paddle at nothing.
+  mode: NONE
+
   belt:
     # MEASURE THIS. Time a marked item over a known distance, repeat 5 times,
     # take the median. Timing error scales directly with speed: at 10 cm/s a
     # 200 ms scheduling error is 2 cm; at 50 cm/s it is 10 cm.
+    #
+    # Used when mode is MANUAL or ENCODER and nothing better is available.
     speed_cm_s: UNMEASURED
+
+  manual:
+    # MEASURE THIS if the belt has no encoder. Real, but entered once: it
+    # cannot notice the belt slowing under load.
+    belt_speed_cm_s: UNMEASURED
+
+  encoder:
+    # No encoder model is assumed - nobody has bought one - so both figures
+    # are configuration. An UNMEASURED circumference makes every reading
+    # UNAVAILABLE rather than papering over a missing tape measurement.
+    pulses_per_revolution: 20
+    roller_circumference_cm: UNMEASURED
+    sample_interval_s: 0.25
+    # Past this with no sample the encoder reads STALE and the scheduler
+    # refuses. A belt nobody can hear is not a belt whose speed is known.
+    timeout_s: 2.0
 
   geometry:
     # MEASURE THESE, along the belt, from the camera's field-of-view centre.
@@ -102,11 +135,20 @@ conveyor:
     # 115200 is what the physical board runs at. Must match the sketch.
     baudrate: 115200
     timeout_s: 1.0
-    # ENGINEERING APPROXIMATION — not research-derived.
-    # How long to wait for an ACK before treating a command as unacknowledged.
-    # The board acknowledges AFTER the stroke completes, so this must exceed
-    # servo.actuation_ms plus travel time.
-    ack_timeout_ms: 2000
+    # MEASURED on the bench, 2026-08-26, against the attached board: a MOVE is
+    # acknowledged 1.212 s after it is written. The board ACKs only once its
+    # stroke routine has finished, so that figure is servo.actuation_ms plus
+    # the sketch's own overhead, and it is the floor this value must clear.
+    #
+    # 2000 ms was not enough and produced a false ACK_TIMEOUT on a board that
+    # was answering correctly. The margin is not arbitrary: a reply is only
+    # noticed when a `next_response` budget ends, which is `timeout_s` (1.0 s)
+    # wide, so the usable resolution here is one second, not one millisecond.
+    # 4000 gives three whole polls against a 1.2 s answer.
+    #
+    # Raise this if servo.actuation_ms is raised. Lowering it below ~3000 will
+    # start latching faults on strokes that completed.
+    ack_timeout_ms: 4000
 
   # ==========================================================================
   # DEMONSTRATION PROFILE - TEST VALUES ONLY
@@ -116,18 +158,40 @@ conveyor:
   # anything. Every routing result computed from them is stamped
   # mode: SIMULATED.
   #
-  # They are reachable ONLY when runtime.simulation is true. With simulation
-  # off, the geometry above applies and stays UNMEASURED, so an unmeasured
-  # machine refuses to schedule rather than routing on plausible-looking
-  # numbers. Do not move these values up into the real geometry block.
+  # They are reachable ONLY when runtime.simulation is true OR mode is
+  # SIMULATION. With both off, the geometry above applies and stays
+  # UNMEASURED, so an unmeasured machine refuses to schedule rather than
+  # routing on plausible-looking numbers. Do not move these values up into the
+  # real geometry block.
   # ==========================================================================
   simulation:
-    belt_speed_cm_s: 20.0            # TEST
+    # 10 cm/s = 0.10 m/s. Slow on purpose: timing error from Python, serial
+    # latency and inference jitter is roughly +/-200 ms, which is +/-2 cm at
+    # this speed and +/-10 cm at 50 cm/s. Run a demonstration belt slow and
+    # make the bin mouths wide.
+    belt_speed_cm_s: 10.0            # TEST - a demonstration value, not a measurement
     camera_to_load_cell_cm: 25.0     # TEST
     camera_to_servo_a_cm: 60.0       # TEST
     camera_to_servo_b_cm: 90.0       # TEST
     servo_actuation_delay_ms: 150    # TEST
     timing_offset_ms: 0              # TEST
+
+  routing:
+    # How late a route may fire and still be worth firing.
+    #
+    # The scheduler refuses to SCHEDULE a route whose moment has already
+    # passed. Nothing refused to ACTUATE one, and the board blocks for the
+    # whole stroke (1.212 s measured), so of three routes due together the
+    # last was commanded 45 cm of belt past its bin and reported ACTUATED.
+    #
+    # 200 ms is not invented: the simulation block below puts the timing error
+    # from Python, serial latency and inference jitter at roughly +/-200 ms,
+    # which is +/-2 cm at 10 cm/s.
+    #
+    # MEASURE THIS before trusting it on a real belt. The honest figure is how
+    # long the item stays in front of the paddle, which is the bin mouth width
+    # divided by the belt speed - and there is no bin mouth yet.
+    late_tolerance_ms: 200           # TEST - derived, not measured
 
   servo:
     # BENCH/TEST VALUES - not calibrated conveyor geometry.

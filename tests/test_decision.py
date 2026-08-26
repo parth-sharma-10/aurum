@@ -187,49 +187,64 @@ class TestBinB:
 
 
 class TestBinC:
+    """Everything that reaches bin C, whether Aurum judged it or could not.
+
+    Changed 2026-08-26: the "could not judge" rungs return Bin.UNKNOWN with
+    physical_bin C. The physical outcome is identical - the item reaches C by
+    nobody doing anything - but the record no longer says Aurum graded
+    something it could not read. Both halves are asserted on every rung.
+    """
+
     def test_a_class_with_no_cited_composition_is_unsupported(self):
-        """C_UNSUPPORTED_MATERIAL still exists and still fires.
+        """UNKNOWN_MATERIAL still exists and still fires.
 
         RAM used to be the example. It is supported now, so the case is made
         with a class the database has never heard of - the same ladder rung,
         reached without pretending an evidence gap that has been closed.
         """
         result = judge("GPU", 0.95, measured(220.0))
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_UNKNOWN_CLASS
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.reason_code is ReasonCode.UNKNOWN_CLASS
 
     def test_an_unknown_class_is_refused(self):
         result = judge("GPU", 0.99, measured(100.0))
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_UNKNOWN_CLASS
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.servo is None
+        assert result.reason_code is ReasonCode.UNKNOWN_CLASS
 
     def test_a_missing_class_is_refused(self):
-        assert decide(None, 0.99, None, cfg=cfg()).reason_code is ReasonCode.C_UNKNOWN_CLASS
+        assert decide(None, 0.99, None, cfg=cfg()).reason_code is ReasonCode.UNKNOWN_CLASS
 
     def test_low_confidence_is_refused(self):
         result = judge("CPU", 0.10, measured(42.7))
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_LOW_CONFIDENCE
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.reason_code is ReasonCode.UNKNOWN_CONFIDENCE
 
     def test_a_pcb_without_a_measured_mass_is_refused(self):
         result = judge("PCB", 0.95, mass=None)
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_UNMEASURED_WEIGHT
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.reason_code is ReasonCode.UNKNOWN_WEIGHT
 
     def test_a_simulated_mass_does_not_satisfy_a_concentration(self):
         result = judge("PCB", 0.95, simulated(1800.0))
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_UNMEASURED_WEIGHT
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.reason_code is ReasonCode.UNKNOWN_WEIGHT
 
     @pytest.mark.parametrize("confidence", [None, -0.1, 1.5, "high"])
     def test_invalid_confidence_is_refused(self, confidence):
         valuation = valuation_module.value({"CPU": 1}, mass=measured(42.7), prices=unpriced())
         result = decide("CPU", confidence, valuation, cfg=cfg())
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_INVALID_DATA
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.reason_code is ReasonCode.UNKNOWN_DATA
 
     def test_a_missing_valuation_is_refused(self):
-        assert decide("CPU", 0.95, None, cfg=cfg()).reason_code is ReasonCode.C_MISSING_EVIDENCE
+        assert decide("CPU", 0.95, None, cfg=cfg()).reason_code is ReasonCode.UNKNOWN_EVIDENCE
 
     def test_a_fraction_below_the_b_threshold_is_refused(self):
         configuration = cfg(grading_class_aware="false")
@@ -303,10 +318,16 @@ class TestBoundaries:
 
     @pytest.mark.parametrize(
         ("confidence", "expected"),
-        [(0.60 - 1e-9, Bin.C), (0.60, Bin.B), (0.60 + 1e-9, Bin.B)],
+        [(0.60 - 1e-9, Bin.UNKNOWN), (0.60, Bin.B), (0.60 + 1e-9, Bin.B)],
     )
     def test_the_bin_b_confidence_boundary(self, confidence, expected):
-        assert judge("CPU", confidence, measured(42.7)).decision is expected
+        """Below the B threshold Aurum cannot judge the item, so UNKNOWN.
+
+        The boundary itself is unmoved: the physical bin below it is still C.
+        """
+        result = judge("CPU", confidence, measured(42.7))
+        assert result.decision is expected
+        assert result.physical_bin == ("C" if expected is Bin.UNKNOWN else str(expected))
 
     @pytest.mark.parametrize(("offset", "expected"), [(1e-6, Bin.B), (0.0, Bin.A), (-1e-6, Bin.A)])
     def test_the_bin_a_fraction_boundary(self, offset, expected):
@@ -386,13 +407,14 @@ class TestRamRoutesOnEvidenceOnly:
     def test_a_weak_detection_is_still_refused(self):
         """Evidence does not excuse the safety ladder."""
         result = judge("RAM", 0.2, measured(17.6))
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_LOW_CONFIDENCE
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.reason_code is ReasonCode.UNKNOWN_CONFIDENCE
 
     def test_no_mass_is_required_for_a_per_module_class(self):
         """Per-piece evidence needs no scale, so an unweighed module still routes."""
         result = judge("RAM", 1.0, mass=None)
-        assert result.reason_code is not ReasonCode.C_UNMEASURED_WEIGHT
+        assert result.reason_code is not ReasonCode.UNKNOWN_WEIGHT
 
 
 class TestRamFailsClosedWithoutEvidence:
@@ -422,11 +444,14 @@ class TestRamFailsClosedWithoutEvidence:
     )
     def test_no_threshold_change_can_route_ram(self, stripped, env):
         result = judge("RAM", 1.0, measured(7.8), configuration=cfg(**env))
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_UNSUPPORTED_MATERIAL
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.reason_code is ReasonCode.UNKNOWN_MATERIAL
 
     def test_even_with_prices_available(self, stripped):
-        assert judge("RAM", 1.0, measured(7.8), prices=priced()).decision is Bin.C
+        result = judge("RAM", 1.0, measured(7.8), prices=priced())
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
 
     def test_the_reason_names_the_database_gap(self, stripped):
         assert "no cited composition" in judge("RAM", 1.0, measured(7.8)).reason
@@ -435,19 +460,23 @@ class TestRamFailsClosedWithoutEvidence:
 class TestSafetyLadderIsNotSkipped:
     def test_a_preferred_class_does_not_rescue_an_invalid_detection(self):
         valuation = valuation_module.value({"CPU": 1}, mass=measured(42.7), prices=unpriced())
-        assert decide("CPU", None, valuation, cfg=cfg()).decision is Bin.C
+        result = decide("CPU", None, valuation, cfg=cfg())
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
 
     def test_a_preferred_class_does_not_rescue_a_missing_measurement(self):
         configuration = cfg(bin_a_preferred_classes="PCB")
         result = judge("PCB", 0.99, mass=None, configuration=configuration)
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_UNMEASURED_WEIGHT
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.reason_code is ReasonCode.UNKNOWN_WEIGHT
 
     def test_a_high_fraction_does_not_rescue_low_confidence(self):
         configuration = cfg(grading_class_aware="false")
         result = judge("PCB", 0.10, measured(1800.0), configuration=configuration)
-        assert result.decision is Bin.C
-        assert result.reason_code is ReasonCode.C_LOW_CONFIDENCE
+        assert result.decision is Bin.UNKNOWN
+        assert result.physical_bin == "C"
+        assert result.reason_code is ReasonCode.UNKNOWN_CONFIDENCE
 
 
 class TestExplainability:
@@ -486,7 +515,7 @@ class TestExplainability:
     def test_the_reason_codes_are_machine_readable(self):
         code = judge("GPU", 0.95, measured(220.0)).reason_code
         assert isinstance(code, ReasonCode)
-        assert str(code) == "C_UNKNOWN_CLASS"
+        assert str(code) == "UNKNOWN_CLASS"
 
 
 class TestStatusPropagation:
@@ -569,13 +598,15 @@ class TestEvidenceCompletenessIsReportedNotEnforced:
             {"CPU": 1, "PCB": 1}, mass=None, prices=unpriced(), now=NOW
         )
         decision = decide("CPU", 0.2, valuation, cfg=cfg())
-        assert decision.decision is Bin.C
-        assert decision.reason_code is ReasonCode.C_LOW_CONFIDENCE
+        assert decision.decision is Bin.UNKNOWN
+        assert decision.physical_bin == "C"
+        assert decision.reason_code is ReasonCode.UNKNOWN_CONFIDENCE
 
     def test_an_object_whose_every_class_lacks_evidence_still_fails_closed(self):
         """INSUFFICIENT_EVIDENCE is unchanged: nothing valued, nothing routed."""
         valuation = valuation_module.value({"PCB": 1}, mass=None, prices=unpriced())
         decision = decide("PCB", 0.94, valuation, cfg=cfg())
         assert valuation.completeness == "INSUFFICIENT_EVIDENCE"
-        assert decision.decision is Bin.C
-        assert decision.reason_code is ReasonCode.C_UNMEASURED_WEIGHT
+        assert decision.decision is Bin.UNKNOWN
+        assert decision.physical_bin == "C"
+        assert decision.reason_code is ReasonCode.UNKNOWN_WEIGHT

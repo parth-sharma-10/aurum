@@ -168,12 +168,39 @@ class RoutingScheduler:
         geometry: Geometry | None = None,
         lifecycle=None,
         cfg: config_module.Config | None = None,
+        conveyor=None,
     ) -> None:
         self.cfg = config_module.load() if cfg is None else cfg
         self.geometry = Geometry.from_config(self.cfg) if geometry is None else geometry
         self.lifecycle = lifecycle
+        #: The belt, when there is one. Supplying it is what makes the ETA
+        #: dynamic: the speed is re-read on every schedule, so slowing the
+        #: belt moves the next item's firing time without a restart.
+        self.conveyor = conveyor
         self._routes: dict[str, ScheduledRoute] = {}
         self._rejected: list[ScheduledRoute] = []
+
+    def reset(self) -> None:
+        """Drop every scheduled and refused route.
+
+        A pending route is a promise to move a paddle for an object at a
+        predicted position. Once the run is over that object is off the bench,
+        so firing for it later would be a stroke at nothing.
+        """
+        self._routes.clear()
+        self._rejected.clear()
+
+    def _refresh(self) -> Geometry:
+        """Re-read the belt speed from the conveyor, if one is attached.
+
+        A `Geometry` is frozen and carries the speed it was built with. Without
+        this the scheduler would keep firing to whatever the belt was doing
+        when the process started, which is the failure that looks exactly like
+        a timing bug and is not one.
+        """
+        if self.conveyor is not None:
+            self.geometry = self.conveyor.live_geometry()
+        return self.geometry
 
     # -- construction helpers ---------------------------------------------
     def _refuse(self, item_id, decision, code, reason, **extra) -> ScheduledRoute:
@@ -208,6 +235,7 @@ class RoutingScheduler:
         now: float | None = None,
     ) -> ScheduledRoute:
         """Turn a decision into a timed routing action, or explain why not."""
+        self._refresh()
         target = _target_of(decision)
         now = detected_at if now is None else now
 
@@ -285,12 +313,19 @@ class RoutingScheduler:
         geo = self.geometry
         speed_problem = geo.belt_speed_problem()
         if speed_problem:
+            # When a belt is attached its own speed source knows more than
+            # "UNMEASURED" - a stale encoder, an unset manual figure, a mode of
+            # NONE - and that reason is more use to whoever has to fix it.
+            detail = (
+                self.conveyor.speed().reason
+                if self.conveyor is not None
+                else "Measure the belt and set conveyor.belt.speed_cm_s."
+            )
             return self._refuse(
                 item_id,
                 target,
                 RouteReason.BELT_SPEED_UNMEASURED,
-                f"Cannot compute a routing time: {speed_problem}. Measure the belt "
-                "and set conveyor.belt.speed_cm_s.",
+                f"Cannot compute a routing time: {speed_problem}. {detail}",
                 component_class=component_class,
                 belt_speed_cm_s=geo.belt_speed_cm_s,
             )
@@ -451,6 +486,7 @@ class RoutingScheduler:
 
     def snapshot(self, now: float) -> dict:
         """Everything an API or a dashboard needs about the routing queue."""
+        self._refresh()
         return {
             "mode": str(self.geometry.mode),
             "simulated": self.geometry.simulated,

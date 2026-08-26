@@ -1,0 +1,163 @@
+{
+  "model_version": "Aurum Vision v0.2",
+  "weights": "models/aurum_vision_v0_2_best.pt",
+  "conf_threshold": 0.35,
+  "source": "data/bench_capture/broken_pcb",
+  "n_images": 15,
+  "images_with_no_detection": 0,
+  "total_detections": {
+    "PCB": 9,
+    "CPU": 6
+  },
+  "mean_confidence_per_class": {
+    "PCB": 0.8991,
+    "RAM": null,
+    "CPU": 0.7354,
+    "Connector": null
+  },
+  "max_confidence_per_class": {
+    "PCB": 0.9229,
+    "RAM": null,
+    "CPU": 0.8195,
+    "Connector": null
+  },
+  "mean_inference_ms": 15.6,
+  "per_image": [
+    {
+      "image": "broken_pcb_pose01_00.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.9229,
+      "inference_ms": 17.3
+    },
+    {
+      "image": "broken_pcb_pose01_01.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.9211,
+      "inference_ms": 14.4
+    },
+    {
+      "image": "broken_pcb_pose01_02.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.9185,
+      "inference_ms": 15.0
+    },
+    {
+      "image": "broken_pcb_pose02_00.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.7162,
+      "inference_ms": 15.0
+    },
+    {
+      "image": "broken_pcb_pose02_01.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.71,
+      "inference_ms": 16.0
+    },
+    {
+      "image": "broken_pcb_pose02_02.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.6049,
+      "inference_ms": 16.3
+    },
+    {
+      "image": "broken_pcb_pose03_00.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.9005,
+      "inference_ms": 14.5
+    },
+    {
+      "image": "broken_pcb_pose03_01.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8986,
+      "inference_ms": 15.7
+    },
+    {
+      "image": "broken_pcb_pose03_02.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.9002,
+      "inference_ms": 15.4
+    },
+    {
+      "image": "broken_pcb_pose04_00.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8678,
+      "inference_ms": 15.5
+    },
+    {
+      "image": "broken_pcb_pose04_01.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8775,
+      "inference_ms": 14.9
+    },
+    {
+      "image": "broken_pcb_pose04_02.jpg",
+      "counts": {
+        "PCB": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8852,
+      "inference_ms": 15.9
+    },
+    {
+      "image": "broken_pcb_pose05_00.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.7841,
+      "inference_ms": 16.2
+    },
+    {
+      "image": "broken_pcb_pose05_01.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.8195,
+      "inference_ms": 15.2
+    },
+    {
+      "image": "broken_pcb_pose05_02.jpg",
+      "counts": {
+        "CPU": 1
+      },
+      "n_objects": 1,
+      "mean_confidence": 0.7778,
+      "inference_ms": 16.3
+    }
+  ],
+  "caveat": "Detections only. These images have no ground-truth annotations, so nothing here is an accuracy measurement and no figure from this run may be quoted as model accuracy."
+}

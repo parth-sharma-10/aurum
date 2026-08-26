@@ -1,0 +1,344 @@
+{
+  "split": "test",
+  "conf": 0.35,
+  "weights": "models/aurum_vision_v0_1_best.pt",
+  "labelled_samples": 206,
+  "unlabelled_samples": {
+    "bench_perfboard": 12,
+    "bench_perfboard_poses_v2": 24,
+    "bench_broken_pcb": 15,
+    "bench_empty_scene": 15,
+    "realworld": 27
+  },
+  "predicted_on": 299,
+  "model_version": "Aurum Vision v0.1",
+  "imgsz": 512,
+  "evaluated": true,
+  "mAP": 0.5132,
+  "per_class": {
+    "CPU": {
+      "precision": 0.974,
+      "recall": 0.9494,
+      "fscore": 0.9615,
+      "support": 79
+    },
+    "Connector": {
+      "precision": 0.775,
+      "recall": 0.5849,
+      "fscore": 0.6667,
+      "support": 53
+    },
+    "PCB": {
+      "precision": 0.8971,
+      "recall": 0.8841,
+      "fscore": 0.8905,
+      "support": 69
+    },
+    "RAM": {
+      "precision": 0.8409,
+      "recall": 0.5324,
+      "fscore": 0.652,
+      "support": 139
+    }
+  },
+  "confidence_by_outcome": {
+    "CPU": {
+      "true_positive": {
+        "n": 75,
+        "min": 0.6069,
+        "p10": 0.8523,
+        "median": 0.8931,
+        "mean": 0.8904,
+        "max": 0.9724
+      },
+      "false_positive": {
+        "n": 2,
+        "min": 0.6512,
+        "p10": 0.6512,
+        "median": 0.9021,
+        "mean": 0.7766,
+        "max": 0.9021
+      }
+    },
+    "Connector": {
+      "true_positive": {
+        "n": 31,
+        "min": 0.4464,
+        "p10": 0.5168,
+        "median": 0.7857,
+        "mean": 0.7411,
+        "max": 0.9102
+      },
+      "false_positive": {
+        "n": 9,
+        "min": 0.3543,
+        "p10": 0.3543,
+        "median": 0.5445,
+        "mean": 0.6105,
+        "max": 0.9273
+      }
+    },
+    "PCB": {
+      "true_positive": {
+        "n": 61,
+        "min": 0.3982,
+        "p10": 0.7368,
+        "median": 0.9031,
+        "mean": 0.8579,
+        "max": 0.9715
+      },
+      "false_positive": {
+        "n": 7,
+        "min": 0.3542,
+        "p10": 0.3542,
+        "median": 0.5535,
+        "mean": 0.559,
+        "max": 0.7494
+      }
+    },
+    "RAM": {
+      "true_positive": {
+        "n": 74,
+        "min": 0.355,
+        "p10": 0.4074,
+        "median": 0.7559,
+        "mean": 0.7156,
+        "max": 0.9722
+      },
+      "false_positive": {
+        "n": 14,
+        "min": 0.3532,
+        "p10": 0.3614,
+        "median": 0.4995,
+        "mean": 0.5065,
+        "max": 0.9229
+      }
+    }
+  },
+  "per_source": {
+    "computer_parts": {
+      "samples": 83,
+      "tp": 78,
+      "fp": 4,
+      "fn": 9,
+      "precision": 0.9512,
+      "recall": 0.8966
+    },
+    "pc_components_amin": {
+      "samples": 37,
+      "tp": 63,
+      "fp": 3,
+      "fn": 3,
+      "precision": 0.9545,
+      "recall": 0.9545
+    },
+    "pc_components_disassembly": {
+      "samples": 10,
+      "tp": 5,
+      "fp": 2,
+      "fn": 13,
+      "precision": 0.7143,
+      "recall": 0.2778
+    },
+    "pc_components_proelect": {
+      "samples": 22,
+      "tp": 38,
+      "fp": 3,
+      "fn": 40,
+      "precision": 0.9268,
+      "recall": 0.4872
+    },
+    "pc_components_projeto": {
+      "samples": 19,
+      "tp": 21,
+      "fp": 10,
+      "fn": 21,
+      "precision": 0.6774,
+      "recall": 0.5
+    },
+    "rc_components": {
+      "samples": 35,
+      "tp": 36,
+      "fp": 10,
+      "fn": 13,
+      "precision": 0.7826,
+      "recall": 0.7347
+    }
+  },
+  "top_false_positives": [
+    {
+      "image": "rc_components__4__69349_700x700_jpg.rf.fddad4d1cc23799a9c801a64e80a769b.jpg",
+      "source": "rc_components",
+      "predicted": "Connector",
+      "confidence": 0.9273
+    },
+    {
+      "image": "computer_parts__images220_jpg.rf.12de2ddf5d554dc31dca6cb768087a11.jpg",
+      "source": "computer_parts",
+      "predicted": "RAM",
+      "confidence": 0.9229
+    },
+    {
+      "image": "computer_parts__CPU-289-_jpg.rf.15320f0016be1083ea87dbf8d4d31d67.jpg",
+      "source": "computer_parts",
+      "predicted": "CPU",
+      "confidence": 0.9021
+    },
+    {
+      "image": "rc_components__1__68942_edf5b7bf-a4ac-4f7f-a8d1-274b4e7b2e05_700x700_jpg.rf.28119c1801ff10d28fddb66f0b29fedb.jpg",
+      "source": "rc_components",
+      "predicted": "Connector",
+      "confidence": 0.8896
+    },
+    {
+      "image": "rc_components__10004__59109_700x700_jpg.rf.485194a0317b9651eb31ef24c32b8876.jpg",
+      "source": "rc_components",
+      "predicted": "Connector",
+      "confidence": 0.8559
+    },
+    {
+      "image": "pc_components_projeto__527359-9a094f56f47aa8937053c5120188970d-1600_jpg.rf.914758ebce583859a7d90c273f3c7f5d.jpg",
+      "source": "pc_components_projeto",
+      "predicted": "PCB",
+      "confidence": 0.7494
+    },
+    {
+      "image": "pc_components_amin__IMG_20260513_201449_jpg.rf.3e28093b5c3e9dbe513ab46e43fb2797.jpg",
+      "source": "pc_components_amin",
+      "predicted": "PCB",
+      "confidence": 0.6898
+    },
+    {
+      "image": "pc_components_proelect__PXL_20240623_161000840_jpg.rf.341e8a690236d19b04843333f2e1882a.jpg",
+      "source": "pc_components_proelect",
+      "predicted": "RAM",
+      "confidence": 0.6767
+    },
+    {
+      "image": "pc_components_proelect__PXL_20240623_162831114_jpg.rf.13f66e1587b0e07d78e917ad4188eb30.jpg",
+      "source": "pc_components_proelect",
+      "predicted": "CPU",
+      "confidence": 0.6512
+    },
+    {
+      "image": "pc_components_projeto__532512-80040f21488a5c9e2186569dad117b8c-1600_jpg.rf.77c725d94063d4171725a0dec0ac34ec.jpg",
+      "source": "pc_components_projeto",
+      "predicted": "RAM",
+      "confidence": 0.6501
+    },
+    {
+      "image": "pc_components_disassembly__pc203_jpg.rf.24d6704493b460bf31414cf1e8d88f58.jpg",
+      "source": "pc_components_disassembly",
+      "predicted": "PCB",
+      "confidence": 0.6129
+    },
+    {
+      "image": "rc_components__4__69349_700x700_jpg.rf.fddad4d1cc23799a9c801a64e80a769b.jpg",
+      "source": "rc_components",
+      "predicted": "Connector",
+      "confidence": 0.6032
+    },
+    {
+      "image": "pc_components_amin__IMG_20260513_201611_jpg.rf.484b9f640bc192bcf7d076e26f4b2eba.jpg",
+      "source": "pc_components_amin",
+      "predicted": "RAM",
+      "confidence": 0.602
+    },
+    {
+      "image": "pc_components_projeto__525963-3e88c27c30852935f0dfc866faeb2eee-1600_jpg.rf.0c05430ce30bcb2855a3e1d83e8a2488.jpg",
+      "source": "pc_components_projeto",
+      "predicted": "PCB",
+      "confidence": 0.5535
+    },
+    {
+      "image": "pc_components_projeto__525652-9d888b91c369146c3e7b8e08d89a0bda-1600_jpg.rf.a0a1557f44da53c8dd351d31134d0da1.jpg",
+      "source": "pc_components_projeto",
+      "predicted": "RAM",
+      "confidence": 0.5455
+    },
+    {
+      "image": "rc_components__1__94432_700x700_jpg.rf.f1a1834618e807fea707801f438c2d2a.jpg",
+      "source": "rc_components",
+      "predicted": "Connector",
+      "confidence": 0.5445
+    },
+    {
+      "image": "pc_components_projeto__531243-17d0b9794239b72879a0d7c5e1d4b938-1600_jpg.rf.c7421989d018a824c10cf564e161f187.jpg",
+      "source": "pc_components_projeto",
+      "predicted": "RAM",
+      "confidence": 0.5186
+    },
+    {
+      "image": "rc_components__TBS-Crossfire-Nano-Rx-Pro-FPV-Long-Range-Drone-Receiver-NDAA-TBS-147203170_800x_jpg.rf.b90efb6c206a666f420eab95a81e620a.jpg",
+      "source": "rc_components",
+      "predicted": "PCB",
+      "confidence": 0.515
+    },
+    {
+      "image": "pc_components_projeto__528799-64f4fadef669661e87c75c92c22e06ea-1600_jpg.rf.9876a534769a53bcc3c7cef2c1931c66.jpg",
+      "source": "pc_components_projeto",
+      "predicted": "RAM",
+      "confidence": 0.4995
+    },
+    {
+      "image": "rc_components__4__18899_700x700_jpg.rf.30cc6337a583a5cd66ccc73d47081c59.jpg",
+      "source": "rc_components",
+      "predicted": "Connector",
+      "confidence": 0.4951
+    }
+  ],
+  "unlabelled_predictions": {
+    "bench_perfboard": {
+      "images": 12,
+      "images_with_a_detection": 12,
+      "detections_by_class": {
+        "CPU": 12
+      },
+      "mean_confidence_by_class": {
+        "CPU": 0.8506
+      }
+    },
+    "bench_perfboard_poses_v2": {
+      "images": 24,
+      "images_with_a_detection": 16,
+      "detections_by_class": {
+        "CPU": 11,
+        "RAM": 3,
+        "PCB": 2
+      },
+      "mean_confidence_by_class": {
+        "CPU": 0.7939,
+        "PCB": 0.5264,
+        "RAM": 0.9235
+      }
+    },
+    "bench_broken_pcb": {
+      "images": 15,
+      "images_with_a_detection": 9,
+      "detections_by_class": {
+        "CPU": 9
+      },
+      "mean_confidence_by_class": {
+        "CPU": 0.7883
+      }
+    },
+    "bench_empty_scene": {
+      "images": 15,
+      "images_with_a_detection": 0,
+      "detections_by_class": {},
+      "mean_confidence_by_class": {}
+    },
+    "realworld": {
+      "images": 27,
+      "images_with_a_detection": 12,
+      "detections_by_class": {
+        "RAM": 8,
+        "PCB": 5
+      },
+      "mean_confidence_by_class": {
+        "PCB": 0.6901,
+        "RAM": 0.7511
+      }
+    }
+  }
+}

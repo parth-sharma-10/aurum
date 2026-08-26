@@ -114,7 +114,11 @@ class PanMachine:
         sensor = self._sensor()
         if sensor is None:
             return None, "No load cell is connected, so nothing can be detected on the pan."
-        if not sensor.calibration.present:
+        # `has_factor`, not `present`: this only answers "has something
+        # arrived". An unverified factor is good enough to notice a mass, and
+        # the reading that follows is labelled STABLE and refused downstream by
+        # anything that needs a measurement.
+        if not sensor.calibration.has_factor:
             return None, (
                 "The load cell is not calibrated, so counts cannot be read as a mass. "
                 "Run `python -m app.calibrate`."

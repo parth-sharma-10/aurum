@@ -60,6 +60,11 @@ class BoardLink:
         #: Lines that were neither a weight frame nor a protocol reply. Boot
         #: banners and line noise live here rather than being misread as data.
         self.dropped = 0
+        #: The angles the board ACKNOWLEDGED, or None while it is still running
+        #: whatever the sketch booted with. Read from the snapshot: an operator
+        #: measuring a throw needs to know which of the two is in force, and an
+        #: unapplied CFG is otherwise invisible from outside this method.
+        self.servo_config: tuple[int, int, int] | None = None
         self.weight_reader = _WeightView(self)
         self.transport = _CommandView(self)
 
@@ -106,20 +111,61 @@ class BoardLink:
         self._state = LinkState.DISCONNECTED
         self._weight.clear()
         self._responses.clear()
+        # Reopening the port resets the board, so the angles it acknowledged
+        # are gone with it. Keeping them would report a configuration that the
+        # bootloader has already thrown away.
+        self.servo_config = None
 
     close = disconnect
 
-    def configure_servos(self, rest_deg: float, push_deg: float, hold_ms: float) -> bool:
+    def configure_servos(
+        self, rest_deg: float, push_deg: float, hold_ms: float, budget_s: float = 4.0
+    ) -> bool:
         """Push the servo angles to the board, so tuning needs no reflash.
 
         Every frame the sketch accepts carries a command id, including this
         one: the board answers `ACK <id>`, and a reply that cannot be matched
         to a request is a reply that cannot be trusted.
+
+        The reply is consumed here rather than left queued. An unread CFG ACK
+        is the next MOVE's problem: `_await` pops it, finds an id it did not
+        ask about, discards it and reads on - which is correct but costs that
+        command a round of its own budget for no reason.
+
+        `budget_s` is an acknowledgement budget, not a read timeout, which is
+        why it defaults far above `timeout_s`. The board interleaves its replies
+        with a continuous stream of other lines, so reaching one is a matter of
+        how long we are willing to read rather than how long a single read
+        blocks. Measured on the bench: one second was not enough, and the
+        caller should pass `conveyor.arduino.ack_timeout_ms`.
+
+        Each poll gets what is LEFT of that budget, not `timeout_s`. Handing
+        `_next` the shorter figure capped the whole wait at one read timeout —
+        it returns None when its own budget ends just as it does when the port
+        runs dry, and this loop cannot tell those apart, so it gave up on a
+        board that was still streaming. Measured at 0.852 s in isolation against
+        a 1.0 s `timeout_s`, which is why it passed on the bench and failed
+        under the server.
         """
-        from app.hardware.arduino import new_command_id
+        from app.hardware.arduino import new_command_id, parse_response
 
         command_id = new_command_id()
-        return self.send(f"AURUM/1 CFG {int(rest_deg)} {int(push_deg)} {int(hold_ms)} {command_id}")
+        if not self.send(
+            f"AURUM/1 CFG {int(rest_deg)} {int(push_deg)} {int(hold_ms)} {command_id}"
+        ):
+            return False
+        deadline = time.monotonic() + budget_s
+        while (remaining := deadline - time.monotonic()) > 0:
+            line = self._next(self._responses, remaining)
+            if line is None:
+                break
+            response = parse_response(line)
+            if response is not None and response.command_id == command_id:
+                if response.verb == "ACK":
+                    self.servo_config = (int(rest_deg), int(push_deg), int(hold_ms))
+                return response.verb == "ACK"
+        self.last_error = f"the board did not acknowledge the servo configuration ({command_id})"
+        return False
 
     # -- frames ------------------------------------------------------------
     def send(self, line: str) -> bool:
@@ -166,20 +212,32 @@ class BoardLink:
         self.dropped += 1
         return True
 
-    # Both accessors pump until a frame of THEIR type arrives or the port runs
-    # dry. Pumping once would let the other stream starve this one: ask for a
-    # mass while the board is answering a command, and a single line read would
-    # be the ACK, leaving the caller with None despite data being available.
-    # `pump()` returns False on a timeout, so an idle port ends the loop.
+    # Both accessors pump until a frame of THEIR type arrives, the port runs
+    # dry, or the budget runs out. Pumping once would let the other stream
+    # starve this one: ask for a mass while the board is answering a command,
+    # and a single line read would be the ACK, leaving the caller with None
+    # despite data being available.
+    #
+    # The budget is what makes that safe against a real board, which is never
+    # idle: the sketch streams weight frames unprompted, so `pump()` always
+    # succeeds and waiting for a reply that only answers a command never ends.
+    # ArduinoController._await tests its deadline BETWEEN calls to receive(),
+    # so a receive() that never returns took ACK_TIMEOUT with it - the latch
+    # for a paddle that may already be half out could not fire on the one path
+    # where a paddle exists.
+    def _next(self, queue: deque, budget_s: float):
+        """The next queued frame of this type, or None once the budget is spent."""
+        deadline = time.monotonic() + budget_s
+        while not queue and self.pump():
+            if time.monotonic() >= deadline:
+                break
+        return queue.popleft() if queue else None
+
     def next_weight(self) -> RawSample | None:
-        while not self._weight and self.pump():
-            pass
-        return self._weight.popleft() if self._weight else None
+        return self._next(self._weight, self.timeout_s)
 
     def next_response(self) -> str | None:
-        while not self._responses and self.pump():
-            pass
-        return self._responses.popleft() if self._responses else None
+        return self._next(self._responses, self.timeout_s)
 
     def snapshot(self) -> dict:
         return {
@@ -191,6 +249,12 @@ class BoardLink:
             "queued_weight_frames": len(self._weight),
             "queued_responses": len(self._responses),
             "dropped_lines": self.dropped,
+            "servo_config_applied": self.servo_config is not None,
+            "servo_config": (
+                dict(zip(("rest_deg", "push_deg", "hold_ms"), self.servo_config, strict=True))
+                if self.servo_config
+                else None
+            ),
         }
 
 

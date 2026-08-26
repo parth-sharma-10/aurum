@@ -1,41 +1,67 @@
-# Aurum — metal price sourcing.
-#
-# ======================= NO LIVE PROVIDER IS CONFIGURED ====================
-# `provider: reference` is the shipped default: a DATED SNAPSHOT of real
-# published prices, in configs/price_reference.yaml, labelled REFERENCE
-# everywhere it surfaces and never presented as a current market quote.
-#
-# No live market data feed is configured, because none is available without a
-# licence or an API key. Aurum therefore reports a reference estimate rather
-# than a live one — and says which it is, on every quote, in the API payload
-# and on the dashboard.
-#
-# A spot price with no source and no timestamp behind it is still worse than
-# no price. Every entry in the snapshot carries both.
-# ===========================================================================
+# Aurum - metal price sourcing.
 #
 # provider:
 #   reference    dated snapshot from configs/price_reference.yaml, status
-#                REFERENCE. The default. Never reported as LIVE or as current.
+#                REFERENCE. THE SHIPPED DEFAULT. Never reported as LIVE or as
+#                current: every figure was published by a named source on a
+#                named date and is being used deliberately after that date.
+#   metalprice   LIVE spot prices from MetalpriceAPI, composed over the
+#                snapshot above so an outage degrades instead of stopping.
+#                NEEDS AN API KEY - see below. Without one every live quote is
+#                UNAVAILABLE and the snapshot answers instead.
 #   unavailable  every price is PRICE_UNAVAILABLE. Set this to run the
 #                pipeline on grams and ppm alone, with no currency figure.
 #   static       pinned prices, status TEST. For tests.
 #
-# A live provider is added by implementing `quote()` in
-# app/valuation/prices.py and registering it in PROVIDERS. Compose it with
-# the snapshot using FallbackProvider so a feed outage degrades to REFERENCE
-# instead of taking the pipeline down. PMDI code does not change.
+# ============================ THE API KEY =================================
+# The key is NOT a setting in this file and NOT a key in app/config.py. It is
+# read from the environment at the point of use, by config.secret():
+#
+#     export AURUM_METALPRICE_API_KEY=...
+#
+# Everything else resolves into a Config object that a future endpoint or a
+# debug dump could serialise wholesale. A credential must not be reachable
+# that way. Never commit it, never log it, never send it to the browser.
+# ==========================================================================
 
 pricing:
   provider: reference
 
-  # ENGINEERING APPROXIMATION — not research-derived.
+  # The single currency every quote is normalised into before anything is
+  # added. A price in USD and a price in INR cannot be summed, and the
+  # conversion is done once, explicitly, with a cited dated rate.
+  currency: INR
+
+  # A live feed that stops answering falls back to the dated snapshot rather
+  # than taking the pipeline down. Which provider actually answered is on
+  # every quote, so a fallback is never mistaken for a live price.
+  fallback_to_reference: true
+
+  # ENGINEERING APPROXIMATION - not research-derived.
   # A LIVE quote older than this is reported STALE. Fifteen minutes is a
   # defensible prototype window for spot metals; a deployment against a real
   # feed should set this from that feed's publication interval.
   #
   # This does NOT apply to REFERENCE prices. A dated snapshot is not a live
-  # feed that went quiet — it was published on a stated date and is being used
+  # feed that went quiet - it was published on a stated date and is being used
   # deliberately after it, so age is reported but never changes its status.
   # STALE keeps one meaning: something that should have been current was not.
   max_age_seconds: 900
+
+  metalprice:
+    # MetalpriceAPI quotes XAU, XAG, XPD and XPT per TROY OUNCE (31.1034768 g).
+    # Other symbols do not share that convention - LME copper is per metric
+    # tonne - so app/valuation/metalprice.py answers for those four only and
+    # returns UNAVAILABLE for anything else rather than guessing a unit.
+    base: USD
+
+    # Regional endpoint. api-eu.metalpriceapi.com is the EU mirror.
+    base_url: https://api.metalpriceapi.com/v1
+
+    timeout_s: 5.0
+
+    # One request answers for every metal and every item until it expires.
+    # Matched to max_age_seconds by default: refreshing more often than a
+    # quote can go stale spends a monthly allowance for nothing. An assembly
+    # of four components would otherwise issue twelve identical requests.
+    cache_seconds: 900
