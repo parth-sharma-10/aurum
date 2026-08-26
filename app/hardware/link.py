@@ -226,10 +226,22 @@ class BoardLink:
     # for a paddle that may already be half out could not fire on the one path
     # where a paddle exists.
     def _next(self, queue: deque, budget_s: float):
-        """The next queued frame of this type, or None once the budget is spent."""
+        """The next queued frame of this type, or None once the budget is spent.
+
+        A quiet port is not a dead one, and `pump()` cannot tell them apart:
+        it returns False both when a read times out with the board simply
+        between frames, and when the port has gone. Treating the first as
+        terminal is what capped `configure_servos` at one read timeout — and
+        on the bench the first CFG after a port open takes 1.310 s, which is
+        longer than one.
+
+        So only two things end the wait: the budget, or the link actually
+        leaving CONNECTED (which `pump()` sets on a read failure). A quiet
+        port is paced by `readline`'s own timeout, not spun on.
+        """
         deadline = time.monotonic() + budget_s
-        while not queue and self.pump():
-            if time.monotonic() >= deadline:
+        while not queue and time.monotonic() < deadline:
+            if not self.pump() and self._state is not LinkState.CONNECTED:
                 break
         return queue.popleft() if queue else None
 
