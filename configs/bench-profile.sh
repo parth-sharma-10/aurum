@@ -35,15 +35,19 @@
 # real geometry block is UNMEASURED, and an unmeasured machine refuses to
 # schedule rather than guessing.
 #
-# NONE, not SIMULATION. There is no belt on this bench: the operator carries
-# the object from the camera to the pan. With SIMULATION the scheduler models
-# a 60 cm travel at 10 cm/s and holds every paddle for ~5.8 s after the
-# decision, which on a bench with no belt is 5.8 s of the machine looking
-# broken. With NONE there is no scheduler and routing is immediate, which is
-# what actually happens here.
+# SIMULATION, because the demonstration IS the timing model. The paddle is
+# meant to fire when the item would have reached it: distance to the bin
+# divided by the belt speed, less the servo's own actuation delay. That wait
+# is the feature, not latency to be removed - `Upcoming` counts it down and
+# the servo fires at the end of it.
 #
-# Set this back to SIMULATION only to demonstrate the belt timing model.
-AURUM_CONVEYOR_MODE=NONE
+# Every figure derived from it is stamped SIMULATED all the way to the EPR
+# ledger, because the belt is a model and there is no belt on this bench.
+#
+# NONE removes the scheduler entirely and fires the paddle the instant the bin
+# is decided. Correct for a bench where the operator carries the object, and
+# wrong for showing the conveyor model.
+AURUM_CONVEYOR_MODE=SIMULATION
 
 # 10 cm/s = 0.10 m/s. Stated rather than defaulted, so the bench says out loud
 # what speed it is pretending to run at.

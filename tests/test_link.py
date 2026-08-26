@@ -514,3 +514,44 @@ class TestFailure:
         assert snapshot["connected"] is True
         assert snapshot["baudrate"] == 115200
         assert snapshot["queued_weight_frames"] == 0
+
+
+class TestReopeningADroppedLink:
+    """The bench board re-enumerates on USB every few minutes, leaving this
+    process holding a descriptor that will never yield another byte. Reopening
+    is the only way back."""
+
+    def test_a_healthy_link_is_never_reopened(self):
+        """Reopening resets the board. Doing that to a working link would park
+        the paddles and drop the weight stream for no reason."""
+        board = link(["W,1,1,-100,OK\n"])
+        port = board._serial
+        assert board.reconnect() is True
+        assert board._serial is port
+        assert port.closed is False
+
+    def test_a_degraded_link_is_closed_before_it_is_reopened(self):
+        board = link(fail_on_read=True)
+        board.pump()
+        assert board.state is LinkState.DEGRADED
+        port = board._serial
+        board.reconnect()  # connect() needs a real device, so it fails
+        assert port.closed is True, "the dead descriptor must not be leaked"
+
+    def test_reopening_a_port_that_is_gone_reports_failure(self):
+        board = link(fail_on_read=True)
+        board.pump()
+        assert board.reconnect() is False
+        assert board.connected is False
+
+    def test_the_angles_are_forgotten_when_the_board_drops(self):
+        """The board reboots when it re-enumerates, so whatever it acknowledged
+        before is gone. Reporting the old ones would be a stale claim."""
+        board = link()
+        board._serial = AckingSerial()
+        board.configure_servos(0, 90, 700)
+        assert board.snapshot()["servo_config_applied"] is True
+        board._serial = FakeSerial(fail_on_read=True)
+        board.pump()
+        board.reconnect()
+        assert board.snapshot()["servo_config_applied"] is False

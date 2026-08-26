@@ -118,6 +118,28 @@ class BoardLink:
 
     close = disconnect
 
+    def reconnect(self) -> bool:
+        """Close a broken link and open it again. True if the board is back.
+
+        The bench board drops off USB and re-enumerates under the same device
+        node, which leaves this object holding a file descriptor that will
+        never yield another byte. Reopening is the only way back, and doing it
+        automatically is the difference between a demonstration that pauses for
+        a few seconds and one that stops until somebody notices.
+
+        Only ever called for a link that is already DEGRADED or DISCONNECTED —
+        reopening a healthy port would reset the board for no reason.
+        """
+        if self._state is LinkState.CONNECTED:
+            return True
+        # Through `disconnect` rather than closing the descriptor here: it also
+        # drops the queued frames and forgets the acknowledged servo angles,
+        # both of which belong to a board that has since rebooted. Reporting
+        # the old angles after a re-enumeration would be a stale claim, and the
+        # caller reapplies them once the link is back.
+        self.disconnect()
+        return self.connect() is LinkState.CONNECTED
+
     def configure_servos(
         self, rest_deg: float, push_deg: float, hold_ms: float, budget_s: float = 4.0
     ) -> bool:

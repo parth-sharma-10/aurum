@@ -88,19 +88,19 @@ class TestTheDemonstrationProfile:
 
 
 class TestTheBenchProfile:
-    """`configs/bench-profile.sh` drives a real board with no belt at all.
+    """`configs/bench-profile.sh` drives a real board through the belt model.
 
-    It used to set the belt to SIMULATION, on the stated reasoning that an
-    UNMEASURED machine refuses to schedule so the servo would never fire
-    otherwise. **That reasoning was wrong, and the bench disproved it on
-    2026-08-26.** With `NONE` there is no scheduler to refuse anything:
-    `_route` takes the immediate `_actuate_now` path, and a real
-    `AURUM/1 MOVE B ... -> ACK` went out over the wire for a camera-confirmed
-    RAM weighed at 33.93 g.
+    The demonstration is the whole chain: the cell measures, the engine decides
+    a bin, the scheduler works out when the item would reach that bin's paddle,
+    and the servo fires at that moment. The wait is the feature.
 
-    NONE is also the honest model. There is no belt on this bench — the
-    operator carries the object — so SIMULATION bought a 5.8 s delay modelling
-    travel that never happens, which reads as a broken machine.
+    Two settings make it work and both are easy to get backwards. Leaving
+    `AURUM_SIMULATION` unset is what reaches the serial port. `CONVEYOR_MODE`
+    on SIMULATION is what makes a route schedulable, because the real geometry
+    block is UNMEASURED and an unmeasured machine refuses to schedule rather
+    than guessing. `DEMO_MOCK_MASS` off is what puts the load cell in the loop
+    at all — with a stand-in mass the pan never sees an arrival and nothing is
+    ever triggered.
     """
 
     PROFILE = config.CONFIG_DIR / "bench-profile.sh"
@@ -121,16 +121,17 @@ class TestTheBenchProfile:
         """Setting it would silently take the board back off the wire."""
         assert "AURUM_SIMULATION" not in self.environ()
 
-    def test_it_models_no_belt_because_there_is_none(self):
+    def test_it_runs_the_belt_timing_model(self):
+        """The wait between decision and paddle is the demonstration."""
         belt = Conveyor.from_config(cfg(**self.environ()))
-        assert belt.mode is ConveyorMode.NONE
-        assert belt.present is False
+        assert belt.mode is ConveyorMode.SIMULATION
+        assert belt.present is True
 
-    def test_no_belt_speed_is_invented_for_a_bench_that_has_no_belt(self):
-        """NONE must not quietly supply the TEST speed. Nothing travels."""
+    def test_the_belt_is_never_presented_as_measured(self):
+        """Only the servo command is real. Every derived figure says so."""
         speed = Conveyor.from_config(cfg(**self.environ())).speed()
-        assert speed.cm_s is None
-        assert speed.status is not SpeedStatus.MEASURED
+        assert speed.cm_s == pytest.approx(10.0)
+        assert speed.status is SpeedStatus.SIMULATED
 
     def test_the_load_cell_drives_the_cycle_not_a_stand_in_mass(self):
         """With a stand-in mass the pan never sees an arrival, so nothing is
