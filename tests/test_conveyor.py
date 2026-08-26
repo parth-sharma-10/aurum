@@ -45,6 +45,94 @@ def geometry(**overrides) -> Geometry:
     return Geometry(**{**base, **overrides})
 
 
+class TestTheDemonstrationProfile:
+    """`configs/demo-profile.sh` is checked in, so what it resolves to is a
+    testable fact rather than something a reader has to trust a comment about.
+
+    Two properties: it produces the demonstration belt at exactly 0.10 m/s,
+    stamped SIMULATED; and sourcing it changes nothing on disk, so the shipped
+    default stays the no-belt machine.
+    """
+
+    PROFILE = config.CONFIG_DIR / "demo-profile.sh"
+
+    def environ(self) -> dict:
+        out = {}
+        for line in self.PROFILE.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                key, _, value = line.partition("=")
+                out[key] = value
+        return out
+
+    def test_it_selects_the_simulated_belt(self):
+        assert Conveyor.from_config(cfg(**self.environ())).mode is ConveyorMode.SIMULATION
+
+    def test_the_belt_runs_at_a_tenth_of_a_metre_per_second(self):
+        speed = Conveyor.from_config(cfg(**self.environ())).speed()
+        assert speed.cm_s == pytest.approx(10.0)
+        assert speed.m_s == pytest.approx(0.10)
+
+    def test_that_speed_is_never_presented_as_measured(self):
+        speed = Conveyor.from_config(cfg(**self.environ())).speed()
+        assert speed.status is SpeedStatus.SIMULATED
+        assert "Nothing was measured to get this" in speed.reason
+
+    def test_it_runs_the_board_in_simulation(self):
+        assert hardware_mode(cfg(**self.environ())) == "SIMULATION"
+
+    def test_it_does_not_change_the_shipped_default(self):
+        """The profile is opt-in. Without it the machine is still beltless."""
+        assert Conveyor.from_config(cfg()).mode is ConveyorMode.NONE
+        assert hardware_mode(cfg()) == "PHYSICAL"
+
+
+class TestTheBenchProfile:
+    """`configs/bench-profile.sh` drives a real board with a simulated belt.
+
+    The property that matters, and the one that is easy to get wrong: it must
+    reach the serial port WITHOUT falling back to the real geometry. Turning
+    simulation off is what reaches the board; leaving the belt on SIMULATION is
+    what keeps a route schedulable. Get only the first right and the servo
+    never fires, because an UNMEASURED machine refuses to schedule at all.
+    """
+
+    PROFILE = config.CONFIG_DIR / "bench-profile.sh"
+
+    def environ(self) -> dict:
+        out = {}
+        for line in self.PROFILE.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                key, _, value = line.partition("=")
+                out[key] = value
+        return out
+
+    def test_it_drives_a_real_board(self):
+        assert hardware_mode(cfg(**self.environ())) == "PHYSICAL"
+
+    def test_it_never_sets_the_simulation_flag(self):
+        """Setting it would silently take the board back off the wire."""
+        assert "AURUM_SIMULATION" not in self.environ()
+
+    def test_it_still_uses_the_simulated_belt(self):
+        assert Conveyor.from_config(cfg(**self.environ())).mode is ConveyorMode.SIMULATION
+
+    def test_the_belt_is_still_never_presented_as_measured(self):
+        """Only the servo command is real. Every derived figure says so."""
+        speed = Conveyor.from_config(cfg(**self.environ())).speed()
+        assert speed.cm_s == pytest.approx(10.0)
+        assert speed.status is SpeedStatus.SIMULATED
+
+    def test_it_names_a_port_and_enables_actuation(self):
+        env = self.environ()
+        assert env["AURUM_ARDUINO_PORT"].startswith("/dev/")
+        assert env["AURUM_ARDUINO_ENABLED"] == "true"
+
+    def test_it_does_not_change_the_shipped_default(self):
+        assert Conveyor.from_config(cfg()).mode is ConveyorMode.NONE
+
+
 class TestTheShippedDefault:
     def test_there_is_no_belt(self):
         """The machine has no conveyor, so the software says it has no conveyor."""

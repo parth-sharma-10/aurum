@@ -251,9 +251,22 @@ class ServoActuator:
         )
 
     def execute_due(self, now: float | None = None) -> list[ActuationResult]:
-        """Actuate every route whose moment has arrived, once each."""
+        """Actuate every route whose moment has arrived, once each.
+
+        A route that failed at the board stays SCHEDULED - the only thing that
+        clears it is an acknowledgement - so `scheduler.due()` keeps offering
+        it. Already-attempted items are dropped here rather than being handed
+        to `actuate()` for a SKIPPED result: the machine loop runs at 20 Hz,
+        and every SKIPPED it returns became another EPR failure row and another
+        error-log entry for the same one item. `actuate()` keeps its own guard
+        for a direct call.
+        """
         now = self._clock() if now is None else now
-        return [self.actuate(route, now=now) for route in self.scheduler.due(now)]
+        return [
+            self.actuate(route, now=now)
+            for route in self.scheduler.due(now)
+            if route.item_id not in self._attempted
+        ]
 
     def snapshot(self, limit: int = 20) -> dict:
         """Recent actuation history, for the API."""

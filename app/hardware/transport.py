@@ -64,7 +64,9 @@ class SerialTransport(Transport):
 
     name = "serial"
 
-    def __init__(self, port: str, baudrate: int = 9600, timeout_s: float = 1.0) -> None:
+    # 115200 to match the sketch (hardware/arduino/aurum_sorter/aurum_sorter.ino)
+    # and BoardLink. A mismatched default reads as line noise, not as an error.
+    def __init__(self, port: str, baudrate: int = 115200, timeout_s: float = 1.0) -> None:
         self.port = port
         self.baudrate = baudrate
         self.timeout_s = timeout_s

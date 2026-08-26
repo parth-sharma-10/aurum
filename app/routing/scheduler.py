@@ -180,6 +180,16 @@ class RoutingScheduler:
         self._routes: dict[str, ScheduledRoute] = {}
         self._rejected: list[ScheduledRoute] = []
 
+    def reset(self) -> None:
+        """Drop every scheduled and refused route.
+
+        A pending route is a promise to move a paddle for an object at a
+        predicted position. Once the run is over that object is off the bench,
+        so firing for it later would be a stroke at nothing.
+        """
+        self._routes.clear()
+        self._rejected.clear()
+
     def _refresh(self) -> Geometry:
         """Re-read the belt speed from the conveyor, if one is attached.
 

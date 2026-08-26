@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app import config
-from app.valuation import metalprice
+from app.valuation import metalprice, pmdi, valuation
 from app.valuation.metalprice import ENV_API_KEY, FetchError, MetalpriceProvider
 from app.valuation.prices import (
     FallbackProvider,
@@ -29,6 +29,12 @@ from app.valuation.prices import (
 #: A fixed market instant, so a test can decide what "now" means.
 MARKET_TS = 1755792000
 MARKET_ISO = datetime.fromtimestamp(MARKET_TS, tz=UTC).isoformat(timespec="seconds")
+#: A moment inside the staleness window, so a quote is LIVE rather than STALE.
+MARKET_NOW = datetime.fromtimestamp(MARKET_TS + 60, tz=UTC)
+
+#: A settled reading, so concentration evidence is admissible. Not a market
+#: figure and not a measurement - a fixture.
+MEASURED_CPU = {"grams": 42.7, "simulated": False, "source": "HX711"}
 
 GRAMS_PER_OZT = 31.1034768
 
@@ -41,6 +47,8 @@ RATES = {
     "USDXAG": 31.1034768,
     "XPD": 1.0 / 622.069536,
     "USDXPD": 622.069536,
+    "XPT": 1.0 / 311.034768,
+    "USDXPT": 311.034768,
     "INR": 80.0,
 }
 
@@ -95,6 +103,20 @@ class TestASuccessfulQuote:
         p = provider()
         assert p.quote("Ag", "silver").price_per_gram == pytest.approx(80.0)
         assert p.quote("Pd", "palladium").price_per_gram == pytest.approx(1600.0)
+
+    def test_platinum_is_the_fourth_troy_ounce_metal(self):
+        """XPT is in SYMBOLS, so it must be quoted on the same basis as the rest."""
+        quote = provider().quote("Pt", "platinum")
+        assert quote.status is PriceStatus.LIVE
+        assert quote.quoted_unit == "ozt"
+        assert quote.price_per_gram == pytest.approx(800.0)
+
+    def test_all_four_metals_ride_one_request(self):
+        feed = Feed()
+        p = provider(feed)
+        grams = {m: p.quote(m, m).price_per_gram for m in ("Au", "Ag", "Pd", "Pt")}
+        assert None not in grams.values()
+        assert len(feed.calls) == 1
 
     def test_the_quote_keeps_the_figure_as_published(self):
         quote = provider().quote("Au", "gold")
@@ -335,6 +357,49 @@ class TestConfiguration:
         with pytest.raises(config.ConfigError) as exc:
             build_provider("bloomberg", config.load())
         assert "metalprice" in str(exc.value)
+
+
+class TestItReachesThePmdiAndTheValuation:
+    """The last leg the other classes stop short of.
+
+    A quote that is correct in isolation is worth nothing if the figure that
+    reaches the ledger came from somewhere else. These run the mocked LIVE
+    feed all the way through PMDI and the valuation and check the arithmetic
+    against the cited evidence, in the reporting currency.
+    """
+
+    def service(self, feed=None):
+        return PriceService(provider=provider(feed), max_age_seconds=900.0)
+
+    def test_the_pmdi_value_is_the_live_price_times_the_cited_mass(self):
+        """CPU-AU-001: 4.71 mg of gold per piece, at 8000 INR/g."""
+        result = pmdi.compute({"CPU": 1}, mass=MEASURED_CPU, prices=self.service(), now=MARKET_NOW)
+        assert result.precious["Au"].grams == pytest.approx(0.00471)
+        assert result.pmdi_value == pytest.approx(0.00471 * 8000.0)
+        assert result.price_status is PriceStatus.LIVE
+
+    def test_the_valuation_carries_the_live_quote_and_its_currency(self):
+        valued = valuation.value(
+            {"CPU": 1}, mass=MEASURED_CPU, prices=self.service(), now=MARKET_NOW
+        )
+        assert valued.currency == "INR"
+        assert valued.pmdi.prices["Au"].status is PriceStatus.LIVE
+        assert valued.total_value == pytest.approx(0.00471 * 8000.0)
+
+    def test_an_outage_reaches_the_valuation_as_an_absence_not_a_zero(self):
+        chain = FallbackProvider(
+            provider(Feed(FetchError("the feed is down"))),
+            ReferenceProvider.from_config(),
+        )
+        valued = valuation.value(
+            {"CPU": 1},
+            mass=MEASURED_CPU,
+            prices=PriceService(provider=chain, max_age_seconds=900.0),
+            now=MARKET_NOW,
+        )
+        assert valued.pmdi.prices["Au"].status is PriceStatus.REFERENCE
+        assert valued.total_value is not None
+        assert valued.total_value > 0
 
 
 class TestTheKeyNeverEscapes:

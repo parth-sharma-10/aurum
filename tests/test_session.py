@@ -28,6 +28,7 @@ from __future__ import annotations
 import pytest
 
 from app import config
+from app.errors import ErrorCode
 from app.hardware import ArduinoController, FakeTransport
 from app.pipeline.session import DemoSession
 from app.vision.tracker import TrackedDetection
@@ -226,6 +227,60 @@ class TestOperatorRules:
         second = run.measure_and_route()
         assert second["error"] == "ALREADY_PROCESSED"
         assert len(transport.movements) == 1
+
+
+class TestStartingAFreshRun:
+    """`reset()` is the operator saying they swapped the object on the bench.
+
+    Without it, a rig whose object never leaves the camera's view can route
+    exactly once and then refuse forever - which reads as a broken button
+    rather than as the safety rule it actually is.
+    """
+
+    def test_a_reset_run_can_route_the_next_object(self):
+        transport = FakeTransport(connected=True)
+        run = session(transport=transport)
+        present(run, "CPU")
+        run.measure_and_route()
+        assert run.measure_and_route()["error"] == "ALREADY_PROCESSED"
+
+        run.reset()
+        present(run, "CPU")
+        assert "error" not in run.measure_and_route()
+        assert len(transport.movements) == 2
+
+    def test_the_new_object_gets_its_own_identity(self):
+        """One physical object cannot inherit the previous one's ledger row."""
+        run = session()
+        present(run, "CPU")
+        first = run.measure_and_route()["item_id"]
+        run.reset()
+        present(run, "CPU")
+        assert run.measure_and_route()["item_id"] != first
+
+    def test_a_reset_forgets_what_was_on_the_pan(self):
+        """A stale latch would short-circuit refresh() and block every item."""
+        run = session()
+        present(run, "CPU")
+        run.zone.latch()
+        run.reset()
+        assert run.zone.held is None
+
+    def test_a_reset_keeps_the_audit_identity_and_the_error_log(self):
+        """The run's bookkeeping restarts; the record of what happened does not.
+
+        The EPR ledger is written through `epr.record` and is not the session's
+        to clear. What the session does own is the error log and the id every
+        row was filed under, and a reset must leave both standing.
+        """
+        run = session()
+        run.errors.record(ErrorCode.ARDUINO_ERROR, "board", "a failure worth keeping")
+        session_id, before = run.session_id, run.errors.snapshot()["count"]
+
+        run.reset()
+
+        assert run.session_id == session_id
+        assert run.errors.snapshot()["count"] == before
 
     def test_two_components_each_get_their_own_identity_and_movement(self):
         transport = FakeTransport(connected=True)

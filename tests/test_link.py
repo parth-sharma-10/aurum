@@ -16,6 +16,8 @@ thing here that has to be mocked because it is the boundary.
 
 from __future__ import annotations
 
+import time
+
 from app.hardware.link import BoardLink
 from app.hardware.transport import LinkState
 from app.weight import RawSample
@@ -51,6 +53,22 @@ class FakeSerial:
 
     def close(self):
         self.closed = True
+
+
+class AckingSerial(FakeSerial):
+    """A board that answers a CFG with a matching ACK, the way the sketch does.
+
+    The command id is minted inside `configure_servos`, so a scripted reply
+    cannot know it. Echoing the id back is the only way to exercise the
+    happy path without reaching for a real port.
+    """
+
+    def write(self, data):
+        super().write(data)
+        frame = data.decode().strip().split()
+        if len(frame) >= 6 and frame[1] == "CFG":
+            self.lines.append(f"AURUM/1 ACK {frame[5]}\n")
+        return len(data)
 
 
 def link(lines=(), **kwargs) -> BoardLink:
@@ -128,6 +146,86 @@ class TestFrameRouting:
         assert board.next_weight() is None
 
 
+class ReadForever(BaseException):
+    """Raised by the cap below. Derives from BaseException on purpose.
+
+    `pump()` turns any `Exception` into a degraded link and returns False,
+    which would quietly convert a runaway loop into a passing test. This has
+    to escape that handler to be worth anything.
+    """
+
+
+class EndlessWeightSerial:
+    """A board that never goes idle: a weight frame on every read, forever.
+
+    `FakeSerial` runs dry and then returns b"" — an idle port, which a real
+    sketch streaming at its own pace never produces. The read cap is what
+    turns the old unbounded loop into a failing test rather than a suite that
+    hangs until someone kills it.
+    """
+
+    READ_CAP = 2_000_000
+
+    def __init__(self):
+        self.reads = 0
+        self.written: list[bytes] = []
+
+    def readline(self):
+        self.reads += 1
+        if self.reads > self.READ_CAP:
+            raise ReadForever("the accessor never gave up; it read the stream forever")
+        return b"W,1,10432,-261605,OK\n"
+
+    def write(self, data):
+        self.written.append(data)
+        return len(data)
+
+    def flush(self):
+        return None
+
+    def reset_input_buffer(self):
+        return None
+
+    def close(self):
+        return None
+
+
+def streaming_link(budget_s: float = 0.02) -> BoardLink:
+    """A connected link over a board whose weight stream never pauses."""
+    board = BoardLink("/dev/fake", baudrate=115200, timeout_s=budget_s)
+    board._serial = EndlessWeightSerial()
+    board._state = LinkState.CONNECTED
+    return board
+
+
+class TestABoardThatNeverGoesIdle:
+    """The real-hardware condition: `pump()` always succeeds, so "port ran dry"
+    is an exit that never comes. Waiting has to be bounded by a clock instead.
+    """
+
+    def test_waiting_for_a_reply_gives_up_rather_than_spinning_forever(self):
+        # The sketch only speaks AURUM/1 in answer to a command, so a reply
+        # that was never requested never arrives however long we read.
+        assert streaming_link().next_response() is None
+
+    def test_it_gives_up_within_a_bound_the_caller_can_plan_around(self):
+        board = streaming_link(budget_s=0.02)
+        start = time.monotonic()
+        board.next_response()
+        # Generous: the assertion is "bounded", not a benchmark of the budget.
+        assert time.monotonic() - start < 1.0
+
+    def test_a_reply_already_queued_is_returned_without_waiting_at_all(self):
+        board = streaming_link()
+        board._responses.append("AURUM/1 ACK CMD-1")
+        assert board.next_response() == "AURUM/1 ACK CMD-1"
+        assert board._serial.reads == 0
+
+    def test_the_weight_stream_still_gets_through(self):
+        # The bound must not cost us the frames the board IS sending.
+        assert streaming_link().next_weight().raw_counts == -261605
+
+
 class TestViews:
     def test_the_weight_view_reads_samples(self):
         board = link(["W,1,10432,-261605,OK\n"])
@@ -164,6 +262,26 @@ class TestViews:
         frame = board._serial.written[0].decode().strip().split()
         assert len(frame) == 6
         assert frame[5].startswith("CMD-")
+
+    def test_configuring_consumes_its_own_acknowledgement(self):
+        """Left queued, the CFG ACK becomes the next MOVE's to discard."""
+        board = link()
+        board._responses.append("AURUM/1 ACK CMD-WHATEVER")
+        # The queued reply carries an id this call never asked about.
+        board._serial.lines = []
+        assert board.configure_servos(0, 90, 700) is False
+        assert not board._responses
+
+    def test_an_unacknowledged_configuration_reports_failure(self):
+        board = link()
+        assert board.configure_servos(0, 90, 700) is False
+        assert "did not acknowledge" in board.last_error
+
+    def test_an_acknowledged_configuration_reports_success(self):
+        board = link()
+        board._serial = AckingSerial()
+        assert board.configure_servos(0, 90, 700) is True
+        assert not board._responses
 
 
 class TestFailure:

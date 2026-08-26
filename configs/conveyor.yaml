@@ -135,11 +135,20 @@ conveyor:
     # 115200 is what the physical board runs at. Must match the sketch.
     baudrate: 115200
     timeout_s: 1.0
-    # ENGINEERING APPROXIMATION — not research-derived.
-    # How long to wait for an ACK before treating a command as unacknowledged.
-    # The board acknowledges AFTER the stroke completes, so this must exceed
-    # servo.actuation_ms plus travel time.
-    ack_timeout_ms: 2000
+    # MEASURED on the bench, 2026-08-26, against the attached board: a MOVE is
+    # acknowledged 1.212 s after it is written. The board ACKs only once its
+    # stroke routine has finished, so that figure is servo.actuation_ms plus
+    # the sketch's own overhead, and it is the floor this value must clear.
+    #
+    # 2000 ms was not enough and produced a false ACK_TIMEOUT on a board that
+    # was answering correctly. The margin is not arbitrary: a reply is only
+    # noticed when a `next_response` budget ends, which is `timeout_s` (1.0 s)
+    # wide, so the usable resolution here is one second, not one millisecond.
+    # 4000 gives three whole polls against a 1.2 s answer.
+    #
+    # Raise this if servo.actuation_ms is raised. Lowering it below ~3000 will
+    # start latching faults on strokes that completed.
+    ack_timeout_ms: 4000
 
   # ==========================================================================
   # DEMONSTRATION PROFILE - TEST VALUES ONLY

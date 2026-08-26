@@ -359,13 +359,28 @@ class TestActuator:
         assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
 
     def test_a_failure_is_not_retried_on_the_next_tick(self):
+        """A failed route stays SCHEDULED, so `due()` keeps offering it.
+
+        The loop must drop it silently rather than produce a SKIPPED result
+        every tick: the machine loop runs at 20 Hz and each result became an
+        EPR failure row and an error-log entry for the same one item.
+        """
         board = FakeTransport(connected=True, fail_with="STALLED")
         scheduler, actuator, _ = rig(board)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
         actuator.execute_due(now=T0 + 5)
-        again = actuator.execute_due(now=T0 + 6)
-        assert [r.outcome for r in again] == [ActuationOutcome.SKIPPED]
-        assert "not a licence to move the paddle again" in again[0].reason
+        for tick in range(6, 12):
+            assert actuator.execute_due(now=T0 + tick) == []
+        assert len(board.movements) == 0
+
+    def test_actuating_a_failed_route_directly_still_refuses(self):
+        board = FakeTransport(connected=True, fail_with="STALLED")
+        scheduler, actuator, _ = rig(board)
+        route = scheduler.schedule("AUR-ITEM-1", "A", T0)
+        actuator.execute_due(now=T0 + 5)
+        again = actuator.actuate(route, now=T0 + 6)
+        assert again.outcome is ActuationOutcome.SKIPPED
+        assert "not a licence to move the paddle again" in again.reason
         assert len(board.movements) == 0
 
     def test_draining_twice_moves_nothing_twice(self):

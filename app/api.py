@@ -439,8 +439,15 @@ def current_item() -> dict:
 
 @app.post("/track/reset")
 def reset_tracking() -> dict:
-    """Start a fresh run: new identities, tracker numbering restarted."""
+    """Start a fresh run: new identities, tracker numbering restarted.
+
+    Resets BOTH tracking runs this process holds. `/track` drives a standalone
+    pipeline and the dashboard drives its own inside `DemoSession`, and an
+    operator asking for a new item means the one in front of them - not
+    whichever of the two this endpoint happened to own first.
+    """
     pipeline().reset()
+    demo_session().reset()
     return {"status": "reset", "frames_processed": 0}
 
 
