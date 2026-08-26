@@ -757,3 +757,278 @@ details.controls > summary {
   font-size: 13px;
   color: var(--faint);
 }
+
+/* ------------------------------------------------------------- operator
+
+   The screen an operator runs the machine from. Everything an engineer needs
+   lives behind `.advanced` instead, because a panel that is always on screen
+   is a panel that gets ignored - and the one that must not be ignored here is
+   the fault banner.
+
+   No state is carried by colour alone: every dot, stage and system row prints
+   its word too. Half the point of this machine is that a claim and its status
+   are never separated, and a hue is a claim with no word attached.            */
+
+.op-masthead {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+}
+
+.op-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.op-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.op-state {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+
+.op-running {
+  color: var(--emerald);
+}
+.op-ready {
+  color: var(--gold);
+}
+.op-warning,
+.op-paused {
+  color: var(--amber);
+}
+.op-fault {
+  color: var(--red);
+}
+.op-unavailable {
+  color: var(--faint);
+}
+
+.op-dots {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.op-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.op-dot .dot {
+  background: var(--faint);
+}
+.op-dot-ok .dot {
+  background: var(--emerald);
+}
+.op-dot-ok {
+  color: var(--text);
+}
+
+.op-dot-word {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+.op-dot-ok .op-dot-word {
+  color: var(--emerald);
+}
+
+.op-masthead .estop {
+  margin-left: 0;
+}
+
+.op-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.op-object-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.op-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px 20px;
+}
+
+.op-figure {
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.op-empty {
+  color: var(--muted);
+  margin: 0;
+}
+
+/* The pipeline. Seven chips, and the live one is heavier as well as brighter. */
+.op-pipeline {
+  margin-bottom: 16px;
+}
+
+.stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  color: var(--faint);
+  background: var(--bg-raised);
+}
+
+.stage-done {
+  color: var(--emerald);
+  border-color: rgba(53, 192, 138, 0.35);
+}
+
+.stage-active {
+  color: var(--bg);
+  background: var(--gold);
+  border-color: var(--gold);
+  font-weight: 700;
+}
+
+.stage-mark {
+  font-size: 12px;
+}
+
+.op-next-body {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  flex-wrap: wrap;
+}
+
+.op-eta {
+  font-size: 26px;
+  color: var(--gold);
+  line-height: 1.1;
+}
+
+.op-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.op-row {
+  display: grid;
+  grid-template-columns: 92px 92px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.op-row:last-child {
+  border-bottom: none;
+}
+
+.op-row-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.op-row-state {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.op-ready .op-row-state {
+  color: var(--emerald);
+}
+.op-warning .op-row-state {
+  color: var(--amber);
+}
+.op-fault .op-row-state {
+  color: var(--red);
+}
+.op-unavailable .op-row-state {
+  color: var(--faint);
+}
+
+.op-row-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-faults {
+  margin-bottom: 16px;
+}
+
+.advanced {
+  margin-top: 8px;
+}
+
+.advanced > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.advanced .panel-body > * {
+  margin-bottom: 16px;
+}
+
+/* The demo laptop is 1280 wide; below that the two-column split stacks rather
+   than squeezing the camera feed into a thumbnail. */
+@media (max-width: 900px) {
+  .op-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .op-dots {
+    margin-left: 0;
+  }
+  .op-row {
+    grid-template-columns: 88px 88px;
+  }
+  .op-row-detail {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+}

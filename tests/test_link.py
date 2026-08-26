@@ -16,8 +16,12 @@ thing here that has to be mocked because it is the boundary.
 
 from __future__ import annotations
 
+import os
 import time
 
+import pytest
+
+from app.hardware import link as link_module
 from app.hardware.link import BoardLink
 from app.hardware.transport import LinkState
 from app.weight import RawSample
@@ -555,3 +559,71 @@ class TestReopeningADroppedLink:
         board.pump()
         board.reconnect()
         assert board.snapshot()["servo_config_applied"] is False
+
+
+class TestOnePortOneOwner:
+    """macOS `cu.*` device nodes do not lock.
+
+    A second process opens the same port successfully and the two then split
+    the board's replies between them - PING, CFG and MOVE all time out against
+    a port that looks perfectly healthy. That is not hypothetical: it is what a
+    failed bench run on 2026-08-26 turned out to be, after the firmware, the
+    servo and the wiring had each been suspected first.
+
+    These tests use a temporary lock directory so they never touch the real
+    one, and never open a device.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _isolated_lock_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+
+    def test_a_second_link_on_the_same_port_is_refused(self):
+        first = BoardLink("/dev/cu.fake")
+        assert first._acquire_lock() is None
+
+        second = BoardLink("/dev/cu.fake")
+        owner = second._acquire_lock()
+
+        assert owner is not None
+        assert str(os.getpid()) in owner
+
+    def test_the_refusal_says_what_is_wrong_rather_than_could_not_open(self):
+        """ "Could not open" would send whoever reads it to the cable. The port
+        opens fine; the problem is that somebody else is already reading it."""
+        first = BoardLink("/dev/cu.fake")
+        first._acquire_lock()
+
+        second = BoardLink("/dev/cu.fake")
+        assert second.connect() is LinkState.DISCONNECTED
+        assert "already owned by" in second.last_error
+        assert "split" in second.last_error
+
+    def test_disconnecting_gives_the_port_back(self):
+        first = BoardLink("/dev/cu.fake")
+        first._acquire_lock()
+        first.disconnect()
+
+        assert BoardLink("/dev/cu.fake")._acquire_lock() is None
+
+    def test_a_failed_open_does_not_keep_the_lock(self):
+        """Otherwise a board that was unplugged and plugged back in could never
+        be reconnected: the process would be refused by its own stale lock."""
+        board = BoardLink("/dev/cu.definitely-not-a-device")
+        assert board.connect() is LinkState.DISCONNECTED
+        assert "could not open" in board.last_error
+
+        assert BoardLink("/dev/cu.definitely-not-a-device")._acquire_lock() is None
+
+    def test_two_different_ports_do_not_exclude_each_other(self):
+        assert BoardLink("/dev/cu.boardA")._acquire_lock() is None
+        assert BoardLink("/dev/cu.boardB")._acquire_lock() is None
+
+    def test_releasing_a_lock_that_was_never_taken_is_harmless(self):
+        BoardLink("/dev/cu.fake")._release_lock()
+
+    def test_an_unwritable_lock_directory_does_not_block_the_machine(self, monkeypatch):
+        """A lock file that cannot be OPENED says nothing about who holds the
+        port. Refusing on it would brick a working rig over a /tmp permission."""
+        monkeypatch.setattr(link_module, "LOCK_DIR", "/proc/nonexistent-for-aurum")
+        assert BoardLink("/dev/cu.fake")._acquire_lock() is None

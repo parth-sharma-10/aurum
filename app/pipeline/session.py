@@ -841,13 +841,20 @@ class DemoSession:
         return actuation
 
     def _schedule(self, assembly: Assembly, target: str) -> dict:
-        """Hand the item to the belt's timing model. Nothing moves yet."""
+        """Hand the item to the belt's timing model. Nothing moves yet.
+
+        `from_load_cell` because this is only ever reached from the pan machine,
+        which routes an object it has just weighed. That object is on the pan,
+        not at the camera line the distances are measured from, and scheduling
+        it from the camera adds the whole camera-to-pan distance to its travel.
+        """
         detected_at = time.monotonic()
         route = self.scheduler.schedule(
             assembly.assembly_id,
             target,
             detected_at,
             component_class=assembly.class_name,
+            from_load_cell=True,
         )
         self._epr(
             assembly.assembly_id,

@@ -31,7 +31,7 @@ from app.hardware import (
     parse_response,
 )
 from app.hardware.fault import FaultCode
-from app.routing import RouteStatus, RoutingScheduler
+from app.routing import RouteReason, RouteStatus, RoutingScheduler
 from app.routing.geometry import Geometry, RoutingMode
 
 T0 = 10.0
@@ -376,17 +376,33 @@ class TestActuator:
         scheduler, actuator, _ = rig(board)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
         assert actuator.execute_due(now=DUE_A)[0].outcome is ActuationOutcome.FAILED
-        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
+        # UNSCHEDULED, not EXECUTED and not SCHEDULED: the paddle never moved,
+        # and the route is over rather than waiting for a moment that will
+        # never come.
+        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.UNSCHEDULED
+        assert scheduler.get("AUR-ITEM-1").reason_code is RouteReason.ACTUATION_FAILED
+
+    def test_a_failed_route_leaves_the_queue_instead_of_counting_down_for_ever(self):
+        """Only an ACK moves a route to EXECUTED, so before this a failed route
+        stayed SCHEDULED and `pending()` offered it until the process died -
+        the dashboard showing an ETA for a stroke nobody would ever make."""
+        board = FakeTransport(connected=True, fail_with="STALLED")
+        scheduler, actuator, _ = rig(board)
+        scheduler.schedule("AUR-ITEM-1", "A", T0)
+        actuator.execute_due(now=DUE_A)
+        assert scheduler.pending() == []
+        assert scheduler.due(DUE_A + 600) == []
 
     def test_a_timeout_does_not_mark_the_route_executed(self):
         board = FakeTransport(connected=True, silent=True)
         scheduler, actuator, _ = rig(board, AURUM_ARDUINO_ACK_TIMEOUT_MS=20)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
         assert actuator.execute_due(now=DUE_A)[0].outcome is ActuationOutcome.FAILED
-        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
+        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.UNSCHEDULED
 
     def test_a_failure_is_not_retried_on_the_next_tick(self):
-        """A failed route stays SCHEDULED, so `due()` keeps offering it.
+        """`_attempted` is the barrier, and it holds even for a route the queue
+        has since dropped.
 
         The loop must drop it silently rather than produce a SKIPPED result
         every tick: the machine loop runs at 20 Hz and each result became an
@@ -435,7 +451,7 @@ class TestActuator:
         scheduler, actuator, _ = rig(board)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
         assert actuator.execute_due(now=DUE_A)[0].outcome is ActuationOutcome.FAILED
-        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
+        assert scheduler.get("AUR-ITEM-1").status is not RouteStatus.EXECUTED
 
 
 class TestReporting:

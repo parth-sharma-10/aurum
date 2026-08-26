@@ -27,6 +27,8 @@ Nothing above `app.hardware` imports pyserial, including through this file.
 from __future__ import annotations
 
 import contextlib
+import fcntl
+import os
 import time
 from collections import deque
 
@@ -38,6 +40,14 @@ from app.weight import RawSample, parse_weight_line
 #: on purpose: a consumer that stops reading should see fresh data when it
 #: comes back, not work through a minute of history first.
 QUEUE_LIMIT = 64
+
+#: Where the per-port advisory lock lives. One file per device node, so two
+#: boards on two ports do not exclude each other.
+LOCK_DIR = "/tmp"
+
+
+def lock_path(port: str) -> str:
+    return os.path.join(LOCK_DIR, f"aurum-{os.path.basename(port)}.lock")
 
 
 class BoardLink:
@@ -54,6 +64,8 @@ class BoardLink:
         self.timeout_s = timeout_s
         self._serial = None
         self._state = LinkState.DISCONNECTED
+        #: The advisory lock on this port, held for the life of the link.
+        self._lock = None
         self.last_error: str | None = None
         self._weight: deque[RawSample] = deque(maxlen=QUEUE_LIMIT)
         self._responses: deque[str] = deque(maxlen=QUEUE_LIMIT)
@@ -77,6 +89,58 @@ class BoardLink:
     def connected(self) -> bool:
         return self._state is LinkState.CONNECTED
 
+    def _acquire_lock(self) -> str | None:
+        """Take this port's advisory lock. None on success, else who holds it.
+
+        macOS `cu.*` device nodes do not lock. A second process opens the same
+        port successfully and the two then SPLIT the board's replies between
+        them - each `readline()` takes whatever the other has not taken yet. The
+        symptom is not a refused open: it is PING, CFG and MOVE all timing out
+        against a port that looks perfectly healthy, which is what a failed
+        bench run on 2026-08-26 turned out to be after an hour of suspecting the
+        firmware. This module's own docstring said "this module owns the port
+        once"; nothing made that true until here.
+
+        `flock` is per open-file-description, so this also catches two
+        `BoardLink`s inside one process, which is the same bug with a shorter
+        cable.
+
+        A lock file that cannot be OPENED is not treated as contention: that
+        says nothing about who holds the port, and refusing on it would brick a
+        working machine over a /tmp permission. Only a lock somebody else holds
+        refuses.
+        """
+        path = lock_path(self.port)
+        try:
+            handle = open(path, "a+")  # noqa: SIM115 - held for the link's life
+        except OSError:
+            return None
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            owner = ""
+            with contextlib.suppress(Exception):
+                handle.seek(0)
+                owner = handle.read().strip()
+            handle.close()
+            return owner or "another process"
+        handle.seek(0)
+        handle.truncate()
+        handle.write(f"PID {os.getpid()}\n")
+        handle.flush()
+        self._lock = handle
+        return None
+
+    def _release_lock(self) -> None:
+        """Give the port back. Safe on a link that never held it."""
+        handle, self._lock = self._lock, None
+        if handle is None:
+            return
+        with contextlib.suppress(Exception):
+            fcntl.flock(handle, fcntl.LOCK_UN)
+        with contextlib.suppress(Exception):
+            handle.close()
+
     def connect(self) -> LinkState:
         try:
             import serial
@@ -85,12 +149,26 @@ class BoardLink:
             self.last_error = "pyserial is not installed; `pip install pyserial`"
             return self._state
 
+        owner = self._acquire_lock()
+        if owner is not None:
+            self._state = LinkState.DISCONNECTED
+            self.last_error = (
+                f"{self.port} is already owned by {owner}. Two readers on one "
+                "macOS cu.* port do not fail to open - they split the board's "
+                "replies, and every command times out against a healthy port. "
+                "Stop the other process and try again."
+            )
+            return self._state
+
         self._state = LinkState.CONNECTING
         try:
             self._serial = serial.Serial(self.port, self.baudrate, timeout=self.timeout_s)
         except Exception as exc:
             self._serial = None
             self._state = LinkState.DISCONNECTED
+            # Released, not kept: a link that failed to open owns nothing, and
+            # holding it would refuse this process's own next attempt.
+            self._release_lock()
             self.last_error = f"could not open {self.port}: {exc}"
             return self._state
 
@@ -109,6 +187,7 @@ class BoardLink:
                 self._serial.close()
         self._serial = None
         self._state = LinkState.DISCONNECTED
+        self._release_lock()
         self._weight.clear()
         self._responses.clear()
         # Reopening the port resets the board, so the angles it acknowledged

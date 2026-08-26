@@ -859,6 +859,271 @@ function ItemChain({ item }) {
   );
 }
 
+
+// ---------------------------------------------------------------- operator
+
+/**
+ * The seven stages the brief asks for, in the order an operator watches them.
+ *
+ * Each stage answers from the ITEM RECORD whether it has happened, rather than
+ * from the pan state alone: the pan is where the machine is, and the record is
+ * what the object has actually been through. A stage is `done` when its
+ * evidence exists, `active` when it is the first that is not done, and
+ * `pending` after that.
+ */
+const STAGES = [
+  ["DETECTED", (i) => Boolean(i?.item_id)],
+  ["WEIGHED", (i) => Boolean(i?.weight_status) && i.weight_status !== "UNAVAILABLE"],
+  ["CLASSIFIED", (i) => Boolean(i?.class_name) && Boolean(i?.decision)],
+  ["DECIDED", (i) => Boolean(i?.decision)],
+  ["SCHEDULED", (i) => Boolean(i?.actuation)],
+  ["SORTING", (i) => Boolean(i?.actuation?.commanded || i?.actuation?.outcome)],
+  ["COMPLETE", (i) => ["ACTUATED", "NO_ACTION"].includes(i?.actuation?.outcome)],
+];
+
+function PipelineStrip({ item }) {
+  const done = STAGES.map(([, test]) => test(item));
+  const active = done.indexOf(false);
+  return (
+    <section className="glass-panel op-pipeline">
+      <h2 className="section-title">Pipeline</h2>
+      <ol className="stages">
+        {STAGES.map(([label], n) => {
+          // Word first, marker second. The stage is never told apart by colour
+          // alone - `aria-current` and the mark carry it too.
+          const state = done[n] ? "done" : n === active && item ? "active" : "pending";
+          return (
+            <li key={label} className={`stage-chip stage-${state}`} aria-current={state === "active"}>
+              <span className="stage-mark" aria-hidden="true">
+                {state === "done" ? "✓" : state === "active" ? "●" : "○"}
+              </span>
+              <span className="stage-label">{label}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+/** The object being handled, in the six figures an operator acts on. */
+function CurrentObject({ item, running }) {
+  if (!item) {
+    return (
+      <section className="glass-panel op-object">
+        <h2 className="section-title">Current object</h2>
+        <p className="op-empty">
+          {running
+            ? "Waiting for an object. Hold one in front of the camera, then put it on the pan."
+            : "Not running. Start the camera in Advanced / Maintenance."}
+        </p>
+      </section>
+    );
+  }
+  const d = item.decision;
+  const ppm = item.valuation?.pmdi?.precious_mass_fraction_ppm;
+  const value = item.valuation?.total?.value ?? item.valuation?.value;
+  return (
+    <section className="glass-panel op-object">
+      <h2 className="section-title">Current object</h2>
+      <div className="op-object-head">
+        <span className="item-id">{item.item_id}</span>
+        {d && (
+          <span className={`${BIN_CLASS[d.physical_bin ?? d.decision] ?? "badge-c"} bin-big`}>
+            BIN {d.physical_bin ?? d.decision}
+          </span>
+        )}
+      </div>
+      <div className="op-figures">
+        <div>
+          <div className="field-label">Class</div>
+          <div className="op-figure">
+            <span className="chip" style={{ "--swatch": CLASS_COLOR[item.class_name] }}>
+              {item.class_name ?? "UNKNOWN"}
+            </span>
+          </div>
+        </div>
+        <div>
+          <div className="field-label">Mass</div>
+          <div className="op-figure mono">
+            {grams(item.weight_g)}
+            {/* The status is the whole claim. A number with no word beside it
+                is exactly what this dashboard exists not to print. */}
+            <Status value={item.weight_status} />
+          </div>
+        </div>
+        <div>
+          <div className="field-label">Confidence</div>
+          <div className="op-figure mono">{pct(item.confidence)}</div>
+        </div>
+        <div>
+          <div className="field-label">PMDI</div>
+          <div className="op-figure mono">{ppm == null ? "--" : `${num(ppm, 1)} ppm`}</div>
+        </div>
+        <div>
+          <div className="field-label">Value</div>
+          <div className="op-figure mono">
+            {money(value, item.valuation?.currency)}
+            <Status value={d?.signals?.price_status} />
+          </div>
+        </div>
+        <div>
+          <div className="field-label">Why</div>
+          <div className="op-figure muted small">{d?.reason_code ?? "not decided yet"}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The next paddle stroke and when it happens.
+ *
+ * Read straight from the scheduler's own queue, so the countdown is the
+ * machine's firing time and not a second one computed here.
+ */
+function NextSort({ routing }) {
+  if (!routing) return null;
+  const next = (routing.pending ?? [])[0];
+  return (
+    <section className="glass-panel op-next">
+      <h2 className="section-title">Next sort</h2>
+      {next ? (
+        <div className="op-next-body">
+          <span className={`${BIN_CLASS[next.decision] ?? "badge-c"} bin-big`}>
+            BIN {next.decision}
+          </span>
+          <div>
+            <div className="field-label">ETA</div>
+            <div className="op-eta mono">{seconds(next.seconds_remaining)}</div>
+          </div>
+          <div>
+            <div className="field-label">Actuator</div>
+            <div className="op-figure mono">{next.servo ?? "--"}</div>
+          </div>
+          {routing.simulated && <Status value="SIMULATED" title="The belt is a timing model, not a measured conveyor." />}
+        </div>
+      ) : (
+        <p className="op-empty">Nothing queued.</p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * One word per subsystem. READY / WARNING / FAULT / UNAVAILABLE.
+ *
+ * WARNING and FAULT are different on purpose: a load cell with an unverified
+ * calibration still produces readings and the machine still runs, whereas a
+ * board that is not there stops it. Collapsing them would make the panel
+ * useless for deciding whether to keep going.
+ */
+function SystemPanel({ state }) {
+  const board = state?.board ?? {};
+  const cal = state?.calibration ?? {};
+  const hw = state?.hardware ?? {};
+  const conveyor = state?.conveyor ?? {};
+  const simulated = hw.mode === "SIMULATION";
+  const speed = conveyor.speed ?? {};
+
+  const servo = board.servo_config_applied
+    ? ["READY", `rest ${board.servo_config?.rest_deg}° · push ${board.servo_config?.push_deg}°`]
+    : simulated
+      ? ["READY", "simulated board"]
+      : board.connected
+        ? ["WARNING", "CFG not acknowledged — the board is running its own boot angles"]
+        : ["UNAVAILABLE", "no board"];
+
+  const rows = [
+    ["Camera", state?.running && !state?.camera?.error ? "READY" : state?.camera?.error ? "FAULT" : "UNAVAILABLE", state?.camera?.error ?? state?.camera?.source ?? "not started"],
+    ["Load cell", !board.connected && !simulated ? "UNAVAILABLE" : cal.verified ? "READY" : "WARNING", cal.verified ? `${num(cal.counts_per_gram, 1)} counts/g, verified` : "calibration not verified against a second mass"],
+    ["Arduino", board.connected ? "READY" : "UNAVAILABLE", board.last_error ?? board.port ?? "not connected"],
+    ["Servo A", servo[0], servo[1]],
+    ["Servo B", servo[0], servo[1]],
+    ["Conveyor", speed.usable ? "READY" : "UNAVAILABLE", speed.cm_s == null ? "no belt speed" : `${num(speed.cm_s, 1)} cm/s ${speed.status}`],
+    ["Ledger", state?.epr?.session_id ? "READY" : "UNAVAILABLE", state?.epr?.session_id ?? "no run"],
+  ];
+
+  return (
+    <section className="glass-panel op-system">
+      <h2 className="section-title">System</h2>
+      <div className="op-rows">
+        {rows.map(([label, word, detail]) => (
+          <div key={label} className={`op-row op-${word.toLowerCase()}`} title={detail}>
+            <span className="op-row-label">{label}</span>
+            <span className="op-row-state">{word}</span>
+            <span className="op-row-detail muted small">{detail}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Shown only when something needs attention.
+ *
+ * A permanently visible diagnostics panel teaches an operator to ignore it,
+ * which is the failure mode that matters on a machine with a moving paddle.
+ */
+function Faults({ state, busy, onReset }) {
+  const fault = state?.hardware?.fault ?? {};
+  const notices = [];
+  if (fault.active) {
+    notices.push({
+      key: "fault",
+      word: fault.code === "EMERGENCY_STOP" ? "EMERGENCY STOP" : `FAULT — ${fault.code}`,
+      detail: fault.reason,
+      reset: true,
+    });
+  }
+  if (state?.camera?.error) {
+    notices.push({ key: "camera", word: "CAMERA UNAVAILABLE", detail: state.camera.error });
+  }
+  if (state?.running && state?.hardware?.mode === "PHYSICAL" && !state?.board?.connected) {
+    notices.push({
+      key: "board",
+      word: "ARDUINO DISCONNECTED",
+      detail: state.board?.last_error ?? "No board is answering. Nothing will be sorted.",
+    });
+  }
+  if (
+    state?.board?.connected &&
+    state?.board?.servo_config_applied === false &&
+    state?.hardware?.mode === "PHYSICAL"
+  ) {
+    notices.push({
+      key: "cfg",
+      word: "SERVO CONFIGURATION NOT APPLIED",
+      detail:
+        "The board did not acknowledge CFG, so it is running whatever angles it booted with rather than the configured ones.",
+    });
+  }
+  const pan = state?.pan ?? {};
+  if (pan.state === "WEIGHING" && pan.seconds_in_state > 15) {
+    notices.push({
+      key: "cell",
+      word: "LOAD CELL UNSTABLE",
+      detail: pan.reason ?? "The mass has not settled.",
+    });
+  }
+  if (!notices.length) return null;
+  return (
+    <section className="op-faults">
+      {notices.map((n) => (
+        <div key={n.key} className="notice bad">
+          <strong>{"⚠ "}{n.word}</strong> {n.detail}
+          {n.reset && (
+            <button className="inline-action" disabled={busy} onClick={onReset}>
+              {busy === "fault" ? "Resetting…" : "Reset fault"}
+            </button>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState(null);
   const [health, setHealth] = useState(null);
@@ -926,63 +1191,48 @@ export default function App() {
   const fault = hardware.fault ?? {};
   const processed = (state?.items ?? []).filter((i) => i.decision);
 
+  // What the machine is doing, in one word. Colour never carries this alone.
+  const machineState = fault.active
+    ? fault.code === "EMERGENCY_STOP"
+      ? "PAUSED"
+      : "FAULT"
+    : !running
+      ? "UNAVAILABLE"
+      : state?.automatic
+        ? "RUNNING"
+        : "READY";
+  const mode = hardware.mode ?? "UNAVAILABLE";
+  const simulated = mode === "SIMULATION";
+  const item = lastResult?.item_id ? lastResult : state?.current_item;
+
+  const dots = [
+    ["Camera", Boolean(running && !state?.camera?.error)],
+    ["Load Cell", Boolean((board.connected || simulated) && cal.verified)],
+    ["Arduino", Boolean(board.connected)],
+    ["Servos", Boolean(board.servo_config_applied || simulated)],
+  ];
+
   return (
     <div className="shell">
-      <header className="glass-panel masthead">
-        <div>
+      <header className="glass-panel op-masthead">
+        <div className="op-brand">
           <h1 className="wordmark">AURUM</h1>
-          <p className="tagline">
-            Identification · Measurement · Recovery routing
-          </p>
+          <div className="op-mode">
+            <span className={`op-state op-${machineState.toLowerCase()}`}>{machineState}</span>
+            <span className={simulated ? "badge-a" : "badge-b"}>{mode}</span>
+          </div>
         </div>
-        <div className="pills">
-          <Pill
-            ok={running}
-            label={running ? "CAMERA LIVE" : "CAMERA OFF"}
-            detail={state?.camera?.error}
-          />
-          <Pill
-            ok={board.connected}
-            label={board.connected ? "BOARD LINKED" : "NO BOARD"}
-            detail={board.last_error}
-          />
-          <Pill
-            ok={cal.verified}
-            label={cal.verified ? "CALIBRATED" : "NOT CALIBRATED"}
-            detail="MEASURED needs a factor verified against a second known mass"
-          />
-          <Pill
-            ok={actuation.actuation_enabled}
-            label={
-              actuation.actuation_enabled ? "ACTUATION ON" : "ACTUATION OFF"
-            }
-          />
-          {state?.mock_mass?.enabled && (
-            <span className="badge-c" title={state.mock_mass.note}>
-              MOCK MASS
+        <div className="op-dots">
+          {dots.map(([label, ok]) => (
+            <span key={label} className={ok ? "op-dot op-dot-ok" : "op-dot op-dot-off"}>
+              <span className="dot" aria-hidden="true" />
+              {label}
+              {/* The word, not just the dot: a red and a green circle are the
+                  same circle to a colour-blind operator across a workshop. */}
+              <span className="op-dot-word">{ok ? "READY" : "OFF"}</span>
             </span>
-          )}
+          ))}
         </div>
-      </header>
-
-      <div className="glass-panel controls">
-        <button disabled={busy} onClick={() => act("camera", "/session/start")}>
-          {busy === "camera" ? "Starting…" : "Start camera"}
-        </button>
-        <button
-          disabled={busy}
-          onClick={() => act("board", "/session/board/connect")}
-        >
-          {busy === "board" ? "Connecting…" : "Connect board"}
-        </button>
-        <button disabled={busy} onClick={() => act("stop", "/session/stop")}>
-          Stop
-        </button>
-        <button disabled={busy} onClick={reset}>
-          {busy === "reset" ? "Resetting…" : "New item / reset run"}
-        </button>
-        {/* Deliberately not disabled while another action is in flight: the
-            one button that must work when the machine is busy is this one. */}
         <button
           className="estop"
           onClick={() => act("estop", "/hardware/estop")}
@@ -990,300 +1240,253 @@ export default function App() {
         >
           {busy === "estop" ? "Stopping…" : "EMERGENCY STOP"}
         </button>
-        <span className="controls-note">
-          Place the object on the pan and wait. The load cell starts the
-          measurement, the model gives the classes, the decision engine gives
-          the bin. Nobody here says which bin. Swapped the object? Press
-          <strong> New item</strong> — one physical item gets one physical
-          action, so the machine will not route the same one twice.
-        </span>
-      </div>
+      </header>
 
-      <details className="glass-panel controls">
-        <summary>Developer controls</summary>
-        <p className="controls-note">
-          Not the normal path. The load cell triggers a measurement on its own;
-          these exist for a bench with no working cell or a mass that will not
-          settle.
-        </p>
-        <button
-          disabled={busy}
-          onClick={() => act("measure", "/session/measure")}
-        >
-          {busy === "measure" ? "Measuring…" : "Measure & route now (manual)"}
-        </button>
-        <button
-          disabled={busy}
-          onClick={() => act("scripted", "/session/demo/step")}
-        >
-          {busy === "scripted" ? "Running…" : "Scripted object (no camera)"}
-        </button>
-        <p className="controls-note">
-          The stage fallback for a camera that will not open. Only the
-          detections are scripted — the mass, the composition, the value and
-          the bin are the same code a camera-seen item runs, and two of the six
-          objects are there to be refused.
-        </p>
-      </details>
-
+      <Faults state={state} busy={busy} onReset={() => act("fault", "/hardware/fault/reset")} />
+      {error && <div className="notice bad">{error}</div>}
       {actionError && <div className="notice bad">{actionError}</div>}
-
-      {/* The masthead badge is the standing signal and every derived figure is
-          stamped SIMULATED at the point it is shown, so the full explanation
-          folds away rather than occupying four lines of every screenshot. */}
       {state?.mock_mass?.enabled && (
-        <details className="notice">
-          <summary>
-            <strong>MOCK MASS — the mass is assumed, not measured.</strong>
-          </summary>
-          The load cell cannot supply one, so every figure derived from it is
-          stamped SIMULATED. The class, the cited composition and the bin are
-          real; the mass is not.
-          {state.mock_mass.per_class && (
-            <span className="mono small">
-              {" "}
-              Assumed per class:{" "}
-              {Object.entries(state.mock_mass.per_class)
-                .map(([cls, g]) => `${cls} ${g} g`)
-                .join(" · ")}
-            </span>
-          )}
-        </details>
-      )}
-      {fault.active && (
-        <div className="notice bad">
-          <strong>
-            {fault.code === "EMERGENCY_STOP"
-              ? "EMERGENCY STOP — the machine is latched."
-              : `HARDWARE FAULT LATCHED — ${fault.code}.`}
-          </strong>{" "}
-          {fault.reason}{" "}
-          {fault.code === "EMERGENCY_STOP"
-            ? "Every servo command is refused. Clearing this is a statement that somebody has looked at the rig."
-            : "No servo will move until it is reset. Nothing clears this on its own: a command that went unacknowledged may have left a paddle half out, and the machine does not know where it is."}
-          {/* The reset lives in the maintenance panel too. It is repeated here
-              because a latched machine is exactly when nobody wants to go
-              looking for the button that unlatches it. */}
-          <button
-            className="inline-action"
-            disabled={busy}
-            onClick={() => act("fault", "/hardware/fault/reset")}
-          >
-            {busy === "fault" ? "Resetting…" : "Reset fault"}
-          </button>
+        <div className="notice">
+          <strong>MOCK MASS — the mass is assumed, not measured.</strong> The class,
+          the cited composition and the bin are real; the mass is not.
         </div>
       )}
-      <PanBanner pan={state?.pan} automatic={state?.automatic} />
 
-      {error && <div className="notice bad">{error}</div>}
-      {state?.camera?.error && (
-        <div className="notice bad">Camera: {state.camera.error}</div>
-      )}
-
-      <div className="split">
+      <div className="op-split">
         <section className="glass-panel feed">
           <h2 className="section-title">Camera</h2>
           <p className="section-note">
-            {state?.camera?.source ?? "not started"} ·{" "}
-            {state?.frames_processed ?? 0} frames
+            {state?.camera?.source ?? "not started"} · {state?.frames_processed ?? 0} frames
           </p>
           {running ? (
-            <img
-              className="stream"
-              src={`${API}/session/stream`}
-              alt="Live detection feed"
-            />
+            <img className="stream" src={`${API}/session/stream`} alt="Live detection feed" />
           ) : (
             <div className="stream placeholder">Camera not started</div>
           )}
-          {/* The belt's own note is in the Conveyor panel. It was printed here
-              too, so the same three sentences appeared twice on one screen. */}
         </section>
-
-        <section className="glass-panel chain">
-          <h2 className="section-title">Current item</h2>
-          <p className="section-note">
-            Model {health?.model_version ?? "--"} ·{" "}
-            {state?.confirmed_count ?? 0} confirmed in view
-          </p>
-          <ItemChain
-            item={lastResult?.item_id ? lastResult : state?.current_item}
-          />
-        </section>
+        <CurrentObject item={item} running={running} />
       </div>
 
-      {/* Reference, not narrative: below the thing being watched, and folded.
-          Each summary still carries the one state worth seeing at a glance. */}
-      <div className="systems">
-        <ConveyorPanel conveyor={state?.conveyor} />
-        <PricingPanel pricing={state?.pricing} />
-        <HardwarePanel
-          hardware={hardware}
-          board={board}
-          actuation={actuation}
-          busy={busy}
-          onReset={() => act("fault", "/hardware/fault/reset")}
-        />
+      <PipelineStrip item={item} />
+
+      <div className="op-split">
+        <NextSort routing={state?.routing} />
+        <SystemPanel state={state} />
       </div>
 
       <BinCards items={state?.items} />
 
-      <section className="glass-panel">
-        <h2 className="section-title">Routed this run</h2>
-        <p className="section-note">
-          One physical item, one identity, one movement. {processed.length}{" "}
-          processed.{" "}
-          {processed.length > 0 && (
-            <a className="mono small" href={`${API}/session/report.csv`}>
-              Download CSV
-            </a>
-          )}
-        </p>
-        <table className="ledger">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Class</th>
-              <th>Conf.</th>
-              <th>Mass</th>
-              <th>ppm</th>
-              <th>Decision</th>
-              <th>Servo</th>
-              <th>Why</th>
-            </tr>
-          </thead>
-          <tbody>
-            {processed.map((i) => (
-              <tr key={i.item_id}>
-                <td className="mono small">{i.item_id}</td>
-                <td>
-                  <span
-                    className="chip"
-                    style={{ "--swatch": CLASS_COLOR[i.class_name] }}
-                  >
-                    {i.class_name}
-                  </span>
-                </td>
-                <td className="mono">{pct(i.confidence)}</td>
-                <td className="mono">
-                  {grams(i.weight_g)}{" "}
-                  <span className="muted small">{i.weight_status}</span>
-                </td>
-                <td className="mono">
-                  {num(i.valuation?.pmdi?.precious_mass_fraction_ppm, 1)}
-                </td>
-                <td>
-                  <span
-                    className={BIN_CLASS[i.decision.decision] ?? "badge-c"}
-                    title={i.decision.decision_note ?? i.decision.reason}
-                  >
-                    {i.decision.decision}
-                  </span>
-                  {/* The grade and the bin the paddle actually used are the
-                      same value except on a physical fallback. Shown only when
-                      they diverge, which is the one case worth the column. */}
-                  {i.decision.physical_bin &&
-                    i.decision.physical_bin !== i.decision.decision && (
-                      <span className="muted small">
-                        {" "}
-                        → {i.decision.physical_bin}
+      {/* Everything below is engineering. The normal operator never opens it:
+          the machine is driven by the load cell, and nothing in here is needed
+          to place an object and read the result. */}
+      <details className="glass-panel advanced">
+        <summary>
+          <span className="section-title">Advanced / Maintenance</span>
+          <span className="panel-headline muted small">
+            manual measurement, routing, calibration, serial diagnostics, the full record
+          </span>
+        </summary>
+        <div className="panel-body">
+          <div className="controls">
+            <button disabled={busy} onClick={() => act("camera", "/session/start")}>
+              {busy === "camera" ? "Starting…" : "Start camera"}
+            </button>
+            <button disabled={busy} onClick={() => act("board", "/session/board/connect")}>
+              {busy === "board" ? "Connecting…" : "Connect board"}
+            </button>
+            <button disabled={busy} onClick={() => act("stop", "/session/stop")}>
+              Stop
+            </button>
+            <button disabled={busy} onClick={reset}>
+              {busy === "reset" ? "Resetting…" : "New item / reset run"}
+            </button>
+            <button disabled={busy} onClick={() => act("measure", "/session/measure")}>
+              {busy === "measure" ? "Measuring…" : "Measure & route now (manual)"}
+            </button>
+            <button disabled={busy} onClick={() => act("scripted", "/session/demo/step")}>
+              {busy === "scripted" ? "Running…" : "Scripted object (no camera)"}
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => act("calibration", "/session/calibration/reload")}
+            >
+              {busy === "calibration" ? "Reloading…" : "Reload calibration"}
+            </button>
+            <span className="controls-note">
+              Not the normal path. The load cell starts the measurement on its own; these
+              exist for a bench with no working cell, or a mass that will not settle.
+            </span>
+          </div>
+
+          <PanBanner pan={state?.pan} automatic={state?.automatic} />
+
+          <section className="glass-panel chain">
+            <h2 className="section-title">Evidence for the current item</h2>
+            <p className="section-note">
+              Model {health?.model_version ?? "--"} · {state?.confirmed_count ?? 0} confirmed
+              in view
+            </p>
+            <ItemChain item={item} />
+          </section>
+
+          <div className="systems">
+            <ConveyorPanel conveyor={state?.conveyor} />
+            <PricingPanel pricing={state?.pricing} />
+            <HardwarePanel
+              hardware={hardware}
+              board={board}
+              actuation={actuation}
+              busy={busy}
+              onReset={() => act("fault", "/hardware/fault/reset")}
+            />
+          </div>
+
+          <section className="glass-panel">
+            <h2 className="section-title">Routed this run</h2>
+            <p className="section-note">
+              One physical item, one identity, one movement. {processed.length} processed.{" "}
+              {processed.length > 0 && (
+                <a className="mono small" href={`${API}/session/report.csv`}>
+                  Download CSV
+                </a>
+              )}
+            </p>
+            <table className="ledger">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Class</th>
+                  <th>Conf.</th>
+                  <th>Mass</th>
+                  <th>ppm</th>
+                  <th>Decision</th>
+                  <th>Servo</th>
+                  <th>Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                {processed.map((i) => (
+                  <tr key={i.item_id}>
+                    <td className="mono small">{i.item_id}</td>
+                    <td>
+                      <span className="chip" style={{ "--swatch": CLASS_COLOR[i.class_name] }}>
+                        {i.class_name}
                       </span>
-                    )}
-                </td>
-                <td className="mono small">{i.actuation?.servo ?? "—"}</td>
-                <td className="muted small">{i.decision.reason_code}</td>
-              </tr>
-            ))}
-            {processed.length === 0 && (
-              <tr>
-                <td colSpan={9} className="muted">
-                  Nothing routed yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
+                    </td>
+                    <td className="mono">{pct(i.confidence)}</td>
+                    <td className="mono">
+                      {grams(i.weight_g)} <span className="muted small">{i.weight_status}</span>
+                    </td>
+                    <td className="mono">
+                      {num(i.valuation?.pmdi?.precious_mass_fraction_ppm, 1)}
+                    </td>
+                    <td>
+                      <span
+                        className={BIN_CLASS[i.decision.decision] ?? "badge-c"}
+                        title={i.decision.decision_note ?? i.decision.reason}
+                      >
+                        {i.decision.decision}
+                      </span>
+                      {i.decision.physical_bin &&
+                        i.decision.physical_bin !== i.decision.decision && (
+                          <span className="muted small"> → {i.decision.physical_bin}</span>
+                        )}
+                    </td>
+                    <td className="mono small">{i.actuation?.servo ?? "—"}</td>
+                    <td className="muted small">{i.decision.reason_code}</td>
+                  </tr>
+                ))}
+                {processed.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="muted">
+                      Nothing routed yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </section>
 
-      <UpcomingQueue routing={state?.routing} />
+          <UpcomingQueue routing={state?.routing} />
+          <ErrorsPanel errors={state?.errors} />
 
-      <ErrorsPanel errors={state?.errors} />
-
-      {state?.epr && (
-        <Panel
-          title="EPR record"
-          headline={<span className="mono small">{state.epr.session_id}</span>}
-        >
-          <p className="section-note">
-            Every item's whole trail — detected, classified, weighed, valued,
-            binned, actuated — is written to the EPR ledger with the provenance
-            below stamped on each event.
-            <span className="mono small"> GET /epr/&lt;item_id&gt;</span>
-          </p>
-          <div className="trail">
-            <span>DETECTED</span>
-            <span>CLASSIFIED</span>
-            <span>WEIGHED</span>
-            <span>COMPOSITION</span>
-            <span>PMDI</span>
-            <span>VALUE</span>
-            <span>BIN</span>
-            <span>SERVO</span>
-            <span>SORT RESULT</span>
-          </div>
-          <div className="field-grid" style={{ marginTop: 16 }}>
-            <div>
-              <div className="field-label">Vision model</div>
-              <div className="field-value">
-                {state.epr.provenance?.vision_model_version ?? "--"}
+          {state?.epr && (
+            <Panel
+              title="EPR record"
+              headline={<span className="mono small">{state.epr.session_id}</span>}
+            >
+              <p className="section-note">
+                Every item's whole trail — detected, classified, weighed, valued, binned,
+                actuated — is written to the EPR ledger with the provenance below stamped
+                on each event.
+                <span className="mono small"> GET /epr/&lt;item_id&gt;</span>
+              </p>
+              <div className="trail">
+                <span>DETECTED</span>
+                <span>CLASSIFIED</span>
+                <span>WEIGHED</span>
+                <span>COMPOSITION</span>
+                <span>PMDI</span>
+                <span>VALUE</span>
+                <span>BIN</span>
+                <span>SERVO</span>
+                <span>SORT RESULT</span>
               </div>
-            </div>
-            <div>
-              <div className="field-label">Composition DB</div>
-              <div className="field-value">
-                schema {state.epr.provenance?.composition_db_schema ?? "--"},{" "}
-                {state.epr.provenance?.composition_db_evidence_count ?? 0} sources
+              <div className="field-grid" style={{ marginTop: 16 }}>
+                <div>
+                  <div className="field-label">Vision model</div>
+                  <div className="field-value">
+                    {state.epr.provenance?.vision_model_version ?? "--"}
+                  </div>
+                </div>
+                <div>
+                  <div className="field-label">Composition DB</div>
+                  <div className="field-value">
+                    schema {state.epr.provenance?.composition_db_schema ?? "--"},{" "}
+                    {state.epr.provenance?.composition_db_evidence_count ?? 0} sources
+                  </div>
+                </div>
+                <div>
+                  <div className="field-label">Price provider</div>
+                  <div className="field-value">
+                    {state.epr.provenance?.price_provider ?? "--"}
+                  </div>
+                </div>
+                <div>
+                  <div className="field-label">Calibration</div>
+                  <div className="field-value">
+                    <Status
+                      value={
+                        state.epr.provenance?.calibration?.verified
+                          ? "CALIBRATED"
+                          : "UNCALIBRATED"
+                      }
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="field-label">Hardware mode</div>
+                  <div className="field-value">
+                    {state.epr.provenance?.hardware_mode ?? "--"}
+                  </div>
+                </div>
+                <div>
+                  <div className="field-label">Software</div>
+                  <div className="field-value">
+                    {state.epr.provenance?.software_version ?? "--"} · PMDI{" "}
+                    {state.epr.provenance?.pmdi_version ?? "--"}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="field-label">Price provider</div>
-              <div className="field-value">
-                {state.epr.provenance?.price_provider ?? "--"}
-              </div>
-            </div>
-            <div>
-              <div className="field-label">Calibration</div>
-              <div className="field-value">
-                <Status
-                  value={
-                    state.epr.provenance?.calibration?.verified
-                      ? "CALIBRATED"
-                      : "UNCALIBRATED"
-                  }
-                />
-              </div>
-            </div>
-            <div>
-              <div className="field-label">Hardware mode</div>
-              <div className="field-value">
-                {state.epr.provenance?.hardware_mode ?? "--"}
-              </div>
-            </div>
-            <div>
-              <div className="field-label">Software</div>
-              <div className="field-value">
-                {state.epr.provenance?.software_version ?? "--"} · PMDI{" "}
-                {state.epr.provenance?.pmdi_version ?? "--"}
-              </div>
-            </div>
-          </div>
-        </Panel>
-      )}
+            </Panel>
+          )}
+        </div>
+      </details>
 
       <footer className="foot">
-        Aurum identifies components and estimates contained metal from cited
-        composition. It does not assay anything. Mechanical conveying and
-        singulation are the next hardware stage.
+        Aurum identifies components and estimates contained metal from cited composition.
+        It does not assay anything. Mechanical conveying and singulation are the next
+        hardware stage.
       </footer>
     </div>
   );
