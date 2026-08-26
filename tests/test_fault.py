@@ -20,6 +20,12 @@ from app.routing.scheduler import RoutingScheduler
 
 T0 = 1_000.0
 
+#: When the Servo A route below actually fires: 60 cm at 10 cm/s, less the
+#: 150 ms actuation delay. The bridges here used to run their clock at
+#: T0 + 100 as a shorthand for "past due", which is now 94 seconds late and
+#: refused as EXPIRED - by then the item is nine metres down a belt.
+DUE_A = T0 + 5.85
+
 
 def cfg(**environ):
     environ.setdefault("AURUM_ARDUINO_ENABLED", "true")
@@ -213,7 +219,7 @@ class TestTheServoBridgeRespectsTheFault:
             transport=board if board is not None else FakeTransport(connected=True), cfg=settings
         )
         queue = RoutingScheduler(geometry=geometry(), cfg=settings)
-        return queue, ServoActuator(queue, controller=ctl, cfg=settings, clock=lambda: T0 + 100)
+        return queue, ServoActuator(queue, controller=ctl, cfg=settings, clock=lambda: DUE_A)
 
     def test_a_due_route_actuates_normally(self):
         queue, bridge = self.bridge()
@@ -243,7 +249,7 @@ class TestTheServoBridgeRespectsTheFault:
         settings = cfg(AURUM_ARDUINO_ACK_TIMEOUT_MS="20")
         ctl = ArduinoController(transport=board, cfg=settings)
         queue = RoutingScheduler(geometry=geometry(), cfg=settings)
-        bridge = ServoActuator(queue, controller=ctl, cfg=settings, clock=lambda: T0 + 100)
+        bridge = ServoActuator(queue, controller=ctl, cfg=settings, clock=lambda: DUE_A)
         route = queue.schedule("AUR-ITEM-1", "A", T0)
         assert bridge.actuate(route).outcome is ActuationOutcome.FAILED
         ctl.fault.reset(by="test")

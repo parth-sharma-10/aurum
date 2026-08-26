@@ -50,6 +50,9 @@ class ActuationOutcome(StrEnum):
     FAILED = "FAILED"
     #: Deliberately not attempted: already handed across, or not actionable.
     SKIPPED = "SKIPPED"
+    #: Its moment passed while something else was being commanded. Refused
+    #: rather than fired late, because a late paddle strikes the next item.
+    EXPIRED = "EXPIRED"
     #: Refused because a hardware fault is latched. Nothing was sent.
     BLOCKED = "BLOCKED"
 
@@ -122,6 +125,22 @@ class ServoActuator:
             ),
         }
 
+    @property
+    def late_tolerance_s(self) -> float:
+        return self.cfg["conveyor.routing.late_tolerance_ms"] / 1000.0
+
+    def late_by(self, route: ScheduledRoute, now: float) -> float | None:
+        """How far past its moment this route is, or None if it is still good.
+
+        None for a route with no firing time at all: Bin C and every refusal
+        carry no `execute_at`, and they are refused for their own reasons
+        further down rather than as late.
+        """
+        if route.execute_at is None:
+            return None
+        late_by = now - route.execute_at
+        return late_by if late_by > self.late_tolerance_s else None
+
     def _record(self, result: ActuationResult) -> ActuationResult:
         self.results.append(result)
         return result
@@ -183,6 +202,29 @@ class ServoActuator:
                     route.target,
                     ActuationOutcome.BLOCKED,
                     refusal,
+                    route_status=str(route.status),
+                    at=now,
+                )
+            )
+
+        # The scheduler refuses to SCHEDULE a route whose moment has passed.
+        # Nothing refused to ACTUATE one, and the board blocks for the whole
+        # stroke: three routes due together were commanded 1.2 s apart, and the
+        # last of them fired 45 cm of belt past its bin reporting ACTUATED.
+        # This is the same rule as TIMING_EXPIRED, applied where the delay
+        # actually accumulates.
+        late_by = self.late_by(route, now)
+        if late_by is not None:
+            self._attempted.add(route.item_id)
+            return self._record(
+                ActuationResult(
+                    route.item_id,
+                    route.target,
+                    ActuationOutcome.EXPIRED,
+                    f"Its moment was {late_by:.3f}s ago, past the "
+                    f"{self.late_tolerance_s:.3f}s tolerance. Refusing to fire late: "
+                    "the item has passed, and a catch-up strikes whatever is behind "
+                    "it. The item is not sorted, and says so.",
                     route_status=str(route.status),
                     at=now,
                 )
@@ -263,11 +305,21 @@ class ServoActuator:
         for a direct call.
         """
         now = self._clock() if now is None else now
-        return [
-            self.actuate(route, now=now)
-            for route in self.scheduler.due(now)
-            if route.item_id not in self._attempted
-        ]
+        # Each route is judged at the moment it is actually reached, not at the
+        # moment the batch opened. `actuate` blocks for the whole stroke -
+        # 1.212 s measured on the attached board - so the second route in a
+        # batch is reached more than a second after the first, and sharing one
+        # timestamp let it fire long after its window while still looking on
+        # time. The caller's `now` stays the frame of reference and elapsed
+        # time is added to it, so a caller that supplies its own clock is not
+        # quietly measured against a different one.
+        started = self._clock()
+        results = []
+        for route in self.scheduler.due(now):
+            if route.item_id in self._attempted:
+                continue
+            results.append(self.actuate(route, now=now + (self._clock() - started)))
+        return results
 
     def snapshot(self, limit: int = 20) -> dict:
         """Recent actuation history, for the API."""

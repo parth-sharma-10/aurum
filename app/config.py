@@ -232,6 +232,22 @@ SPEC: dict[str, tuple] = {
         "AURUM_WEIGHT_CALIBRATION_FACTOR",
     ),
     "conveyor.weight.hx711_port": (_optional_text, None, "AURUM_HX711_PORT"),
+    # How late a route may fire and still be worth firing. The scheduler
+    # refuses to SCHEDULE a route whose moment has passed; without this nothing
+    # refused to ACTUATE one, and the board blocks for the whole stroke, so the
+    # second of two routes due together was commanded a stroke-length late and
+    # reported ACTUATED.
+    #
+    # 200 ms is not invented: configs/conveyor.yaml already puts the timing
+    # error from Python, serial latency and inference jitter at roughly
+    # +/-200 ms, which is +/-2 cm at the 10 cm/s demonstration speed. MEASURE
+    # THIS against a real bin mouth before trusting it on a real belt - the
+    # honest figure is how long the item stays in front of the paddle.
+    "conveyor.routing.late_tolerance_ms": (
+        _non_negative,
+        200.0,
+        "AURUM_ROUTING_LATE_TOLERANCE_MS",
+    ),
     "conveyor.arduino.port": (_optional_text, None, "AURUM_ARDUINO_PORT"),
     # Actuation ships OFF. Nothing moves until someone turns this on with the
     # board connected and bench-verified.

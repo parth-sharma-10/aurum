@@ -176,6 +176,23 @@ conveyor:
     servo_actuation_delay_ms: 150    # TEST
     timing_offset_ms: 0              # TEST
 
+  routing:
+    # How late a route may fire and still be worth firing.
+    #
+    # The scheduler refuses to SCHEDULE a route whose moment has already
+    # passed. Nothing refused to ACTUATE one, and the board blocks for the
+    # whole stroke (1.212 s measured), so of three routes due together the
+    # last was commanded 45 cm of belt past its bin and reported ACTUATED.
+    #
+    # 200 ms is not invented: the simulation block below puts the timing error
+    # from Python, serial latency and inference jitter at roughly +/-200 ms,
+    # which is +/-2 cm at 10 cm/s.
+    #
+    # MEASURE THIS before trusting it on a real belt. The honest figure is how
+    # long the item stays in front of the paddle, which is the bin mouth width
+    # divided by the belt speed - and there is no bin mouth yet.
+    late_tolerance_ms: 200           # TEST - derived, not measured
+
   servo:
     # BENCH/TEST VALUES - not calibrated conveyor geometry.
     #
