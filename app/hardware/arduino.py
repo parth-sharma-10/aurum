@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app import config as config_module
+from app.hardware import recovery
 from app.hardware.fault import FaultCode, HardwareFault
 from app.hardware.transport import (
     FakeTransport,
@@ -166,7 +167,11 @@ class ArduinoController:
         cfg: config_module.Config | None = None,
         clock=time.monotonic,
         fault: HardwareFault | None = None,
+        recovery_marker=None,
     ) -> None:
+        #: Where the in-flight command marker lives. Injectable so a test does
+        #: not write to the repository's own.
+        self.recovery_marker = recovery_marker
         self.cfg = config_module.load() if cfg is None else cfg
         self.transport = transport if transport is not None else self._transport_from_config()
         self.ack_timeout_s = self.cfg["conveyor.arduino.ack_timeout_ms"] / 1000.0
@@ -382,47 +387,61 @@ class ArduinoController:
 
         frame = build_frame(target, item_id, command_id)
         command.raw_frame = frame
-        if not self.transport.send(frame):
-            command.state = CommandState.FAILED
-            command.error_code = "WRITE_FAILED"
-            command.reason = getattr(self.transport, "last_error", "the write failed")
+        # Before the frame, not after: the gap this covers is the one between
+        # the write and the reply, and a marker written afterwards would miss
+        # every crash that happens inside it.
+        recovery.mark(command_id, target, item_id, path=self.recovery_marker)
+        # `finally` rather than a clear before each return: every branch below
+        # is terminal, and the one that gets forgotten when a branch is added
+        # later is the one that leaves a machine latched on its next start for
+        # a command that finished perfectly well.
+        try:
+            if not self.transport.send(frame):
+                command.state = CommandState.FAILED
+                command.error_code = "WRITE_FAILED"
+                command.reason = getattr(self.transport, "last_error", "the write failed")
+                command.settled_at = self._clock()
+                self.fault.latch(FaultCode.WRITE_FAILED, command.reason, item_id, command_id)
+                return command
+
+            command.state = CommandState.SENT
+            command.sent_at = self._clock()
+            self._by_item[item_id] = command_id
+
+            response = self._await(command_id)
             command.settled_at = self._clock()
-            self.fault.latch(FaultCode.WRITE_FAILED, command.reason, item_id, command_id)
-            return command
+            if response is None:
+                command.state = CommandState.TIMED_OUT
+                command.reason = (
+                    f"No acknowledgement within {self.ack_timeout_s * 1000:.0f} ms. "
+                    "Not retried: a blind resend is how one item gets moved twice."
+                )
+                # Latching: the frame was written, so the paddle may have moved,
+                # may be half out, may be jammed. Nothing else may be commanded
+                # into a machine whose physical state nobody knows.
+                self.fault.latch(FaultCode.ACK_TIMEOUT, command.reason, item_id, command_id)
+                return command
 
-        command.state = CommandState.SENT
-        command.sent_at = self._clock()
-        self._by_item[item_id] = command_id
+            command.raw_response = f"{PROTOCOL} {response.verb} {response.command_id}"
+            if response.verb == "ERR":
+                command.state = CommandState.FAILED
+                command.error_code = response.code
+                command.reason = f"The board reported {response.code}."
+                self.fault.latch(FaultCode.BOARD_ERROR, command.reason, item_id, command_id)
+                return command
 
-        response = self._await(command_id)
-        command.settled_at = self._clock()
-        if response is None:
-            command.state = CommandState.TIMED_OUT
+            command.state = CommandState.ACKED
             command.reason = (
-                f"No acknowledgement within {self.ack_timeout_s * 1000:.0f} ms. "
-                "Not retried: a blind resend is how one item gets moved twice."
+                "The board acknowledged"
+                + (" (already actioned; not moved again)" if response.duplicate else "")
+                + ". This is not evidence that the servo physically moved."
             )
-            # Latching: the frame was written, so the paddle may have moved,
-            # may be half out, may be jammed. Nothing else may be commanded
-            # into a machine whose physical state nobody knows.
-            self.fault.latch(FaultCode.ACK_TIMEOUT, command.reason, item_id, command_id)
             return command
-
-        command.raw_response = f"{PROTOCOL} {response.verb} {response.command_id}"
-        if response.verb == "ERR":
-            command.state = CommandState.FAILED
-            command.error_code = response.code
-            command.reason = f"The board reported {response.code}."
-            self.fault.latch(FaultCode.BOARD_ERROR, command.reason, item_id, command_id)
-            return command
-
-        command.state = CommandState.ACKED
-        command.reason = (
-            "The board acknowledged"
-            + (" (already actioned; not moved again)" if response.duplicate else "")
-            + ". This is not evidence that the servo physically moved."
-        )
-        return command
+        finally:
+            # The outcome is recorded on the command either way. What the
+            # marker exists to catch is the case where there is no outcome
+            # because the process stopped existing.
+            recovery.clear(path=self.recovery_marker)
 
     def _suppress(self, command_id, item_id, target, now, reason, duplicate_of) -> Command:
         command = Command(

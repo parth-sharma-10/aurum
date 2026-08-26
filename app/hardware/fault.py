@@ -47,6 +47,10 @@ class FaultCode(StrEnum):
     INVALID_SPEED = "INVALID_SPEED"
     #: The encoder stopped reporting while the machine required it.
     ENCODER_FAILURE = "ENCODER_FAILURE"
+    #: The last process died with a command in flight. Same unknown as an
+    #: ACK_TIMEOUT, with even less to go on: the timeout leaves a record and a
+    #: kill leaves nothing.
+    RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
     #: A human hit stop. Not a malfunction, and latched for the same reason
     #: one is: the operator stopped the machine because of something happening
     #: in front of them, and software cannot see whether it is over.

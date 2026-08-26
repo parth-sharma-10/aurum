@@ -58,9 +58,9 @@ from app import config as config_module
 from app import epr
 from app.decision import engine as decision_engine
 from app.errors import ErrorCode, ErrorLog
-from app.hardware import verification
+from app.hardware import recovery, verification
 from app.hardware.arduino import ArduinoController
-from app.hardware.fault import HardwareFault
+from app.hardware.fault import FaultCode, HardwareFault
 from app.hardware.link import BoardLink
 from app.hardware.servos import ActuationOutcome, ServoActuator
 from app.pipeline.association import SingleObjectZone
@@ -200,6 +200,16 @@ class DemoSession:
         #: with, so the session and the controller cannot disagree about
         #: whether the machine is safe to actuate.
         self.fault = controller.fault if controller is not None else HardwareFault()
+
+        # A command that was in flight when the last process ended leaves the
+        # paddle somewhere nobody knows. That is the same unknown an ACK
+        # timeout latches for, and a restart is the worse case of the two: the
+        # timeout leaves a record and a kill leaves nothing. Latched here so it
+        # is impossible to sort a first item on a machine in that state.
+        interrupted = recovery.pending()
+        if interrupted is not None:
+            self.fault.latch(FaultCode.RECOVERY_REQUIRED, recovery.reason(interrupted))
+            recovery.clear()
 
         # The belt, if there is one. With `conveyor.mode: NONE` - the shipped
         # state, because this machine has no belt - `scheduler` and `actuator`
