@@ -620,6 +620,11 @@ export function subsystems(state) {
     ],
   });
 
+  // The only claim in this whole system that software cannot make for itself.
+  // A stalled servo, a cut signal wire and a dead supply rail all acknowledge
+  // a MOVE identically, so this comes from a human having watched the paddle.
+  const watched = (state?.hardware?.movement_verification?.verified ?? []).length;
+
   rows.push({
     key: "servos",
     label: "Sorting paddles",
@@ -629,7 +634,10 @@ export function subsystems(state) {
         ? {
             level: "ready",
             headline: "Ready",
-            detail: `Rest ${board.servo_config?.rest_deg}°, push ${board.servo_config?.push_deg}°`,
+            detail:
+              watched >= 2
+                ? "Both paddles watched moving"
+                : `Rest ${board.servo_config?.rest_deg}°, push ${board.servo_config?.push_deg}°`,
           }
         : board.connected
           ? {
@@ -643,6 +651,7 @@ export function subsystems(state) {
               detail: "No Arduino, so no paddles.",
             }),
     technical: [
+      ["Movement verified", watched ? `${watched} of 2, by a person watching` : "never"],
       ["Configuration applied", String(Boolean(board.servo_config_applied))],
       ["Rest angle", board.servo_config?.rest_deg ?? "--"],
       ["Push angle", board.servo_config?.push_deg ?? "--"],
