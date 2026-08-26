@@ -125,7 +125,9 @@ def main() -> int:
         # A mean over a handful of detections hides the worst case. On a
         # false-positive check the single most confident wrong box is the number
         # that decides whether the machine would have acted on it.
-        "max_confidence_per_class": {c: (round(max(v), 4) if v else None) for c, v in confs.items()},
+        "max_confidence_per_class": {
+            c: (round(max(v), 4) if v else None) for c, v in confs.items()
+        },
         "mean_inference_ms": round(sum(r["inference_ms"] for r in rows) / max(1, len(rows)), 1),
         "per_image": rows,
         "caveat": (

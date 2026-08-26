@@ -139,8 +139,10 @@ def _average(sensor: WeightSensor, samples: int, label: str) -> float:
             raise RuntimeError(f"the load cell disconnected while reading {label}")
     elapsed = time.monotonic() - started
     spread = max(collected) - min(collected)
-    print(f"  {label}: {statistics.fmean(collected):.1f} counts (spread {spread:.1f}) "
-          f"in {elapsed:.1f} s")
+    print(
+        f"  {label}: {statistics.fmean(collected):.1f} counts (spread {spread:.1f}) "
+        f"in {elapsed:.1f} s"
+    )
 
     # A board emitting at 10 Hz cannot deliver this burst appreciably faster
     # than real time. If it did, the drain failed and these counts describe an
