@@ -50,8 +50,11 @@ AURUM_SIM_BELT_SPEED_CM_S=10.0
 # serial port and the ACK comes back from an actual Arduino.
 
 # The attached board. `ls /dev/cu.usbmodem*` to find yours; never hardcode a
-# port you have not looked up.
-AURUM_ARDUINO_PORT=/dev/cu.usbmodem101
+# port you have not looked up — and this line is the proof, because it said
+# usbmodem101 on 2026-08-26 while the board was answering on usbmodem1101. The
+# number follows the USB location, so it changes when the board moves hub or
+# socket. Check it every session; a stale value here fails as "could not open".
+AURUM_ARDUINO_PORT=/dev/cu.usbmodem1101
 
 # Actuation ships OFF. Without this every move() returns ACTUATION_DISABLED
 # and no frame is written, which looks exactly like a dead servo.
