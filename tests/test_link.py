@@ -627,3 +627,185 @@ class TestOnePortOneOwner:
         port. Refusing on it would brick a working rig over a /tmp permission."""
         monkeypatch.setattr(link_module, "LOCK_DIR", "/proc/nonexistent-for-aurum")
         assert BoardLink("/dev/cu.fake")._acquire_lock() is None
+
+    def test_reconnecting_through_the_same_link_is_not_refused_by_its_own_lock(self):
+        """`connect_board()` runs on every dashboard load. The lock is there to
+        keep a SECOND process out, not to lock this one out of its own port."""
+        board = BoardLink("/dev/cu.fake")
+        assert board._acquire_lock() is None
+        assert board._acquire_lock() is None, "a link must not block itself"
+
+    def test_a_healthy_link_is_not_reopened(self):
+        """Opening the port resets the board and parks both paddles. Doing that
+        to a working link would interrupt a run every time somebody reloads."""
+        board = link(["W,1,1,-100,OK\n"])
+        port = board._serial
+        assert board.connect() is LinkState.CONNECTED
+        assert board._serial is port, "the port was reopened under a live run"
+
+    def test_the_open_waits_for_the_firmware_rather_than_a_fixed_sleep(self, monkeypatch, tmp_path):
+        """A fixed 2 s sleep raced the bootloader: the first CFG after every
+        open went unacknowledged, and the second was answered in 10 ms."""
+        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+
+        class BootingSerial(FakeSerial):
+            """Silent while the bootloader runs, then the sketch's banner."""
+
+            def __init__(self):
+                FakeSerial.__init__(self, [])
+                self.quiet = 3
+
+            def readline(self):
+                if self.quiet > 0:
+                    self.quiet -= 1
+                    return b""
+                return b"AURUM/1 BOOT 2026-08-27 rest=0\n"
+
+        port = BootingSerial()
+        board = BoardLink("/dev/cu.fake")
+
+        class Module:
+            Serial = staticmethod(lambda *a, **k: port)
+
+        monkeypatch.setitem(__import__("sys").modules, "serial", Module)
+        assert board.connect() is LinkState.CONNECTED
+        assert port.quiet == 0, "it stopped waiting before the board had spoken"
+
+    def test_a_board_that_never_speaks_gives_up_rather_than_hanging(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+        monkeypatch.setattr(BoardLink, "BOOT_TIMEOUT_S", 0.05)
+
+        class Mute(FakeSerial):
+            def readline(self):
+                return b""
+
+        class Module:
+            Serial = staticmethod(lambda *a, **k: Mute([]))
+
+        monkeypatch.setitem(__import__("sys").modules, "serial", Module)
+        # Still CONNECTED: a quiet board is not a closed port, and the caller's
+        # own command budget is what decides whether it is usable.
+        assert BoardLink("/dev/cu.fake").connect() is LinkState.CONNECTED
+
+    def test_two_concurrent_configures_are_serialised(self):
+        """The bug that made CFG look flaky under the server for three sessions.
+
+        `configure_servos` drains a response queue it SHARES with every other
+        reader, and discards whatever does not carry its own command id. Two
+        callers running at once therefore throw away each other's
+        acknowledgement, and the loser reports a board that "did not
+        acknowledge" while the board answered both in 13 ms. React StrictMode
+        double-invoking one effect was enough to produce it, and so is any two
+        clients calling POST /session/board/connect together.
+
+        The fix is that only one may be in flight at a time, and that is what
+        this asserts - a second caller entering while the first is still waiting
+        is the defect itself, so overlap is measured directly rather than
+        inferred from whether both happened to get an answer.
+        """
+        import threading
+
+        overlap = []
+
+        class CountingSerial(FakeSerial):
+            """Never idle, like a real board, and counts callers in flight."""
+
+            def __init__(self):
+                FakeSerial.__init__(self, [])
+                self.inflight = 0
+                self.due = []
+                self.guard = threading.Lock()
+
+            def write(self, data):
+                frame = data.decode().strip().split()
+                if len(frame) >= 6 and frame[1] == "CFG":
+                    with self.guard:
+                        self.inflight += 1
+                        overlap.append(self.inflight)
+                        self.due.append((time.monotonic() + 0.05, frame[5]))
+                return len(data)
+
+            def readline(self):
+                with self.guard:
+                    for i, (at, cid) in enumerate(self.due):
+                        if time.monotonic() >= at:
+                            self.due.pop(i)
+                            self.inflight -= 1
+                            return f"AURUM/1 ACK {cid}\n".encode()
+                time.sleep(0.002)
+                return b"W,1,1,-261000,OK\n"
+
+        board = link()
+        board._serial = CountingSerial()
+
+        results = []
+        threads = [
+            threading.Thread(
+                target=lambda: results.append(board.configure_servos(0, 90, 700, budget_s=3.0))
+            )
+            for _ in range(2)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=20)
+
+        assert max(overlap) == 1, f"two configures were in flight at once: {overlap}"
+        assert results == [True, True]
+        assert board.servo_config == (0, 90, 700)
+
+    def test_the_open_clears_a_backlog_instead_of_leaving_it_for_the_first_command(
+        self, monkeypatch, tmp_path
+    ):
+        """1,151,728 bytes of a malformed fragment were measured arriving in one
+        burst when the port opened. One reset_input_buffer() does not clear a
+        sender that is still mid-burst, and every line of it is counted as
+        dropped - so the first CFG spent its whole budget reading rubbish and
+        never reached its own ACK."""
+        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+
+        class Backlogged(FakeSerial):
+            def __init__(self):
+                FakeSerial.__init__(self, [])
+                self.resets = 0
+                self.in_waiting = 40000
+
+            def readline(self):
+                return b"58900,OK\n"
+
+            def reset_input_buffer(self):
+                self.resets += 1
+                # Still arriving: the burst outlives the first two resets.
+                self.in_waiting = 0 if self.resets >= 3 else 40000
+
+        port = Backlogged()
+
+        class Module:
+            Serial = staticmethod(lambda *a, **k: port)
+
+        monkeypatch.setitem(__import__("sys").modules, "serial", Module)
+        assert BoardLink("/dev/cu.fake").connect() is LinkState.CONNECTED
+        assert port.resets >= 3, "it stopped clearing while the board was still sending"
+
+    def test_a_backlog_that_never_ends_does_not_hang_the_open(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+        monkeypatch.setattr(BoardLink, "DRAIN_TIMEOUT_S", 0.2)
+
+        class Endless(FakeSerial):
+            in_waiting = 999999
+
+            def readline(self):
+                return b"58900,OK\n"
+
+            def reset_input_buffer(self):
+                pass
+
+        class Module:
+            Serial = staticmethod(lambda *a, **k: Endless([]))
+
+        monkeypatch.setitem(__import__("sys").modules, "serial", Module)
+        started = time.monotonic()
+        # Usable either way: a noisy board is still a board, and the command's
+        # own budget is what decides whether it can be talked to.
+        assert BoardLink("/dev/cu.fake").connect() is LinkState.CONNECTED
+        assert time.monotonic() - started < 2.0

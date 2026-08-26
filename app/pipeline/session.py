@@ -288,7 +288,12 @@ class DemoSession:
             # Not fatal, but not silent either: unacknowledged, the paddles keep
             # whatever angles the sketch booted with rather than the configured
             # ones, and nothing downstream would ever say so.
-            if not self.link.configure_servos(
+            # Already applied and the link never dropped: the board is holding
+            # these angles, and re-sending them would reset both paddles for
+            # nothing every time somebody opens the dashboard.
+            if self.link.servo_config is not None:
+                pass
+            elif not self.link.configure_servos(
                 self.cfg["conveyor.servo.rest_angle_deg"],
                 self.cfg["conveyor.servo.push_angle_deg"],
                 self.cfg["conveyor.servo.actuation_ms"],

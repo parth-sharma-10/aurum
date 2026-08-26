@@ -29,6 +29,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import os
+import threading
 import time
 from collections import deque
 
@@ -58,6 +59,12 @@ class BoardLink:
     reports it could not be weighed or routed - not a traceback.
     """
 
+    #: How long to wait after opening for the board to prove its firmware is
+    #: running. Generous: an Uno bootloader is ~2 s and a slow one is worse,
+    #: and the cost of waiting is a second at start-up against a CFG that
+    #: silently does not apply.
+    BOOT_TIMEOUT_S = 6.0
+
     def __init__(self, port: str, baudrate: int = 115200, timeout_s: float = 1.0) -> None:
         self.port = port
         self.baudrate = baudrate
@@ -66,6 +73,13 @@ class BoardLink:
         self._state = LinkState.DISCONNECTED
         #: The advisory lock on this port, held for the life of the link.
         self._lock = None
+        #: Guards opening and closing only - NOT pumping, which stays
+        #: single-reader by design. The pan thread reopens a dropped board in
+        #: `_heal_link` while the HTTP thread may be connecting the same link
+        #: from the dashboard, and the two used to interleave: one would take
+        #: the port lock between the other's release and re-acquire, and the
+        #: loser reported "already owned by another process" about itself.
+        self._gate = threading.RLock()
         self.last_error: str | None = None
         self._weight: deque[RawSample] = deque(maxlen=QUEUE_LIMIT)
         self._responses: deque[str] = deque(maxlen=QUEUE_LIMIT)
@@ -110,6 +124,14 @@ class BoardLink:
         working machine over a /tmp permission. Only a lock somebody else holds
         refuses.
         """
+        # Already ours. Re-connecting through the same link - which is what
+        # `connect_board()` does every time the dashboard is opened - must not
+        # be refused by this link's own lock. `flock` is per open-file-
+        # description, so a second `open()` in this process would fail against
+        # the descriptor we are still holding.
+        if self._lock is not None:
+            return None
+
         path = lock_path(self.port)
         try:
             handle = open(path, "a+")  # noqa: SIM115 - held for the link's life
@@ -142,6 +164,16 @@ class BoardLink:
             handle.close()
 
     def connect(self) -> LinkState:
+        with self._gate:
+            return self._connect()
+
+    def _connect(self) -> LinkState:
+        # Opening the port resets the board and parks both paddles. Doing that
+        # to a link that is already up - on every dashboard reload, say - would
+        # interrupt a run for no reason, so a healthy link is left alone.
+        if self._state is LinkState.CONNECTED and self._serial is not None:
+            return self._state
+
         try:
             import serial
         except ImportError:
@@ -172,16 +204,85 @@ class BoardLink:
             self.last_error = f"could not open {self.port}: {exc}"
             return self._state
 
-        # Opening the port resets the board. Anything sent before it has booted
-        # is swallowed by a bootloader that is not listening.
-        time.sleep(2.0)
-        with contextlib.suppress(Exception):
-            self._serial.reset_input_buffer()
+        # Opening the port resets the board, and anything sent while its
+        # bootloader is still running is swallowed by something that is not
+        # listening.
+        #
+        # This used to be `time.sleep(2.0)` - a guess, and too short a one. The
+        # first CFG after every open went unacknowledged, burning its whole
+        # 4 s budget, while a second CFG a moment later was answered in 10 ms.
+        # That looked like a flaky board for three sessions and was really a
+        # fixed sleep racing a bootloader.
+        #
+        # So wait for the board to say something instead of guessing when it
+        # might. The sorter prints a boot banner and then streams weight frames
+        # at 10 Hz, so one line is proof the FIRMWARE is running - which is the
+        # actual precondition for sending it a command.
+        deadline = time.monotonic() + self.BOOT_TIMEOUT_S
+        while time.monotonic() < deadline:
+            try:
+                if self._serial.readline().strip():
+                    break
+            except Exception as exc:
+                self._serial = None
+                self._state = LinkState.DISCONNECTED
+                self._release_lock()
+                self.last_error = f"the board stopped responding while booting: {exc}"
+                return self._state
+
+        self._drain_backlog()
         self._state = LinkState.CONNECTED
         self.last_error = None
         return self._state
 
+    #: Bytes still waiting that count as "the backlog has drained". A board
+    #: streaming its normal 10 Hz produces about 20 bytes per 100 ms, so this
+    #: is a couple of frames' worth and not a quiet port.
+    SETTLED_BYTES = 64
+
+    #: How long to spend clearing a backlog before giving up and going on. The
+    #: link is usable either way; this only decides how much rubbish the first
+    #: command has to read past.
+    DRAIN_TIMEOUT_S = 3.0
+
+    def _drain_backlog(self) -> None:
+        """Throw away whatever the board queued up while nobody was listening.
+
+        One `reset_input_buffer()` is not enough. The bench board gets into a
+        state where it prints a malformed weight fragment at full line rate -
+        1,151,728 bytes of `58900,OK` were measured arriving in a single burst
+        at 135 kB/s, twelve times what 115200 baud can carry, which is a
+        backlog draining rather than live output. Every one of those lines is
+        neither a weight frame nor a protocol reply, so `pump()` counts them as
+        dropped, and the first CFG after an open spends its whole four-second
+        budget reading rubbish and never reaches its own ACK.
+
+        That is the "board did not acknowledge the servo configuration" that
+        has been blamed on the firmware, the servo and the wiring in turn.
+
+        Why the board does it is NOT understood - the fragment looks like a
+        weight frame with its head cut off and a frozen `millis()`, and it
+        pre-dates the current sketch. This does not fix that. It stops it from
+        costing the next command its acknowledgement.
+        """
+        deadline = time.monotonic() + self.DRAIN_TIMEOUT_S
+        while time.monotonic() < deadline:
+            try:
+                self._serial.reset_input_buffer()
+                # Let anything still in flight arrive before deciding it is
+                # over: resetting an empty buffer proves nothing when the sender
+                # is mid-burst.
+                time.sleep(0.05)
+                if self._serial.in_waiting <= self.SETTLED_BYTES:
+                    return
+            except Exception:
+                return
+
     def disconnect(self) -> None:
+        with self._gate:
+            self._disconnect()
+
+    def _disconnect(self) -> None:
         with contextlib.suppress(Exception):
             if self._serial is not None:
                 self._serial.close()
@@ -209,6 +310,10 @@ class BoardLink:
         Only ever called for a link that is already DEGRADED or DISCONNECTED —
         reopening a healthy port would reset the board for no reason.
         """
+        with self._gate:
+            return self._reconnect()
+
+    def _reconnect(self) -> bool:
         if self._state is LinkState.CONNECTED:
             return True
         # Through `disconnect` rather than closing the descriptor here: it also
@@ -216,8 +321,8 @@ class BoardLink:
         # both of which belong to a board that has since rebooted. Reporting
         # the old angles after a re-enumeration would be a stale claim, and the
         # caller reapplies them once the link is back.
-        self.disconnect()
-        return self.connect() is LinkState.CONNECTED
+        self._disconnect()
+        return self._connect() is LinkState.CONNECTED
 
     def configure_servos(
         self, rest_deg: float, push_deg: float, hold_ms: float, budget_s: float = 4.0
@@ -248,6 +353,21 @@ class BoardLink:
         a 1.0 s `timeout_s`, which is why it passed on the bench and failed
         under the server.
         """
+        # SERIALISED, because this method pops from a queue it shares with
+        # every other reader and discards whatever is not its own id.
+        #
+        # Two concurrent callers therefore eat each other's acknowledgement:
+        # each drains `_responses` looking for its own command, throws the
+        # other's ACK away, and the loser reports a board that "did not
+        # acknowledge" while the board answered both in 13 ms. React StrictMode
+        # double-invoking an effect was enough to produce it, and so is any two
+        # clients calling POST /session/board/connect together.
+        with self._gate:
+            return self._configure_servos(rest_deg, push_deg, hold_ms, budget_s)
+
+    def _configure_servos(
+        self, rest_deg: float, push_deg: float, hold_ms: float, budget_s: float
+    ) -> bool:
         from app.hardware.arduino import new_command_id, parse_response
 
         command_id = new_command_id()
