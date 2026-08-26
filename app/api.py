@@ -159,6 +159,106 @@ def health() -> dict:
     }
 
 
+def _check(name: str, ready: bool, blocking: bool, detail: str) -> dict:
+    return {"name": name, "ready": ready, "blocking": blocking, "detail": detail}
+
+
+@app.get("/ready")
+def readiness() -> dict:
+    """Is this machine fit to demonstrate right now, and if not, what is missing.
+
+    `/health` answers whether the service started. This answers the question an
+    operator actually has thirty seconds before a demonstration, which needs
+    the camera, the board, the calibration and the fault latch read together.
+
+    **Blocking and advisory are not the same failure.** Without weights or a
+    camera there is nothing to identify and the pipeline cannot run at all.
+    Without a board, a calibration or actuation it runs perfectly well and
+    stamps every affected figure SIMULATED or UNMEASURED — that is the shipped
+    configuration, and calling it "not ready" would make the honest state look
+    like a broken one.
+    """
+    session = demo_session()
+    state = session.snapshot()
+    board = state["board"]
+    cal = state["calibration"]
+    hardware = state["hardware"]
+    fault = hardware["fault"]
+    weights = DEFAULT_WEIGHTS.exists()
+    simulated = hardware["mode"] == "SIMULATION"
+
+    checks = [
+        _check(
+            "vision model",
+            weights,
+            True,
+            f"{_rel(DEFAULT_WEIGHTS)}" if weights else f"missing: {_rel(DEFAULT_WEIGHTS)}",
+        ),
+        _check(
+            "camera",
+            bool(state["running"]),
+            True,
+            state["camera"]["error"]
+            or (state["camera"]["source"] or "not started — POST /session/start"),
+        ),
+        _check(
+            "no latched fault",
+            not fault["active"],
+            True,
+            fault["reason"] or "clear",
+        ),
+        _check(
+            "board link",
+            bool(board.get("connected")),
+            False,
+            board.get("last_error")
+            or (
+                "simulated — no serial port"
+                if simulated
+                else "linked"
+                if board.get("connected")
+                else "not connected — POST /session/board/connect"
+            ),
+        ),
+        _check(
+            "servo angles applied",
+            bool(board.get("servo_config_applied")),
+            False,
+            "the board is running the angles in conveyor.yaml"
+            if board.get("servo_config_applied")
+            else "unapplied — the board is running whatever the sketch booted with",
+        ),
+        _check(
+            "load cell calibrated",
+            bool(cal.get("verified")),
+            False,
+            cal.get("notes") or "no factor verified against a second known mass",
+        ),
+        _check(
+            "actuation enabled",
+            bool(hardware["actuation_enabled"]),
+            False,
+            "enabled"
+            if hardware["actuation_enabled"]
+            else "off — the shipped state; set AURUM_ARDUINO_ENABLED=true to move a servo",
+        ),
+    ]
+    blocked = [c["name"] for c in checks if c["blocking"] and not c["ready"]]
+    return {
+        "ready": not blocked,
+        "blocked_by": blocked,
+        "advisory": [c["name"] for c in checks if not c["blocking"] and not c["ready"]],
+        "checks": checks,
+        "hardware_mode": hardware["mode"],
+        "note": (
+            "Advisory failures are not defects. A machine with no board and no "
+            "calibration runs the whole pipeline and marks every figure that "
+            "depends on them. Physical servo movement is not checked here at "
+            "all: run scripts/bench_check.py and watch the paddle."
+        ),
+    }
+
+
 @app.get("/model")
 def model_info() -> dict:
     d = detector()

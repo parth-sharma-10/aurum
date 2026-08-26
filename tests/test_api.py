@@ -637,3 +637,50 @@ class TestEmergencyStop:
         assert cleared["cleared"]["code"] == "EMERGENCY_STOP"
         assert cleared["fault"]["active"] is False
         assert cleared["fault"]["resets"][0]["by"] == "dashboard"
+
+
+class TestReadiness:
+    """`/health` says the service started. `/ready` says the machine can be
+    demonstrated, which is a different and larger question."""
+
+    def test_a_missing_camera_blocks_readiness(self, client):
+        body = client.get("/ready").json()
+        assert body["ready"] is False
+        assert "camera" in body["blocked_by"]
+
+    def test_no_board_is_advisory_not_blocking(self, client):
+        """The shipped configuration. Calling it 'not ready' would make the
+        honest state look like a broken one."""
+        body = client.get("/ready").json()
+        assert "board link" in body["advisory"]
+        assert "board link" not in body["blocked_by"]
+
+    def test_a_latched_fault_blocks_readiness(self, client):
+        assert "no latched fault" not in client.get("/ready").json()["blocked_by"]
+        client.post("/hardware/estop")
+        body = client.get("/ready").json()
+        assert body["ready"] is False
+        assert "no latched fault" in body["blocked_by"]
+
+    def test_clearing_the_fault_unblocks_that_check(self, client):
+        client.post("/hardware/estop")
+        client.post("/hardware/fault/reset")
+        assert "no latched fault" not in client.get("/ready").json()["blocked_by"]
+
+    def test_every_check_explains_itself(self, client):
+        """A check that fails without saying why is a check nobody can act on."""
+        for check in client.get("/ready").json()["checks"]:
+            assert check["detail"], check["name"]
+            assert isinstance(check["blocking"], bool)
+
+    def test_the_detail_agrees_with_the_verdict(self, client):
+        """The board detail used to read 'linked' while reporting not ready."""
+        by_name = {c["name"]: c for c in client.get("/ready").json()["checks"]}
+        board = by_name["board link"]
+        assert board["ready"] is False
+        assert "not connected" in board["detail"]
+
+    def test_it_does_not_claim_anything_about_physical_movement(self, client):
+        names = [c["name"] for c in client.get("/ready").json()["checks"]]
+        assert not any("moved" in n or "physical" in n for n in names)
+        assert "bench_check" in client.get("/ready").json()["note"]
