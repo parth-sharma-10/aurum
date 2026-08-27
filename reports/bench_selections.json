@@ -1,0 +1,29 @@
+{
+  "note": "Which images make up two bench evaluation sets. Recorded because the sets were assembled as symlink farms in a session scratch directory, with absolute paths that resolve on one machine and nowhere else. The summaries in this directory cite them, so the selection is evidence and belongs in the repo.",
+  "heldout_boardlike": {
+    "why": "The only CPU false-positive evidence uncontaminated by v0.2's training set - see docs/model-card.md. Images are tracked under data/bench_capture/.",
+    "files": [
+      "data/bench_capture/broken_pcb/broken_pcb_pose02_00.jpg",
+      "data/bench_capture/broken_pcb/broken_pcb_pose02_01.jpg",
+      "data/bench_capture/broken_pcb/broken_pcb_pose02_02.jpg",
+      "data/bench_capture/broken_pcb/broken_pcb_pose05_00.jpg",
+      "data/bench_capture/broken_pcb/broken_pcb_pose05_01.jpg",
+      "data/bench_capture/broken_pcb/broken_pcb_pose05_02.jpg",
+      "data/bench_capture/perfboard_poses_v2/perfboard_poses_v2_pose03_00.jpg",
+      "data/bench_capture/perfboard_poses_v2/perfboard_poses_v2_pose03_01.jpg",
+      "data/bench_capture/perfboard_poses_v2/perfboard_poses_v2_pose03_02.jpg",
+      "data/bench_capture/perfboard_poses_v2/perfboard_poses_v2_pose06_00.jpg",
+      "data/bench_capture/perfboard_poses_v2/perfboard_poses_v2_pose06_01.jpg",
+      "data/bench_capture/perfboard_poses_v2/perfboard_poses_v2_pose06_02.jpg"
+    ]
+  },
+  "real_cpu": {
+    "why": "Real CPU packages, for whether either model detects one at all. NOT TRACKED: data/realworld/ is gitignored (operator-supplied photos, third-party licences). Listed so the set can be reassembled.",
+    "files": [
+      "data/realworld/CPU__E5-2450v2_IvyBridge-EP_Package.jpg",
+      "data/realworld/CPU__Intel_CPU_Celeron_G3930_Kaby_Lake_top.jpg",
+      "data/realworld/CPU__Intel_CPU_Core_2_Duo_E8400_Wolfdale_bottom.jpg",
+      "data/realworld/CPU__Intel_CPU_Core_2_Duo_E8400_Wolfdale_perspective.jpg"
+    ]
+  }
+}

@@ -2,7 +2,7 @@
   "model_version": "Aurum Vision v0.2",
   "weights": "models/aurum_vision_v0_2_best.pt",
   "conf_threshold": 0.35,
-  "source": "/private/tmp/claude-501/-Users-parthsharma-baymax/f8faccc9-7434-4b5f-bc9c-4ea418186471/scratchpad/heldout_boardlike",
+  "source": "reports/bench_selections.json#heldout_boardlike",
   "n_images": 12,
   "images_with_no_detection": 3,
   "total_detections": {
@@ -126,5 +126,6 @@
       "inference_ms": 14.8
     }
   ],
-  "caveat": "Detections only. These images have no ground-truth annotations, so nothing here is an accuracy measurement and no figure from this run may be quoted as model accuracy."
+  "caveat": "Detections only. These images have no ground-truth annotations, so nothing here is an accuracy measurement and no figure from this run may be quoted as model accuracy.",
+  "source_note": "A selected set, not a directory. It was assembled as absolute symlinks in a session scratch directory that resolved on one machine only; the file list is now recorded in reports/bench_selections.json."
 }
