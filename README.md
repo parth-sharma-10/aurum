@@ -9,7 +9,7 @@ invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-1267%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-1428%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
 
 > **The weights are a release asset, not a tracked file.** `models/*.pt` is
 > gitignored, so a fresh clone has no model until you download one. One command
@@ -65,7 +65,7 @@ Not "a fully automated conveyor sorting system". There is no conveyor.
 ## Running the sorting console
 
 ```bash
-export AURUM_ARDUINO_PORT=/dev/cu.usbmodem101   # ls /dev/cu.usbmodem*
+export AURUM_ARDUINO_PORT=/dev/cu.usbmodem1101  # ls /dev/cu.usbmodem* — it follows the socket
 export AURUM_ARDUINO_ENABLED=true               # actuation ships OFF
 uvicorn app.api:app --port 8000
 
@@ -547,8 +547,10 @@ table says *assumed* rather than *measured* batch mass, and the console shows a
 `MOCK MASS` pill and a banner listing the assumed values. The permission rides
 on the reading itself, so an unmarked simulated mass is still refused.
 
-It does not conjure evidence: RAM still reaches Bin C, because no cited
-composition exists for a DRAM module and a stand-in mass cannot invent one.
+It does not conjure evidence. A stand-in mass changes the arithmetic and never
+the evidence, so an item whose class has no cited composition still reaches Bin
+C on `UNKNOWN_MATERIAL`, and one whose class the model is unsure of still
+reaches Bin C on `UNKNOWN_CONFIDENCE`.
 
 ## Material Reference Database
 
@@ -591,7 +593,7 @@ estimated value       ← ESTIMATE of an ESTIMATE
 | **CPU** | Au | yes | usable — 4.71 mg Au/piece |
 | **Connector** | Au (+ Ag, Cu, Ni, Al for gold fingers) | yes | usable — 0.914 mg Au/piece, upper bound 2.35 |
 | **PCB** | Au, Ag, Pd, Cu, Ni, Sn, Al | no | needs a **measured** batch mass |
-| **RAM** | — | — | **no data — estimate refuses** |
+| **RAM** | Au, Ag, Pd, Cu | yes | usable — 18 mg Au/module, per-piece |
 
 Two evidence shapes exist and they are not interchangeable. **Per-piece** figures
 (mg of metal in one component) multiply the count directly. **Concentration**
@@ -1014,7 +1016,7 @@ components between stages.
 | 7 Arduino/servo | COMPLETE | transport, command layer, both sketches | **both servos moved by Aurum code** | **PHYSICALLY VERIFIED** |
 | 8 API/frontend | COMPLETE | session API + sorting console | real webcam | verified in the browser |
 | 9 End-to-end | COMPLETE | `app/pipeline/session.py` | camera + board | camera→item→PMDI→bin→servo, on hardware |
-| 10 Validation | PARTIAL | 836 tests, ruff clean | — | **calibration blocked on the mounting fault** |
+| 10 Validation | PARTIAL | 1428 tests, ruff clean | — | calibration verified 2026-08-26; **full automatic cycle to A/B still unwatched** |
 
 ### What the five levels mean
 
@@ -1113,7 +1115,7 @@ frontend/    React/Vite browser view of the ledger (reads the API only)
 ml/          Pipeline: ingest → prepare → validate → train → evaluate → realworld → assets
 configs/     Label map, pinned datasets, material reference (cited), price reference (disabled)
 scripts/     Doc generators, training monitor, external-image fetcher, Universe search
-tests/       236 tests
+tests/       1428 tests
 docs/        dataset · training · evaluation · model-card · architecture · demo · material-reference
 docs/sources/ Canonical bibliography for every material figure
 reports/     Generated metrics, figures and validation output
@@ -1131,7 +1133,7 @@ layer and its fail-closed guards), `app/api.py` (HTTP surface and `/stats`).
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q                  # 236 tests
+python -m pytest -q                  # 1428 tests
 ruff check . && ruff format --check .
 
 cd frontend && npm run build         # static bundle to frontend/dist/

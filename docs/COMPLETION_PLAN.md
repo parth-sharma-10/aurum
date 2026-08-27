@@ -6,25 +6,37 @@
 
 | | |
 |---|---|
-| Branch | `feat/final-integration` |
+| Branch | merged to `main` — PRs #12, #13, #14 |
 | Phases 0-11 | **COMPLETE** |
-| Tests | **1267 passing**, 5 skipped (FiftyOne absent), ruff clean, frontend builds |
-| Hardware | Board, both sketches, both servos: **PHYSICALLY VERIFIED** 2026-08-22 |
-| Blocking | **The load cell is mechanically bypassed. Nothing else.** |
+| Phase 1 software audit | **COMPLETE** 2026-08-27 (PR #14) |
+| Tests | **1428 passing**, ruff clean, format clean, frontend builds |
+| Hardware | Board, both sketches, both servos: **PHYSICALLY VERIFIED** 2026-08-22. Both paddles watched moving 2026-08-26 |
+| Load cell | **CALIBRATED AND VERIFIED** 2026-08-26 — 392.2167 counts/g, second-mass check +1.130 g |
+| Blocking | Nothing in software. Three physical items below |
 
-### THE ONLY REMAINING TASK IS PHYSICAL
+### THE REMAINING TASKS ARE PHYSICAL
 
-Mount the load cell as a cantilever — one end fixed, the free end able to bend
-— then:
+The mounting fault that blocked everything until 2026-08-26 is **fixed**; the
+cantilever was rebuilt and `configs/calibration.yaml` carries a verified record.
+`AURUM_DEMO_MOCK_MASS` ships `false` and the cell drives the cycle.
 
-```bash
-python -m app.calibrate --port <PORT> --reference-mass 180 --verify-mass 100
-```
+What is left needs the machine, and none of it can be done in software:
 
-until `verified: true`. Then unset `AURUM_DEMO_MOCK_MASS`. A working mount
-shows ~65 000 counts under 180 g, visible immediately in the `tare` vs `loaded`
-lines. **Nothing in software can substitute for this and nothing has tried.**
-`configs/calibration.yaml` stays UNMEASURED until the workflow records it.
+1. **Reconnect the board.** It dropped off USB on 2026-08-27 and no
+   `cu.usbmodem*` node exists. Re-read the port after reseating — it follows the
+   socket.
+2. **Re-tare.** The empty pan read 7.9–8.3 g on 2026-08-27, over both the 5 g
+   arrival and 2 g clear thresholds, so the automatic cycle cannot arm. The
+   thresholds were deliberately **not** raised to mask this.
+   `python -m app.calibrate --port <PORT> --reference-mass 204 --verify-mass 170`
+3. **Watch one full automatic cycle end to end** — camera to a physical
+   diversion into bin A or B. Every piece is proven separately; the whole cycle
+   with a paddle stroke has never been observed in one go.
+
+One software fix is also **unverified against hardware**: the board is now
+offered its servo angles twice on connect, which should absorb the first CFG
+losing its ACK to the boot backlog. Proven by unit test only, because the board
+was absent when it was written.
 
 Everything else that could be solved in software has been.
 
@@ -63,7 +75,7 @@ carries the object and routing is immediate. See `docs/conveyor.md`.
 
 Verified by running it, not by reading it:
 
-- Arduino Uno at `/dev/cu.usbmodem101`, both sketches flashed at 115200
+- Arduino Uno at `/dev/cu.usbmodem1101` (the number follows the socket), both sketches flashed at 115200
 - `W,1,...,OK` frames streaming; HX711 converting, 64-157 count noise floor
 - `PING` -> `PONG` over the real serial port
 - **Servo A moved by Aurum's own command** (ACK in 709 ms), watched
@@ -89,7 +101,7 @@ holds the port exclusively - it caused two upload failures and one apparent
 Flash with `arduino-cli`, not the IDE:
 
     arduino-cli compile --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
-    arduino-cli upload -p /dev/cu.usbmodem101 --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
+    arduino-cli upload -p /dev/cu.usbmodem1101 --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
 
 ### THE MOCK-MASS FALLBACK
 
@@ -97,14 +109,15 @@ Flash with `arduino-cli`, not the IDE:
 (CPU 25 g / PCB 180 g / RAM 30 g / Connector 5 g) so the pipeline can be
 demonstrated. Ships OFF. Everything derived from it is stamped SIMULATED, the
 permission rides on the reading rather than on configuration, and it cannot
-conjure evidence - RAM still reaches C.
+conjure evidence: a stand-in mass changes the arithmetic and never the evidence,
+so a class with no cited composition still reaches C.
 
 ### FIRST ACTION NEXT SESSION
 
-**Re-mount the load cell as a cantilever, then re-run the calibration.** A
-working mount shows ~65 000 counts under 180 g, visible immediately in the
-`tare` vs `loaded` lines. Then PCB -> B on a real measurement rather than a
-stand-in, and the demonstration needs no fallback at all.
+**Done, 2026-08-26.** The cell was re-mounted as a cantilever and the
+calibration recorded `verified: true` at 392.2167 counts/g. PCB now reaches B on
+a real measurement and the demonstration needs no fallback. The current first
+action is the three physical items in the checkpoint at the top of this file.
 
 ### SCOPE CHANGE — the demonstration has no conveyor
 
