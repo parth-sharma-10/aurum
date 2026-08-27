@@ -28,6 +28,7 @@ import {
   activity,
   clock,
   grams,
+  loadCellSilent,
   num,
   objectValue,
   pct,
@@ -50,7 +51,7 @@ export function Masthead({ state, machine, mode, onMode, onEstop, busy }) {
   const simulated = state?.hardware?.mode === "SIMULATION";
   const dots = [
     ["Camera", Boolean(state?.running && !state?.camera?.error)],
-    ["Load Cell", Boolean((board.connected || simulated) && cal.verified)],
+    ["Load Cell", Boolean((board.connected || simulated) && cal.verified && !loadCellSilent(state))],
     ["Arduino", Boolean(board.connected || simulated)],
     ["Servos", Boolean(board.servo_config_applied || simulated)],
   ];

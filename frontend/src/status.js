@@ -353,6 +353,24 @@ const STATE = (key, title, detail, action, tone) => ({ key, title, detail, actio
  * and only then the cycle itself. Reading the pan first would let a machine
  * with no camera report "waiting for an object", which is a lie told calmly.
  */
+/** True when the load cell is being polled and is not returning a mass.
+ *
+ * A cell that is answering produces a number. `grams: null` while the pan is
+ * being polled means the reader refused every sample, and `pan.reason` is its
+ * own account of why - a frozen converter, an open cell, no frames at all.
+ *
+ * This exists as ONE exported predicate because the question was previously
+ * answered in three places by `calibration.verified`, which is a record of a
+ * measurement made once on 2026-08-26 and says nothing about whether the cell
+ * reads today. On 2026-08-27 a cell with DOUT stuck LOW left the masthead, the
+ * health row and the machine status all reporting "Ready" while the pan held a
+ * phantom 670.7 g. One predicate, so they cannot disagree again.
+ */
+export function loadCellSilent(state) {
+  const pan = state?.pan ?? {};
+  return pan.automatic === true && pan.grams == null;
+}
+
 export function machineState(state, startup) {
   if (startup && startup.phase !== "done") {
     return startup.phase === "failed"
@@ -592,6 +610,8 @@ const LEVEL = { ready: 0, warning: 1, offline: 2, fault: 3 };
 export function subsystems(state) {
   const board = state?.board ?? {};
   const cal = state?.calibration ?? {};
+  const panHealth = state?.pan ?? {};
+  const cellSilent = loadCellSilent(state);
   const camera = state?.camera ?? {};
   const conveyor = state?.conveyor ?? {};
   const speed = conveyor.speed ?? {};
@@ -624,14 +644,21 @@ export function subsystems(state) {
           headline: "Not available",
           detail: "The Arduino is not connected, and the load cell is read through it.",
         }
-      : cal.verified
-        ? { level: "ready", headline: "Ready", detail: "Calibration verified" }
-        : {
-            level: "warning",
-            headline: "Not calibrated",
-            detail: "Weights can be shown but not relied on.",
-          }),
+      : cellSilent
+        ? {
+            level: "fault",
+            headline: "No reading",
+            detail: panHealth.reason ?? "The load cell is not returning a usable mass.",
+          }
+        : cal.verified
+          ? { level: "ready", headline: "Ready", detail: "Calibration verified" }
+          : {
+              level: "warning",
+              headline: "Not calibrated",
+              detail: "Weights can be shown but not relied on.",
+            }),
     technical: [
+      ["Live reading", panHealth.grams == null ? "none" : `${num(panHealth.grams, 1)} g`],
       ["Counts per gram", num(cal.counts_per_gram, 1)],
       ["Verified", String(Boolean(cal.verified))],
       ["Verification error", cal.verification_error_g == null ? "--" : `${num(cal.verification_error_g, 3)} g`],
