@@ -315,7 +315,7 @@ Rehearse with all four so nothing is a surprise on camera.
 |---|---|---|---|
 | **CPU** | **A** → Servo A | Configured premium class; cited gold per package (`CPU-AU-001`) is per-piece, so it needs no mass | No |
 | **PCB** | **B** → Servo B | 2 200 ppm precious from cited composition, above the 100 ppm recoverable threshold | **Yes** — or a mock mass |
-| **RAM** | **C** → nothing | No cited composition exists for a whole RAM module. Routing it anywhere would be a guess | No |
+| **RAM** | **B** → Servo B | 18 mg gold per module, cited per-piece (`RAM-AU-001`, Charles et al. 2017, n=12 DIMMs), so it needs no mass | No |
 | **Connector** | **A** → Servo A | Configured premium class, cited gold per piece | No |
 
 **Weigh the actual pieces you plan to demonstrate, and check them against the
@@ -326,11 +326,27 @@ real 10.8 g PCB did exactly that on 2026-08-27: correctly identified, correctly
 weighed, and refused because a 10.8 g board is not a plausible board. Bring one
 over 20 g if you want to see Bin B.
 
-**RAM going to C is the best thing in the demonstration.** It is not a
-failure — it is the system refusing to invent data it does not have, and
-saying exactly why: `UNKNOWN_MATERIAL`. Point at it deliberately. Note
-that the mock-mass fallback does not rescue it: a stand-in mass changes the
-arithmetic, never the evidence.
+**RAM routes to B, and this runbook used to say it routed to C.** It said the
+system had no cited composition for a whole module and refused rather than
+guessing. That stopped being true when `RAM-AU-001` was added: 18 mg of gold
+per module, measured by Charles et al. across twelve DIMMs, on a per-piece
+basis that needs no mass at all. Verified in simulation on 2026-08-27 — RAM
+routes to **B** on `B_PRECIOUS_FRACTION`. Do not say "watch it get refused".
+
+**The refusals are still the best thing in the demonstration** — there are just
+two real ones now, and both are worth showing:
+
+| Refusal | How to trigger it | What it proves |
+|---|---|---|
+| `UNKNOWN_CONFIDENCE` → C | Present a component badly — edge-on, moving, half out of frame — until confidence drops below the threshold | It will not act on a class it is not sure of |
+| `UNKNOWN_MASS_ANOMALY` → C | The 10.8 g PCB, or anything outside its class's mass window | A mass that cannot be right makes the identity suspect, and it says so rather than valuing it |
+
+`UNKNOWN_CLASS` is the third, but it needs an object of a class the model does
+not know — a heatsink. Bring one and it goes to C on `UNKNOWN_CLASS`, which is
+the cleanest refusal of the three: no class, no guess.
+
+In every case the mock-mass fallback does not rescue the item: a stand-in mass
+changes the arithmetic, never the evidence.
 
 **RAM is also the hardest class to get on camera.** The model scores 0.51 recall
 on it — the worst of the four — so a module flickers in and out where a CPU
@@ -369,10 +385,11 @@ decided that. Nobody typed it."*
 **2:20 — the servo.** The paddle strokes. *"That is a real command over real
 serial to a real Arduino."*
 
-**2:45 — RAM.** Run the RAM module. It goes to C, nothing moves. *"No cited
-composition exists for a whole DRAM module, so it refuses rather than guessing.
-Bin C needs no actuator — it is what happens when the software does nothing,
-which is also what happens if it crashes."*
+**2:45 — a refusal.** Present something badly, or use the 10.8 g PCB. It goes
+to C and nothing moves. *"It will not act on a class it is not sure of, or on a
+mass that cannot be right for that class. Bin C needs no actuator — it is what
+happens when the software does nothing, which is also what happens if it
+crashes."*
 
 **3:15 — the honest boundary.** *"No conveyor yet. I carried these between
 stages. Conveying and singulation are the next hardware stage — what is proven
@@ -420,10 +437,12 @@ No. It identifies the component and multiplies a published composition by a
 measured mass. That is an estimate of *contained* metal, labelled as one — not
 a recovery yield and not an assay.
 
-**"Why did the RAM get rejected?"**
-No source giving whole-module composition could be read in full, so the
-database has a stated gap rather than an invented number. The system refuses
-rather than guessing.
+**"Why did that one get rejected?"**
+One of three reasons, and the dashboard names which: the class was below the
+confidence threshold (`UNKNOWN_CONFIDENCE`), the mass was outside what is
+plausible for that class (`UNKNOWN_MASS_ANOMALY`), or the class has no cited
+composition in the database at all (`UNKNOWN_CLASS`). In none of them does the
+system substitute a guess — it routes to C and records the reason.
 
 **"Is the conveyor part built?"**
 No. I moved those by hand. Perception, measurement, material intelligence and
