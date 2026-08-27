@@ -75,6 +75,17 @@ conveyor:
     # predicts its own latency correctly.
     offset_ms: 0
     # MEASURE THIS: command sent -> paddle physically in the stream.
+    #
+    # Still UNMEASURED, and deliberately so: the number this field wants is a
+    # PHYSICAL observation of when the paddle enters the stream, and nobody has
+    # watched one with a timer.
+    #
+    # What HAS been measured, on the board, 2026-08-27, firmware 2026-08-27c:
+    # frame -> ACK is 1.711 s, and the firmware's own structure accounts for all
+    # of it - 500 ms settling at rest after attach, then holdMs (700 ms) with
+    # the paddle out, then 500 ms returning before the pin is released. So the
+    # servo BEGINS moving ~500 ms after the frame and is fully out perhaps
+    # 300 ms later. Record the observed figure here rather than that arithmetic.
     servo_actuation_delay_ms: UNMEASURED
 
   weight:
@@ -173,7 +184,13 @@ conveyor:
     camera_to_load_cell_cm: 25.0     # TEST
     camera_to_servo_a_cm: 60.0       # TEST
     camera_to_servo_b_cm: 90.0       # TEST
-    servo_actuation_delay_ms: 150    # TEST
+    # 500, not the 150 this used to hold. The belt above is a fiction, but the
+    # servo delay is a property of the REAL board and firmware, and the bench
+    # profile drives a real paddle with these numbers. Firmware 2026-08-27c
+    # settles at rest for 500 ms after attaching before it throws, measured as
+    # part of a 1.711 s frame-to-ACK, so a schedule built on 150 ms fired
+    # 350 ms - 3.5 cm at this belt speed - too late.
+    servo_actuation_delay_ms: 500    # TEST geometry, but a measured servo figure
     timing_offset_ms: 0              # TEST
 
   routing:
