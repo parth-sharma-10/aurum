@@ -279,6 +279,20 @@ class DemoSession:
         """
         if self.cfg["conveyor.runtime.simulation"]:
             return self._connect_simulated_board()
+        # Already up: say so and touch nothing. The dashboard calls this on
+        # every page load, and re-opening a healthy link is not free - the
+        # connect path drains the board's backlog first, and an open load cell
+        # holds DOUT LOW, so the sketch's waitReady returns instantly and it
+        # emits as fast as the port allows. Draining that backlog never
+        # finishes, so the second connect hangs and the boot screen sits on
+        # "Connecting..." in front of a machine that was already connected.
+        #
+        # Idempotent, not a reconnect: the loop's `_heal_link` owns recovering
+        # a link that actually dropped, and it can tell the difference.
+        if self.link is not None and self.link.connected:
+            self._ensure_actuator()
+            self.start_pan()
+            return {"connected": True, "already": True, **self.link.snapshot()}
         port = self.cfg["conveyor.arduino.port"]
         # "auto" means find it. The port name is not stable across reboots on
         # this bench - the same board has come up as usbmodem101 and as

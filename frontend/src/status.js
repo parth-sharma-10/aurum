@@ -460,6 +460,22 @@ export function machineState(state, startup) {
   // camera and board checks above exist to prevent, told by the one sensor
   // that drives everything.
   if (pan.state && pan.grams == null && pan.reason) {
+    // The fallback changes what this state MEANS. Without it a silent cell is a
+    // machine that will wait for ever; with it the camera starts the cycle and
+    // the chain runs to a real decision on a stand-in mass. Still worth saying
+    // loudly - every number downstream is an illustration - but "nothing can be
+    // sorted until it reads" is now false, and an operator who is told the
+    // machine is dead while it sorts stops believing the screen.
+    if (physical && pan.trigger_fallback_armed) {
+      return STATE(
+        "LOAD_CELL_OFFLINE_FALLBACK",
+        "Sorting on assumed weights",
+        pan.reason,
+        "Aurum is still sorting: the camera starts each cycle and every weight is a " +
+          "stand-in, not a measurement. Fix the load cell below to return to measured masses.",
+        "ready",
+      );
+    }
     return physical
       ? STATE(
           "LOAD_CELL_OFFLINE",
@@ -644,19 +660,32 @@ export function subsystems(state) {
           headline: "Not available",
           detail: "The Arduino is not connected, and the load cell is read through it.",
         }
-      : cellSilent
+      : cellSilent && panHealth.trigger_fallback_armed
         ? {
-            level: "fault",
-            headline: "No reading",
-            detail: panHealth.reason ?? "The load cell is not returning a usable mass.",
+            // WARNING, not FAULT, and the difference is not cosmetic: `worstSubsystem`
+            // skips warnings, so this no longer raises "Aurum cannot start automatic
+            // sorting" - which stopped being true when the fallback was armed. The
+            // machine sorts; it just cannot weigh. Saying it is stopped when it is
+            // running is the same class of lie as saying it is Ready when it is not.
+            level: "warning",
+            headline: "Assumed weights",
+            detail:
+              (panHealth.reason ?? "The load cell is not returning a usable mass.") +
+              " Sorting continues on stand-in masses, which are not measurements.",
           }
-        : cal.verified
-          ? { level: "ready", headline: "Ready", detail: "Calibration verified" }
-          : {
-              level: "warning",
-              headline: "Not calibrated",
-              detail: "Weights can be shown but not relied on.",
-            }),
+        : cellSilent
+          ? {
+              level: "fault",
+              headline: "No reading",
+              detail: panHealth.reason ?? "The load cell is not returning a usable mass.",
+            }
+          : cal.verified
+            ? { level: "ready", headline: "Ready", detail: "Calibration verified" }
+            : {
+                level: "warning",
+                headline: "Not calibrated",
+                detail: "Weights can be shown but not relied on.",
+              }),
     technical: [
       ["Live reading", panHealth.grams == null ? "none" : `${num(panHealth.grams, 1)} g`],
       ["Counts per gram", num(cal.counts_per_gram, 1)],
