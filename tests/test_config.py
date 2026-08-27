@@ -239,6 +239,27 @@ class TestNoCredentialsInVersionControl:
             assert value.strip() == "", f"env.example must not ship a value: {stripped!r}"
 
 
+class TestBeltDuty:
+    """A PWM of zero is a machine that can never weigh again.
+
+    `analogWrite(ENA, 0)` leaves the motor still while the firmware reports the
+    belt running, and the pan machine refuses to weigh while it does.
+    """
+
+    def test_zero_is_refused_rather_than_treated_as_stopped(self):
+        with pytest.raises(config.ConfigError) as excinfo:
+            config.load(environ={"AURUM_BELT_MOTOR_PWM": "0"})["conveyor.belt.motor.pwm"]
+        assert "between 1 and 255" in str(excinfo.value)
+
+    @pytest.mark.parametrize("bad", ["-1", "256"])
+    def test_a_duty_the_driver_cannot_take_is_refused(self, bad):
+        with pytest.raises(config.ConfigError):
+            config.load(environ={"AURUM_BELT_MOTOR_PWM": bad})["conveyor.belt.motor.pwm"]
+
+    def test_the_shipped_duty_is_usable(self):
+        assert config.load()["conveyor.belt.motor.pwm"] == 120
+
+
 class TestConfigObject:
     def test_membership_and_get_default(self, empty_dir):
         cfg = config.load(empty_dir, environ={})

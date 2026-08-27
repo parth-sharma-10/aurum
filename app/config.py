@@ -94,6 +94,20 @@ def _non_negative(value: Any, key: str) -> float:
     return out
 
 
+def _duty(value: Any, key: str) -> int:
+    """A PWM duty an L298N can actually turn a motor with: 1-255.
+
+    Zero is rejected rather than clamped. `analogWrite(ENA, 0)` leaves the
+    motor still while the firmware reports the belt running, and the pan
+    machine refuses to weigh while the belt runs - so a duty of zero is a
+    machine that can never weigh again. STOP is how you stop.
+    """
+    out = _int(value, key)
+    if not 1 <= out <= 255:
+        raise ConfigError(f"{key}: must be between 1 and 255, got {out}")
+    return out
+
+
 def _bool(value: Any, key: str) -> bool:
     if isinstance(value, bool):
         return value
@@ -255,7 +269,7 @@ SPEC: dict[str, tuple] = {
     # The L298N conveyor motor. OFF by default, like actuation: a belt keeps
     # acting after the software stops, so it is never enabled as a side effect.
     "conveyor.belt.motor.enabled": (_bool, False, "AURUM_BELT_MOTOR_ENABLED"),
-    "conveyor.belt.motor.pwm": (_int, 120, "AURUM_BELT_MOTOR_PWM"),
+    "conveyor.belt.motor.pwm": (_duty, 120, "AURUM_BELT_MOTOR_PWM"),
     "conveyor.belt.motor.keepalive_s": (_non_negative, 1.0, "AURUM_BELT_MOTOR_KEEPALIVE_S"),
     # Measured 430x noise degradation with the motor running; see the comment
     # in configs/conveyor.yaml. Configurable so a rig with a quiet drive can
