@@ -16,6 +16,8 @@ above is exercised rather than imitated.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from app import config
@@ -237,6 +239,95 @@ class TestDuplicateProtection:
         ctl.move("A", "AUR-ITEM-1")
         ctl.move("B", "AUR-ITEM-2")
         assert len(board.movements) == 2
+
+    def test_one_item_cannot_be_commanded_twice_by_two_threads(self):
+        """Every other guard in this class is single-threaded, which is how this
+        survived: the per-item check and the per-item claim are separate
+        statements with a whole serial write between them. Two threads both read
+        an empty `_by_item`, both pass, and one physical object gets TWO frames -
+        the second paddle stroke landing on whatever is behind it.
+
+        Reachable on the real machine: `_route` runs on the pan thread while the
+        developer fallback runs on the HTTP thread, and both reach `move()`.
+
+        The slow write is what makes the window wide enough to observe every
+        time rather than once in a hundred runs; the defect does not need it.
+        """
+        import threading
+
+        class SlowMoveBoard(FakeTransport):
+            def send(self, line):
+                if " MOVE " in line:
+                    time.sleep(0.1)
+                return super().send(line)
+
+        board = SlowMoveBoard(connected=True)
+        ctl = controller(board)
+        ready = threading.Barrier(2)
+
+        def go():
+            ready.wait(timeout=5)
+            ctl.move("A", "AUR-ITEM-1")
+
+        threads = [threading.Thread(target=go) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=20)
+
+        assert len(board.movements) == 1, f"one item produced {board.movements}"
+
+    def test_two_moves_do_not_eat_each_others_acknowledgement(self):
+        """The reply queue is shared and a reader discards ids that are not its
+        own, so two exchanges at once throw away each other's ACK. The loser
+        then latches ACK_TIMEOUT - stopping the machine - over a paddle the
+        board acknowledged in milliseconds.
+
+        This is the same defect already fixed for CFG, on the one path where a
+        paddle physically exists. Overlap is measured directly, because "both
+        happened to get an answer" is what it looks like when the race simply
+        did not fire this run.
+        """
+        import threading
+
+        overlap = []
+
+        class CountingBoard(FakeTransport):
+            def __init__(self, **kw):
+                super().__init__(**kw)
+                self.inflight = 0
+                self.guard = threading.Lock()
+
+            def send(self, line):
+                if " MOVE " in line:
+                    with self.guard:
+                        self.inflight += 1
+                        overlap.append(self.inflight)
+                    time.sleep(0.05)
+                    with self.guard:
+                        self.inflight -= 1
+                return super().send(line)
+
+        board = CountingBoard(connected=True)
+        ctl = controller(board, AURUM_ARDUINO_ACK_TIMEOUT_MS=500)
+        results = {}
+        ready = threading.Barrier(2)
+
+        def go(item):
+            ready.wait(timeout=5)
+            results[item] = ctl.move("A", item)
+
+        threads = [threading.Thread(target=go, args=(f"AUR-ITEM-{i}",)) for i in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=20)
+
+        assert max(overlap) == 1, f"two moves were in flight at once: {overlap}"
+        assert {k: v.state for k, v in results.items()} == {
+            "AUR-ITEM-0": CommandState.ACKED,
+            "AUR-ITEM-1": CommandState.ACKED,
+        }
 
 
 class TestLinkLifecycle:

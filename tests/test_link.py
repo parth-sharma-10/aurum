@@ -299,6 +299,22 @@ class TestViews:
             "hold_ms": 700,
         }
 
+    def test_a_configuration_that_succeeds_clears_the_earlier_failure(self):
+        """`last_error` is this method's own message, so a success must retract
+        it. Left standing, the snapshot reported `servo_config_applied: true`
+        beside "the board did not acknowledge the servo configuration" - which
+        is what the operator screen showed after every reconnect, because the
+        first CFG on a fresh port routinely loses its ACK to the boot backlog
+        and the second one works. Observed on the bench on 2026-08-27.
+        """
+        board = link()
+        assert board.configure_servos(0, 90, 700, budget_s=0.05) is False
+        assert board.last_error is not None
+        board._serial = AckingSerial()
+        assert board.configure_servos(0, 90, 700) is True
+        assert board.snapshot()["servo_config_applied"] is True
+        assert board.last_error is None
+
     def test_reconnecting_forgets_the_angles_the_board_no_longer_holds(self):
         board = link()
         board._serial = AckingSerial()

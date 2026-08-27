@@ -384,7 +384,16 @@ class BoardLink:
             if response is not None and response.command_id == command_id:
                 if response.verb == "ACK":
                     self.servo_config = (int(rest_deg), int(push_deg), int(hold_ms))
-                return response.verb == "ACK"
+                    # Cleared, because it is this method's own failure message
+                    # and this method has just succeeded. Leaving it made the
+                    # snapshot report `servo_config_applied: true` next to "the
+                    # board did not acknowledge the servo configuration" - which
+                    # is what the operator screen showed after every reconnect,
+                    # since the first CFG on a fresh port routinely loses its
+                    # ACK to the boot backlog and the second one works.
+                    self.last_error = None
+                    return True
+                return False
         self.last_error = f"the board did not acknowledge the servo configuration ({command_id})"
         return False
 
@@ -520,7 +529,15 @@ class _CommandView(Transport):
     name = "board-serial"
 
     def __init__(self, link: BoardLink) -> None:
+        super().__init__()
         self._link = link
+        # THE LINK'S OWN GATE, not a lock of this view's own. `configure_servos`
+        # is called on the BoardLink directly while `move` goes through this
+        # view, so two separate locks would leave a CFG from the API thread
+        # racing a MOVE from the pan thread - both draining the one response
+        # queue, each discarding the other's ACK. One lock is what makes "one
+        # exchange at a time on this port" true rather than nearly true.
+        self._exchange_lock = link._gate
 
     @property
     def state(self) -> LinkState:
