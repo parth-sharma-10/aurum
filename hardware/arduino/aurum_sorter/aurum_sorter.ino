@@ -97,7 +97,7 @@ const unsigned long READY_TIMEOUT_MS   = 500;
 // Printed at boot and blinked on the LED. Bump it whenever this file changes,
 // so "which build is on the board" is answerable from the wire and from across
 // the room instead of being inferred.
-#define FIRMWARE_BUILD "2026-08-27e"
+#define FIRMWARE_BUILD "2026-08-27f"
 
 // How long to give a paddle to physically reach an angle before the pins are
 // released. An MG995 is about 0.2 s per 60 degrees, so a full rest<->push
@@ -121,6 +121,15 @@ const unsigned long SERVO_TRAVEL_MS = 500;
 // frozen instead of blinking, which is the cheapest possible detector for the
 // hang seen on the bench (millis() stuck, the same counts repeating for ever).
 const unsigned long HEARTBEAT_MS = 1000;
+
+// The same LED blinks FAST while the belt is commanded on, so "is the Arduino
+// actually driving ENA?" is answerable by looking at the board rather than by
+// trusting an ACK. An ACK only proves the frame was parsed; this proves the
+// pins are being driven, which is the difference between a firmware fault and
+// a fault downstream of D5/D7/D8 - 12 V absent, ENA jumper fitted, a loose
+// OUT lead, or a dead driver. Added 2026-08-27 when the belt ACKed happily and
+// did not turn.
+const unsigned long BELT_BLINK_MS = 120;
 
 // BENCH/TEST defaults, overridden by the CFG frame at startup.
 int restAngle  = 0;
@@ -477,9 +486,10 @@ void loop() {
     Serial.println("AURUM/1 BELTSTOP WATCHDOG");
   }
 
-  // Idle heartbeat. `push()` drives the LED solid for the whole stroke and
-  // this only runs between strokes, so the two never fight over the pin.
-  if (millis() - lastBeat >= HEARTBEAT_MS) {
+  // Idle heartbeat, or the fast belt blink. `push()` drives the LED solid for
+  // the whole stroke and this only runs between strokes, so they never fight.
+  const unsigned long beat = beltRunning ? BELT_BLINK_MS : HEARTBEAT_MS;
+  if (millis() - lastBeat >= beat) {
     lastBeat = millis();
     beatOn = !beatOn;
     digitalWrite(PIN_LED, beatOn ? HIGH : LOW);
