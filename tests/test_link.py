@@ -357,12 +357,119 @@ class TestConfiguringABoardThatKeepsTalking:
         assert time.monotonic() - start < 1.0
         assert "did not acknowledge" in board.last_error
 
-    def test_a_dry_port_is_not_waited_out_for_the_whole_budget(self):
-        """`break` was there for a reason: a silent port must not burn 4 s."""
+    def test_a_quiet_port_is_waited_on_for_the_whole_budget(self):
+        """Changed deliberately. A quiet port is not a dead one, and `pump()`
+        cannot tell them apart — it returns False both when a read times out
+        between frames and when the port has gone. Giving up on the first
+        empty read is what capped the wait at one read timeout, and the first
+        CFG after a port open was measured at 1.310 s on the bench.
+
+        The cost is that a genuinely silent board burns the acknowledgement
+        budget, which is what a budget is for. A real `readline` blocks for
+        `timeout_s` each time, so this is paced, not spun."""
         board = link()
+        start = time.monotonic()
+        assert board.configure_servos(0, 90, 700, budget_s=0.4) is False
+        assert 0.4 <= time.monotonic() - start < 1.5
+
+    def test_a_port_that_dies_mid_wait_gives_up_at_once(self):
+        """The distinction that replaced it: DEGRADED is terminal, quiet is not."""
+        board = link(fail_on_read=True)
         start = time.monotonic()
         assert board.configure_servos(0, 90, 700, budget_s=5.0) is False
         assert time.monotonic() - start < 1.0
+        assert board.state is LinkState.DEGRADED
+
+
+class TestTheConfigureServosContract:
+    """The six cases the CFG path has to get right, after two hardware bugs
+    in it. Case 2 is the one that actually broke the backend."""
+
+    def serial_that_acks_after(self, quiet_reads: int, delay_s: float = 0.0):
+        """A board that streams weight, then answers the CFG N reads later."""
+
+        class Delayed(FakeSerial):
+            reads = 0
+            ack: str | None = None
+
+            def readline(self):
+                if delay_s:
+                    time.sleep(delay_s)
+                self.reads += 1
+                if self.ack is not None and self.reads >= quiet_reads:
+                    line, self.ack = self.ack, None
+                    return line.encode()
+                return b"W,1,10432,-261605,OK\n"
+
+            def write(self, data):
+                FakeSerial.write(self, data)
+                frame = data.decode().strip().split()
+                if len(frame) >= 6 and frame[1] == "CFG":
+                    self.ack = f"AURUM/1 ACK {frame[5]}\n"
+                return len(data)
+
+        return Delayed()
+
+    def board(self, serial, timeout_s: float = 0.02) -> BoardLink:
+        made = BoardLink("/dev/fake", timeout_s=timeout_s)
+        made._serial = serial
+        made._state = LinkState.CONNECTED
+        return made
+
+    def test_1_a_normal_cfg_is_acknowledged(self):
+        board = self.board(self.serial_that_acks_after(1))
+        assert board.configure_servos(0, 90, 700, budget_s=1.0) is True
+        assert board.servo_config == (0, 90, 700)
+
+    def test_2_a_slow_first_cfg_is_still_acknowledged(self):
+        """The bench case. Measured 1.310 s for the first CFG after a port
+        open against a 1.0 s `timeout_s`; every later one took 0.408 s. The
+        backend only ever does the first."""
+        board = self.board(self.serial_that_acks_after(30, delay_s=0.005))
+        assert board.configure_servos(0, 90, 700, budget_s=2.0) is True
+
+    def test_3_a_board_that_never_answers_times_out(self):
+        """Streaming happily, deaf to AURUM/1 — the wrong sketch, or none."""
+
+        class Deaf(FakeSerial):
+            def readline(self):
+                return b"W,1,10432,-261605,OK\n"
+
+        board = self.board(Deaf())
+        start = time.monotonic()
+        assert board.configure_servos(0, 90, 700, budget_s=0.3) is False
+        assert "did not acknowledge" in board.last_error
+        assert time.monotonic() - start < 1.5
+
+    def test_4_a_dead_port_fails_without_burning_the_budget(self):
+        board = self.board(FakeSerial(fail_on_read=True))
+        start = time.monotonic()
+        assert board.configure_servos(0, 90, 700, budget_s=5.0) is False
+        assert time.monotonic() - start < 1.0
+
+    def test_5_a_malformed_reply_is_never_read_as_an_acknowledgement(self):
+        class Garbage(FakeSerial):
+            def write(self, data):
+                FakeSerial.write(self, data)
+                # Right shape, wrong protocol version, and a bare ACK with no id.
+                self.lines += ["AURUM/2 ACK CMD-1\n", "AURUM/1 ACK\n", "ACK\n"]
+                return len(data)
+
+        board = self.board(Garbage())
+        assert board.configure_servos(0, 90, 700, budget_s=0.3) is False
+        assert board.servo_config is None
+
+    def test_6_an_ack_arriving_after_many_weight_frames_still_counts(self):
+        board = self.board(self.serial_that_acks_after(50))
+        assert board.configure_servos(0, 90, 700, budget_s=1.0) is True
+        # The weight frames read while waiting are kept, not discarded.
+        assert board.next_weight().raw_counts == -261605
+
+    def test_an_unwritable_port_fails_before_it_waits_at_all(self):
+        board = self.board(FakeSerial(fail_on_write=True))
+        start = time.monotonic()
+        assert board.configure_servos(0, 90, 700, budget_s=5.0) is False
+        assert time.monotonic() - start < 0.2
 
 
 class TestFailure:
@@ -407,3 +514,44 @@ class TestFailure:
         assert snapshot["connected"] is True
         assert snapshot["baudrate"] == 115200
         assert snapshot["queued_weight_frames"] == 0
+
+
+class TestReopeningADroppedLink:
+    """The bench board re-enumerates on USB every few minutes, leaving this
+    process holding a descriptor that will never yield another byte. Reopening
+    is the only way back."""
+
+    def test_a_healthy_link_is_never_reopened(self):
+        """Reopening resets the board. Doing that to a working link would park
+        the paddles and drop the weight stream for no reason."""
+        board = link(["W,1,1,-100,OK\n"])
+        port = board._serial
+        assert board.reconnect() is True
+        assert board._serial is port
+        assert port.closed is False
+
+    def test_a_degraded_link_is_closed_before_it_is_reopened(self):
+        board = link(fail_on_read=True)
+        board.pump()
+        assert board.state is LinkState.DEGRADED
+        port = board._serial
+        board.reconnect()  # connect() needs a real device, so it fails
+        assert port.closed is True, "the dead descriptor must not be leaked"
+
+    def test_reopening_a_port_that_is_gone_reports_failure(self):
+        board = link(fail_on_read=True)
+        board.pump()
+        assert board.reconnect() is False
+        assert board.connected is False
+
+    def test_the_angles_are_forgotten_when_the_board_drops(self):
+        """The board reboots when it re-enumerates, so whatever it acknowledged
+        before is gone. Reporting the old ones would be a stale claim."""
+        board = link()
+        board._serial = AckingSerial()
+        board.configure_servos(0, 90, 700)
+        assert board.snapshot()["servo_config_applied"] is True
+        board._serial = FakeSerial(fail_on_read=True)
+        board.pump()
+        board.reconnect()
+        assert board.snapshot()["servo_config_applied"] is False

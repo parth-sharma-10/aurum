@@ -52,10 +52,24 @@ const uint8_t PIN_DOUT   = 2;
 const uint8_t PIN_SCK    = 3;
 const uint8_t PIN_SERVO_A = 9;
 const uint8_t PIN_SERVO_B = 10;
+// Status LED. Lit while a paddle is mid-stroke, so the one moment the machine
+// is physically committed is visible from across a room without reading a
+// serial log. Also blinks a signature at boot - see setup().
+const uint8_t PIN_LED    = 6;
 
 const uint8_t  PROTOCOL_VERSION   = 1;
 const unsigned long SAMPLE_INTERVAL_MS = 100;   // 10 Hz, the HX711 rate
 const unsigned long READY_TIMEOUT_MS   = 500;
+
+// Printed at boot and blinked on the LED. Bump it whenever this file changes,
+// so "which build is on the board" is answerable from the wire and from across
+// the room instead of being inferred.
+#define FIRMWARE_BUILD "2026-08-26"
+
+// Heartbeat while idle. A board that has stopped executing keeps its LED
+// frozen instead of blinking, which is the cheapest possible detector for the
+// hang seen on the bench (millis() stuck, the same counts repeating for ever).
+const unsigned long HEARTBEAT_MS = 1000;
 
 // BENCH/TEST defaults, overridden by the CFG frame at startup.
 int restAngle  = 0;
@@ -93,6 +107,9 @@ void setup() {
   pinMode(PIN_SCK, OUTPUT);
   digitalWrite(PIN_SCK, LOW);
 
+  pinMode(PIN_LED, OUTPUT);
+  digitalWrite(PIN_LED, LOW);
+
   // Attach and park at rest before anything else, so a reset cannot leave a
   // paddle out in the stream.
   servoA.attach(PIN_SERVO_A);
@@ -100,6 +117,21 @@ void setup() {
   servoA.write(restAngle);
   servoB.write(restAngle);
   inputLine.reserve(64);
+
+  // Three quick blinks, then the banner. Both exist for the same reason: the
+  // board on the bench spent weeks running a build that was not this file and
+  // nothing said so. A boot signature you can SEE, plus one you can grep,
+  // means "did the reflash take?" stops being a guess.
+  for (uint8_t i = 0; i < 3; i++) {
+    digitalWrite(PIN_LED, HIGH);
+    delay(80);
+    digitalWrite(PIN_LED, LOW);
+    delay(80);
+  }
+  Serial.print("AURUM/1 BOOT ");
+  Serial.print(FIRMWARE_BUILD);
+  Serial.print(" rest=");
+  Serial.println(restAngle);
 }
 
 // ---------------------------------------------------------------- HX711
@@ -159,9 +191,11 @@ void err(const String &id, const char *code) {
 // Blocking on purpose. One paddle moves at a time, weight sampling pauses for
 // holdMs, and there is nothing else this board should be doing meanwhile.
 void push(Servo &servo) {
+  digitalWrite(PIN_LED, HIGH);    // lit for exactly as long as the paddle is out
   servo.write(pushAngle);
   delay(holdMs);
   servo.write(restAngle);
+  digitalWrite(PIN_LED, LOW);
 }
 
 String field(const String &line, uint8_t index) {
@@ -219,6 +253,8 @@ void handleCommand(const String &line) {
 // ------------------------------------------------------------------ loop
 
 unsigned long lastSample = 0;
+unsigned long lastBeat = 0;
+bool beatOn = false;
 
 void loop() {
   while (Serial.available()) {
@@ -230,6 +266,14 @@ void loop() {
     } else if (c != '\r' && inputLine.length() < 60) {
       inputLine += c;
     }
+  }
+
+  // Idle heartbeat. `push()` drives the LED solid for the whole stroke and
+  // this only runs between strokes, so the two never fight over the pin.
+  if (millis() - lastBeat >= HEARTBEAT_MS) {
+    lastBeat = millis();
+    beatOn = !beatOn;
+    digitalWrite(PIN_LED, beatOn ? HIGH : LOW);
   }
 
   if (millis() - lastSample >= SAMPLE_INTERVAL_MS) {

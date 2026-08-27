@@ -256,6 +256,8 @@ class DemoSession:
         self._classes: set[str] | None = None
         #: How far through `app.pipeline.scripted.SCRIPT` a camera-less run is.
         self.scripted_index = 0
+        #: When `_heal_link` last tried to reopen a dropped port.
+        self._last_reconnect = 0.0
 
     # -- hardware ----------------------------------------------------------
     def connect_board(self) -> dict:
@@ -425,6 +427,7 @@ class DemoSession:
                     )
                     time.sleep(interval)
                     continue
+            self._heal_link()
             try:
                 self.drain_routes()
             except Exception as exc:  # the belt must not take the loop down
@@ -433,6 +436,44 @@ class DemoSession:
             # through work that has already taken its own time.
             if state in (PanState.WAITING_FOR_OBJECT, PanState.WAITING_FOR_CLEAR):
                 time.sleep(interval)
+
+    #: Don't hammer a port that is not coming back. The board takes ~2 s to
+    #: boot after a reopen anyway, so trying oftener than this cannot help.
+    RECONNECT_INTERVAL_S = 3.0
+
+    def _heal_link(self) -> None:
+        """Reopen a link the board dropped, so the machine carries on by itself.
+
+        The bench board re-enumerates on USB every few minutes — three times in
+        one hour on 2026-08-26 — and leaves this process holding a descriptor
+        that will never yield another byte. Without this the run is over until
+        somebody notices and clicks.
+
+        It only reopens the port. It does NOT clear a latched fault: if a MOVE
+        went unacknowledged, a paddle may be half out and that still needs a
+        human. Reconnecting and unlatching are different decisions, and only
+        one of them is safe to automate.
+        """
+        if self.link is None or self.link.connected:
+            return
+        now = time.monotonic()
+        if now - self._last_reconnect < self.RECONNECT_INTERVAL_S:
+            return
+        self._last_reconnect = now
+        if self.link.reconnect():
+            self.errors.record(
+                ErrorCode.ARDUINO_ERROR,
+                "board",
+                f"The link dropped and was reopened automatically ({self.link.port}). "
+                "Any latched fault is left latched.",
+                port=self.link.port,
+            )
+            self.link.configure_servos(
+                self.cfg["conveyor.servo.rest_angle_deg"],
+                self.cfg["conveyor.servo.push_angle_deg"],
+                self.cfg["conveyor.servo.actuation_ms"],
+                budget_s=self.cfg["conveyor.arduino.ack_timeout_ms"] / 1000,
+            )
 
     # -- camera ------------------------------------------------------------
     def start_camera(self, mode: str = "webcam", path: str | None = None) -> dict:

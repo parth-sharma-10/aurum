@@ -88,13 +88,19 @@ class TestTheDemonstrationProfile:
 
 
 class TestTheBenchProfile:
-    """`configs/bench-profile.sh` drives a real board with a simulated belt.
+    """`configs/bench-profile.sh` drives a real board through the belt model.
 
-    The property that matters, and the one that is easy to get wrong: it must
-    reach the serial port WITHOUT falling back to the real geometry. Turning
-    simulation off is what reaches the board; leaving the belt on SIMULATION is
-    what keeps a route schedulable. Get only the first right and the servo
-    never fires, because an UNMEASURED machine refuses to schedule at all.
+    The demonstration is the whole chain: the cell measures, the engine decides
+    a bin, the scheduler works out when the item would reach that bin's paddle,
+    and the servo fires at that moment. The wait is the feature.
+
+    Two settings make it work and both are easy to get backwards. Leaving
+    `AURUM_SIMULATION` unset is what reaches the serial port. `CONVEYOR_MODE`
+    on SIMULATION is what makes a route schedulable, because the real geometry
+    block is UNMEASURED and an unmeasured machine refuses to schedule rather
+    than guessing. `DEMO_MOCK_MASS` off is what puts the load cell in the loop
+    at all — with a stand-in mass the pan never sees an arrival and nothing is
+    ever triggered.
     """
 
     PROFILE = config.CONFIG_DIR / "bench-profile.sh"
@@ -115,14 +121,23 @@ class TestTheBenchProfile:
         """Setting it would silently take the board back off the wire."""
         assert "AURUM_SIMULATION" not in self.environ()
 
-    def test_it_still_uses_the_simulated_belt(self):
-        assert Conveyor.from_config(cfg(**self.environ())).mode is ConveyorMode.SIMULATION
+    def test_it_runs_the_belt_timing_model(self):
+        """The wait between decision and paddle is the demonstration."""
+        belt = Conveyor.from_config(cfg(**self.environ()))
+        assert belt.mode is ConveyorMode.SIMULATION
+        assert belt.present is True
 
-    def test_the_belt_is_still_never_presented_as_measured(self):
+    def test_the_belt_is_never_presented_as_measured(self):
         """Only the servo command is real. Every derived figure says so."""
         speed = Conveyor.from_config(cfg(**self.environ())).speed()
         assert speed.cm_s == pytest.approx(10.0)
         assert speed.status is SpeedStatus.SIMULATED
+
+    def test_the_load_cell_drives_the_cycle_not_a_stand_in_mass(self):
+        """With a stand-in mass the pan never sees an arrival, so nothing is
+        ever triggered and the servo never fires on its own — which is exactly
+        what the bench hit before this was turned off."""
+        assert self.environ()["AURUM_DEMO_MOCK_MASS"] == "false"
 
     def test_it_names_a_port_and_enables_actuation(self):
         env = self.environ()

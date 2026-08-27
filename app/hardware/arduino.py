@@ -382,7 +382,19 @@ class ArduinoController:
                 f"{getattr(self.transport, 'last_error', '') or ''}".strip()
             )
             command.settled_at = now
-            self.fault.latch(FaultCode.ARDUINO_DISCONNECTED, command.reason, item_id, command_id)
+            # Deliberately NOT latched. Every other fault here stops the
+            # machine because a paddle may be somewhere nobody knows — but
+            # this branch returns BEFORE `build_frame` below, so no frame was
+            # written and no paddle was asked to move. The physical state is
+            # known: unchanged.
+            #
+            # Latching it meant a board that dropped off USB while idle bricked
+            # the machine until a human pressed reset, which on a bench where
+            # the link drops every few minutes is a stopped demonstration
+            # rather than a safety measure. The item still fails, and says so.
+            #
+            # ACK_TIMEOUT below is the opposite case and still latches: there
+            # the frame WAS written and the paddle may be half out.
             return command
 
         frame = build_frame(target, item_id, command_id)

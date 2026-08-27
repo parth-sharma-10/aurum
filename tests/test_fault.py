@@ -90,11 +90,31 @@ class TestWhatLatchesAndWhatDoesNot:
         assert ctl.fault.current.code is FaultCode.ACK_TIMEOUT
 
     def test_a_write_failure_latches(self):
+        """A write that fails may have put part of a frame on the wire, so what
+        the board did with it is unknown. That still latches."""
+
+        class WriteFails(FakeTransport):
+            def send(self, line):
+                self.last_error = "the write failed"
+                return False
+
+        ctl = controller(WriteFails(connected=True))
+        assert ctl.move("A", "AUR-ITEM-1").error_code == "WRITE_FAILED"
+        assert ctl.fault.current.code is FaultCode.WRITE_FAILED
+
+    def test_a_link_that_is_already_down_does_not_latch(self):
+        """Changed 2026-08-26. This case returns before `build_frame`, so
+        nothing was written and no paddle was asked to move — the physical
+        state is known, and known states do not latch. Latching it meant a
+        board that dropped off USB while idle stopped the machine until a human
+        clicked, which on a bench where the link drops every few minutes is a
+        halted demonstration rather than a safety measure."""
         board = FakeTransport(connected=True)
         ctl = controller(board)
         board.unplug()
         assert ctl.move("A", "AUR-ITEM-1").error_code == "NOT_CONNECTED"
-        assert ctl.fault.active
+        assert board.sent == []
+        assert ctl.fault.active is False
 
     def test_a_board_error_latches(self):
         ctl = controller(FakeTransport(connected=True, fail_with="JAMMED"))

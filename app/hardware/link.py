@@ -118,6 +118,28 @@ class BoardLink:
 
     close = disconnect
 
+    def reconnect(self) -> bool:
+        """Close a broken link and open it again. True if the board is back.
+
+        The bench board drops off USB and re-enumerates under the same device
+        node, which leaves this object holding a file descriptor that will
+        never yield another byte. Reopening is the only way back, and doing it
+        automatically is the difference between a demonstration that pauses for
+        a few seconds and one that stops until somebody notices.
+
+        Only ever called for a link that is already DEGRADED or DISCONNECTED —
+        reopening a healthy port would reset the board for no reason.
+        """
+        if self._state is LinkState.CONNECTED:
+            return True
+        # Through `disconnect` rather than closing the descriptor here: it also
+        # drops the queued frames and forgets the acknowledged servo angles,
+        # both of which belong to a board that has since rebooted. Reporting
+        # the old angles after a re-enumeration would be a stale claim, and the
+        # caller reapplies them once the link is back.
+        self.disconnect()
+        return self.connect() is LinkState.CONNECTED
+
     def configure_servos(
         self, rest_deg: float, push_deg: float, hold_ms: float, budget_s: float = 4.0
     ) -> bool:
@@ -226,10 +248,22 @@ class BoardLink:
     # for a paddle that may already be half out could not fire on the one path
     # where a paddle exists.
     def _next(self, queue: deque, budget_s: float):
-        """The next queued frame of this type, or None once the budget is spent."""
+        """The next queued frame of this type, or None once the budget is spent.
+
+        A quiet port is not a dead one, and `pump()` cannot tell them apart:
+        it returns False both when a read times out with the board simply
+        between frames, and when the port has gone. Treating the first as
+        terminal is what capped `configure_servos` at one read timeout — and
+        on the bench the first CFG after a port open takes 1.310 s, which is
+        longer than one.
+
+        So only two things end the wait: the budget, or the link actually
+        leaving CONNECTED (which `pump()` sets on a read failure). A quiet
+        port is paced by `readline`'s own timeout, not spun on.
+        """
         deadline = time.monotonic() + budget_s
-        while not queue and self.pump():
-            if time.monotonic() >= deadline:
+        while not queue and time.monotonic() < deadline:
+            if not self.pump() and self._state is not LinkState.CONNECTED:
                 break
         return queue.popleft() if queue else None
 

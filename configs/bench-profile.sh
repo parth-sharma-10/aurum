@@ -33,8 +33,20 @@
 #
 # This line is load-bearing and not interchangeable with AURUM_SIMULATION. The
 # real geometry block is UNMEASURED, and an unmeasured machine refuses to
-# schedule rather than guessing — so without a SIMULATION belt no route is ever
-# scheduled and the servo never fires, board or no board.
+# schedule rather than guessing.
+#
+# SIMULATION, because the demonstration IS the timing model. The paddle is
+# meant to fire when the item would have reached it: distance to the bin
+# divided by the belt speed, less the servo's own actuation delay. That wait
+# is the feature, not latency to be removed - `Upcoming` counts it down and
+# the servo fires at the end of it.
+#
+# Every figure derived from it is stamped SIMULATED all the way to the EPR
+# ledger, because the belt is a model and there is no belt on this bench.
+#
+# NONE removes the scheduler entirely and fires the paddle the instant the bin
+# is decided. Correct for a bench where the operator carries the object, and
+# wrong for showing the conveyor model.
 AURUM_CONVEYOR_MODE=SIMULATION
 
 # 10 cm/s = 0.10 m/s. Stated rather than defaulted, so the bench says out loud
@@ -50,19 +62,23 @@ AURUM_SIM_BELT_SPEED_CM_S=10.0
 # serial port and the ACK comes back from an actual Arduino.
 
 # The attached board. `ls /dev/cu.usbmodem*` to find yours; never hardcode a
-# port you have not looked up.
-AURUM_ARDUINO_PORT=/dev/cu.usbmodem101
+# port you have not looked up — and this line is the proof, because it said
+# usbmodem101 on 2026-08-26 while the board was answering on usbmodem1101. The
+# number follows the USB location, so it changes when the board moves hub or
+# socket. Check it every session; a stale value here fails as "could not open".
+AURUM_ARDUINO_PORT=/dev/cu.usbmodem1101
 
 # Actuation ships OFF. Without this every move() returns ACTUATION_DISABLED
 # and no frame is written, which looks exactly like a dead servo.
 AURUM_ARDUINO_ENABLED=true
 
-# STALE AS WRITTEN: the cell is no longer bypassed. The mounting was corrected
-# on 2026-08-26 and it now carries a calibration verified against a second
-# known mass (docs/hardware.md). Leave this true only to run the servo half of
-# the bench without touching the cell — an item that cannot be weighed then
-# gets a per-class stand-in mass (CPU 25 g, PCB 180 g, RAM 30 g, Connector 5 g),
-# SIMULATED and never `usable`, and every figure derived from it says so.
-# Set it false to exercise the real cell. Calibrating is still not a
-# prerequisite for moving a servo.
-AURUM_DEMO_MOCK_MASS=true
+# FALSE, so the pan drives the machine. The cell is mounted and carries a
+# calibration verified against a second known mass (392.2167 counts/g,
+# docs/hardware.md), and with a stand-in mass in play the load cell is not in
+# the loop at all: `PanMachine` never sees an arrival, so nothing is ever
+# triggered and the servo never fires on its own. Mock mass is for a bench
+# with no working cell.
+#
+# Set it true to run the vision and decision halves without touching the cell.
+# Every figure derived from a stand-in is stamped SIMULATED and never `usable`.
+AURUM_DEMO_MOCK_MASS=false

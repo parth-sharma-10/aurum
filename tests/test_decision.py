@@ -29,6 +29,13 @@ from app.valuation.prices import PriceService, StaticProvider, UnavailableProvid
 
 NOW = datetime(2026, 8, 22, 12, 0, 0, tzinfo=UTC)
 
+# Read from configuration rather than written down here. These are tuning
+# values - they were lowered on 2026-08-26 when a real component in plain view
+# read 0.43 and was refused - and a boundary test that hardcodes them tests the
+# number somebody typed rather than the boundary the engine actually applies.
+A_MIN = config.load()["grading.bin_a.minimum_confidence"]
+B_MIN = config.load()["grading.bin_b.minimum_confidence"]
+
 # CPU-AU-001 gives 4.71 mg Au per piece = 0.00471 g. Choosing the mass sets the
 # fraction exactly, which is how the boundary cases below stay unambiguous
 # without inventing a single number.
@@ -170,7 +177,11 @@ class TestBinB:
         assert result.reason_code is ReasonCode.B_PRECIOUS_FRACTION
 
     def test_a_cpu_below_the_premium_confidence_can_still_reach_b(self):
-        result = judge("CPU", 0.65, measured(42.7))
+        """Between the two gates: too weak for the premium stream, strong
+        enough for the evidence-led one. Derived, so lowering either gate
+        cannot silently turn this into a test of nothing."""
+        assert B_MIN < A_MIN, "the premium gate must be the stricter one"
+        result = judge("CPU", (A_MIN + B_MIN) / 2, measured(42.7))
         assert result.decision is Bin.B
 
     def test_base_metal_value_justifies_b_when_the_fraction_does_not(self):
@@ -311,14 +322,14 @@ class TestBoundaries:
 
     @pytest.mark.parametrize(
         ("confidence", "expected"),
-        [(0.75 - 1e-9, Bin.B), (0.75, Bin.A), (0.75 + 1e-9, Bin.A)],
+        [(A_MIN - 1e-9, Bin.B), (A_MIN, Bin.A), (A_MIN + 1e-9, Bin.A)],
     )
     def test_the_bin_a_confidence_boundary(self, confidence, expected):
         assert judge("CPU", confidence, measured(42.7)).decision is expected
 
     @pytest.mark.parametrize(
         ("confidence", "expected"),
-        [(0.60 - 1e-9, Bin.UNKNOWN), (0.60, Bin.B), (0.60 + 1e-9, Bin.B)],
+        [(B_MIN - 1e-9, Bin.UNKNOWN), (B_MIN, Bin.B), (B_MIN + 1e-9, Bin.B)],
     )
     def test_the_bin_b_confidence_boundary(self, confidence, expected):
         """Below the B threshold Aurum cannot judge the item, so UNKNOWN.
@@ -496,8 +507,14 @@ class TestExplainability:
             assert field in record, field
 
     def test_the_confidence_threshold_actually_used_is_recorded(self):
-        assert judge("CPU", 0.91, measured(42.7)).signals["confidence_threshold_applied"] == 0.75
-        assert judge("CPU", 0.65, measured(42.7)).signals["confidence_threshold_applied"] == 0.60
+        assert (
+            judge("CPU", A_MIN + 0.05, measured(42.7)).signals["confidence_threshold_applied"]
+            == A_MIN
+        )
+        assert (
+            judge("CPU", B_MIN + 0.01, measured(42.7)).signals["confidence_threshold_applied"]
+            == B_MIN
+        )
 
     def test_thresholds_are_labelled_as_approximations(self):
         note = judge("CPU", 0.91, measured(42.7)).as_dict()["threshold_note"]

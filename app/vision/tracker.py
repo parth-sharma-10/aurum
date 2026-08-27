@@ -149,9 +149,30 @@ class TrackedItem:
         """
         return self.class_counts.most_common(1)[0][0] if self.class_counts else None
 
+    #: How many recent observations `confidence` averages over. A lifetime mean
+    #: was wrong for the rig this runs on: the load cell sits UNDER the camera,
+    #: so the tracker starts observing while the object is still being placed —
+    #: a hand over it, moving, half out of frame. Those frames score badly, and
+    #: because the mean never forgot them a component that then sat perfectly
+    #: still and read 0.9 could keep a lifetime mean of 0.43 and be refused as
+    #: UNKNOWN. A RAM did exactly that on 2026-08-26.
+    #:
+    #: For a stationary object the recent view IS the evidence; the frames from
+    #: while it was being put down are not. `max_confidence` and the full list
+    #: are still kept, so nothing is lost.
+    CONFIDENCE_WINDOW = 15
+
     @property
     def confidence(self) -> float | None:
-        """Mean detection confidence. The figure the decision engine reads."""
+        """Mean confidence over the recent window. The decision engine reads this."""
+        if not self.confidences:
+            return None
+        window = self.confidences[-self.CONFIDENCE_WINDOW :]
+        return sum(window) / len(window)
+
+    @property
+    def lifetime_confidence(self) -> float | None:
+        """Mean over every observation, including placement. Kept for the record."""
         if not self.confidences:
             return None
         return sum(self.confidences) / len(self.confidences)
@@ -198,7 +219,11 @@ class TrackedItem:
             "confidence": self.confidence,
             "latest_confidence": self.latest_confidence,
             "max_confidence": self.max_confidence,
-            "confidence_basis": "mean over all observations",
+            "lifetime_confidence": self.lifetime_confidence,
+            "confidence_basis": (
+                f"mean over the last {self.CONFIDENCE_WINDOW} observations - the object as "
+                "it now sits, not as it was being put down"
+            ),
             "detection_count": self.detection_count,
             "frames_since_seen": self.frames_since_seen,
             "first_seen": self.first_seen,

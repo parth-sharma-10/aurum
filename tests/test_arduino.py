@@ -259,20 +259,37 @@ class TestLinkLifecycle:
         assert ctl.ping() is False
 
     def test_reconnecting_alone_does_not_allow_a_later_command(self):
-        """Changed 2026-08-26 by app/hardware/fault.py, deliberately.
+        """A frame that went out unacknowledged latches, and a reconnect is not
+        somebody having looked at the rig.
 
-        This used to assert that a reconnect was enough. It is not: a link that
-        dropped mid-command left the paddle in a position nobody knows, and the
-        latch exists so that the next item is not commanded into that. The
-        cable coming back is not somebody having looked at the rig.
+        Re-pointed 2026-08-26. This used to unplug the board and call `move`,
+        which is refused BEFORE `build_frame` — so it wrote nothing, no paddle
+        could be anywhere unexpected, and it was asserting the latch for a case
+        that never needed one. The dangerous case is this one: the frame was
+        written and the board never answered.
         """
+        board = FakeTransport(connected=True, silent=True)
+        ctl = controller(board, AURUM_ARDUINO_ACK_TIMEOUT_MS=20)
+        assert ctl.move("A", "AUR-ITEM-1").state is CommandState.TIMED_OUT
+        assert board.sent, "the frame must actually have gone out"
+        ctl.connect()
+        assert ctl.move("A", "AUR-ITEM-2").error_code == "HARDWARE_FAULT"
+
+    def test_a_link_that_is_already_down_refuses_without_latching(self):
+        """The other half of the same rule, and the reason a dropping board no
+        longer stops the machine. `move` returns before `build_frame` when the
+        link is down, so nothing was written and no paddle was asked to move:
+        the physical state is known, and known states do not latch."""
         board = FakeTransport(connected=True)
         ctl = controller(board)
         board.unplug()
-        assert ctl.move("A", "AUR-ITEM-1").error_code == "NOT_CONNECTED"
+        command = ctl.move("A", "AUR-ITEM-1")
+        assert command.error_code == "NOT_CONNECTED"
+        assert board.sent == [], "nothing may be written to a link that is down"
+        assert ctl.fault.active is False
+        # ...so once the board is back, the next item goes through by itself.
         ctl.connect()
-        assert ctl.move("A", "AUR-ITEM-2").error_code == "HARDWARE_FAULT"
-        assert board.connects >= 1
+        assert ctl.move("A", "AUR-ITEM-2").state is CommandState.ACKED
 
     def test_reconnecting_and_resetting_the_fault_allows_a_later_command(self):
         board = FakeTransport(connected=True)
