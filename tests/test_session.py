@@ -66,11 +66,17 @@ class FakeCell:
         self.connected = True
         self.grams = grams
         self.last_error = None
+        self.reads = 0
 
     def read(self):
         if self.grams is None:
             return None
-        return RawSample(raw_counts=TARE_COUNTS + self.grams * COUNTS_PER_GRAM)
+        self.reads += 1
+        # One count of wander, centred, because a converting cell never repeats
+        # a value bit-for-bit - `app.weight.repeats_exactly` refuses a frozen
+        # series as the hardware fault it is. Far below any tolerance here.
+        wander = (self.reads % 3) - 1
+        return RawSample(raw_counts=TARE_COUNTS + self.grams * COUNTS_PER_GRAM + wander)
 
     def close(self):
         self.connected = False

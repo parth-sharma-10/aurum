@@ -34,7 +34,7 @@ import time
 from collections import deque
 
 from app.hardware.transport import LinkState, Transport
-from app.weight import RawSample, parse_weight_line
+from app.weight import RawSample, StuckWatch, parse_weight_line
 
 #: How many unread frames of each type to keep. The weight stream runs at
 #: 10 Hz and a stale sample is worse than an absent one, so the queue is short
@@ -564,17 +564,27 @@ class _WeightView:
 
     def __init__(self, link: BoardLink) -> None:
         self._link = link
+        # A frozen converter is not a link fault: frames keep arriving and
+        # `connected` stays true, which is precisely why it needs catching
+        # here. This is the reader the RUNNING machine uses - the pan machine
+        # takes one sample per poll from it - so a rule applied only in
+        # `WeightSensor` would never see the reading the operator is shown.
+        self._stuck = StuckWatch()
 
     @property
     def connected(self) -> bool:
         return self._link.connected
 
     @property
+    def stuck(self) -> bool:
+        return self._stuck.error is not None
+
+    @property
     def last_error(self) -> str | None:
-        return self._link.last_error
+        return self._stuck.error or self._link.last_error
 
     def read(self) -> RawSample | None:
-        return self._link.next_weight()
+        return self._stuck.accept(self._link.next_weight())
 
     def close(self) -> None:
         self._link.disconnect()

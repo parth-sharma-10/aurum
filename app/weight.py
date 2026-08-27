@@ -14,6 +14,7 @@ import math
 import os
 import statistics
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -210,6 +211,126 @@ PROTOCOL_VERSION = 1
 HX711_MIN_COUNTS = -(2**23)
 HX711_MAX_COUNTS = 2**23 - 1
 PROTOCOL = "W,<version>,<board_millis>,<raw_counts>,<status>"
+
+#: How many consecutive bit-for-bit identical raw counts mean the converter has
+#: stopped converting rather than the pan being still.
+#:
+#: The rail bounds above refuse a count that is outside the converter's range.
+#: They cannot refuse one INSIDE it, and a dead converter does not have to rail:
+#: measured on this bench on 2026-08-27, an HX711 with DOUT held LOW clocked in
+#: 24 zero bits and emitted `W,1,<millis>,0,OK` at 8 Hz, 121 frames of 121. A
+#: verified 392.2167 counts/g and a -263078.25 tare turned that into a steady
+#: 670.7 g on an empty pan, and every layer above believed it: it settles with a
+#: spread of exactly 0.000 g, so it earns MEASURED, the one status a
+#: concentration calculation is allowed to consume.
+#:
+#: What separates a dead converter from a still pan is not the value, it is the
+#: repetition. This bench measures 33 counts of stdev with the belt stopped, so
+#: a live bridge never repeats a 24-bit value even twice; eight in a row is
+#: about a second of wire and cannot happen while the cell is converting.
+#:
+#: A single sample cannot carry this, which is why it lives here and not in
+#: `parse_weight_line` beside the rail bounds: only a run shows it.
+#:
+#: FIVE, matching the shortest run any consumer judges: a 500 ms stability
+#: window fed by a 10 Hz cell is five samples, so a longer rule would let a
+#: settled reading through before it could fire. Raise it if the cell is ever
+#: run slower than the window.
+STUCK_RUN_SAMPLES = 5
+
+#: How close to digital zero a whole run must sit before the input is called
+#: open, in raw counts.
+#:
+#: A strain-gauge bridge is never balanced and an amplifier has its own offset,
+#: so a CONVERTING HX711 rests at a large count - this rig's own empty-pan tare
+#: is -263078.25. Counts at zero mean no differential input reached the
+#: converter at all.
+#:
+#: Measured on the bench 2026-08-27, pan empty, cell unwired: 66 frames of 0,
+#: 20 of -1, and single frames of 8191, 4095, 63, -16 and -65536 - powers-of-two
+#: bit patterns, which is a DOUT line being sampled while nothing drives it.
+#: `repeats_exactly` does NOT catch this: 0 and -1 alternate, so the run is not
+#: frozen, and the median of it is a confident 670.7 g on an empty pan.
+#:
+#: 1000 counts is 2.5 g on this rig's factor - far below the 5 g arrival
+#: threshold, so no real object can be mistaken for an open input, and far above
+#: the 33-count noise floor, so no live cell can be mistaken for one.
+#:
+#: ponytail: one absolute threshold, on the assumption that every bridge rests
+#: well away from zero. A rig deliberately nulled near zero would need this
+#: expressed relative to `calibration.tare_counts` instead.
+HX711_OPEN_INPUT_COUNTS = float(os.environ.get("AURUM_HX711_OPEN_INPUT_COUNTS", 1000))
+
+
+class StuckWatch:
+    """A rolling window over raw counts, for anything that owns a wire.
+
+    Two classes read the HX711 in production and they are not related by
+    inheritance: `HX711SerialReader` opens its own port for calibration, and
+    `link._WeightView` takes frames off the BoardLink queue for the running
+    machine. Both need this rule and neither should own a second copy of it.
+    """
+
+    def __init__(self) -> None:
+        self._recent: deque[float] = deque(maxlen=STUCK_RUN_SAMPLES)
+        self.error: str | None = None
+
+    def accept(self, sample: RawSample | None) -> RawSample | None:
+        """Pass a sample through, or refuse it once the converter stops converting.
+
+        Two shapes of the same fault, because the bench produced both in one
+        afternoon: a frozen line that repeats one count, and a floating line
+        that dithers around zero. Neither is a mass.
+        """
+        if sample is None:
+            return None
+        self._recent.append(sample.raw_counts)
+        wiring = "Check HX711 VCC, DOUT/SCK on D2/D3, and the cell's four wires into the amplifier."
+        if repeats_exactly(self._recent):
+            self.error = (
+                f"The load cell has reported exactly {sample.raw_counts:g} counts for "
+                f"{STUCK_RUN_SAMPLES} readings running. A converting cell never repeats "
+                f"a count bit-for-bit, so this is a wiring or amplifier fault, not a "
+                f"mass. {wiring}"
+            )
+            return None
+        if rests_at_zero(self._recent):
+            self.error = (
+                f"The load cell is resting at digital zero (last {STUCK_RUN_SAMPLES} "
+                f"counts within {HX711_OPEN_INPUT_COUNTS:g} of it). A connected bridge "
+                f"always rests at a large offset - this cell's own empty-pan tare is "
+                f"recorded elsewhere - so nothing is reaching the converter. {wiring}"
+            )
+            return None
+        self.error = None
+        return sample
+
+
+def rests_at_zero(counts) -> bool:
+    """True when a run rests at digital zero: an open converter input.
+
+    Judged on the MEDIAN, not on every sample, because that is the statistic
+    the sensor itself builds a mass from. A floating line throws the occasional
+    bit-pattern spike (8191, -65536) that an `all()` test would excuse - and
+    those are precisely the samples the median filter discards before turning
+    the rest into a confident number.
+    """
+    counts = list(counts)
+    if len(counts) < STUCK_RUN_SAMPLES:
+        return False
+    return abs(statistics.median(counts)) <= HX711_OPEN_INPUT_COUNTS
+
+
+def repeats_exactly(counts) -> bool:
+    """True when a run of counts is long enough to judge and never changed.
+
+    Applied at every point a decision is taken from more than one sample: the
+    reader's rolling window, the stability run behind a settled reading, and
+    the samples `tare` is about to average. All three are the same question.
+    """
+    counts = list(counts)
+    return len(counts) >= STUCK_RUN_SAMPLES and len(set(counts)) == 1
+
 
 #: The sketch emits every 100 ms. A frame that arrives in appreciably less than
 #: that came out of a buffer rather than off the wire, so half a period is the
@@ -450,7 +571,18 @@ class HX711SerialReader:
         self._ser = serial.Serial(port, baudrate, timeout=timeout_s)
         self.connected = True
         self.last_error: str | None = None
+        self._stuck = StuckWatch()
         time.sleep(2.0)  # the board resets when the port opens
+
+    @property
+    def stuck(self) -> bool:
+        """True once the converter has repeated one count bit-for-bit.
+
+        Not a disconnect: the link is healthy and frames keep arriving. It is
+        the converter that has stopped converting, which is why this does not
+        clear `connected`.
+        """
+        return self._stuck.error is not None
 
     def read(self) -> RawSample | None:
         if not self.connected:
@@ -461,7 +593,15 @@ class HX711SerialReader:
             self.connected = False
             self.last_error = f"serial read failed on {self.port}: {exc}"
             return None
-        return parse_weight_line(line)
+        # Refused rather than returned, so that every consumer - the pan
+        # machine, the sensor, and `tare` - inherits the refusal without each
+        # having to know about it. `tare` in particular MUST not average a
+        # stuck count into a calibration factor: that writes a fabricated zero
+        # over a verified one.
+        sample = self._stuck.accept(parse_weight_line(line))
+        if self._stuck.error:
+            self.last_error = self._stuck.error
+        return sample
 
     def drain(self, budget_s: float = 30.0) -> int:
         """Read forward until the stream is live, and return frames discarded.
@@ -489,6 +629,12 @@ class HX711SerialReader:
             started = time.monotonic()
             line = self.read()
             if line is None:
+                if self.stuck:
+                    # Nothing this reader returns from here on is a sample, so
+                    # there is no backlog left to separate from the present.
+                    # Without this the caller waits out the whole budget before
+                    # being told what is already known.
+                    return discarded
                 continue
             if time.monotonic() - started >= LIVE_FRAME_S:
                 return discarded  # we waited for it, so it is of the present
@@ -611,6 +757,11 @@ class WeightSensor:
         # shipped 500 ms window only worked because 100 ms divides into it.
         stable_since: float | None = None
         run_min = run_max = 0.0
+        # The raw counts behind the current run, for `repeats_exactly`. The
+        # reader applies the same rule to its own rolling window, but a run can
+        # settle before that window is full, and a settled reading is the one
+        # that earns MEASURED - so it is checked here as well as there.
+        run_raw: list[float] = []
 
         while clock() < deadline:
             sample = self.reader.read()
@@ -619,6 +770,16 @@ class WeightSensor:
                     return self._unavailable(
                         getattr(self.reader, "last_error", None)
                         or "The load-cell reader disconnected."
+                    )
+                if getattr(self.reader, "stuck", False):
+                    # The reader refused before a run could settle, so the loop
+                    # would otherwise time out and report the last pre-refusal
+                    # sample as an UNSTABLE mass - a phantom number with a
+                    # caveat, where the honest answer is no number at all.
+                    return self._unavailable(
+                        getattr(self.reader, "last_error", None)
+                        or "The load cell has stopped converting.",
+                        last_raw,
                     )
                 continue
 
@@ -639,15 +800,31 @@ class WeightSensor:
                 # settles, a bench vibrates, and a hand leaving the pan takes a
                 # moment. It only opens the window.
                 stable_since, run_min, run_max = stamp, grams, grams
+                run_raw = [sample.raw_counts]
                 continue
 
             run_min, run_max = min(run_min, grams), max(run_max, grams)
+            run_raw.append(sample.raw_counts)
             if run_max - run_min > self.tolerance_g:
                 # It moved. The window restarts from here rather than from the
                 # start of the run, which is what "stayed within tolerance for
                 # the whole window" has to mean.
                 stable_since, run_min, run_max = stamp, grams, grams
+                run_raw = [sample.raw_counts]
             elif stamp - stable_since >= window_s:
+                if repeats_exactly(run_raw):
+                    # Perfectly still is not the same as perfectly repeated.
+                    # This run has a spread of exactly 0.000 g, which is the
+                    # best-looking reading the sensor can produce and the one
+                    # thing a converting cell cannot do.
+                    return self._unavailable(
+                        f"The load cell reported exactly {last_raw:g} counts for the whole "
+                        "stability window. A converting cell never repeats a count "
+                        "bit-for-bit, so this is a wiring or amplifier fault, not a mass. "
+                        "Check HX711 VCC, DOUT/SCK on D2/D3, and the cell's four wires "
+                        "into the amplifier.",
+                        last_raw,
+                    )
                 return self._settled(grams, last_raw, run_max - run_min)
 
         if last_grams is None:
@@ -698,7 +875,14 @@ class WeightSensor:
             sample = self.reader.read()
             if sample is not None:
                 collected.append(sample.raw_counts)
-        return statistics.fmean(collected) if collected else None
+        if not collected or getattr(self.reader, "stuck", False):
+            return None
+        if repeats_exactly(collected):
+            # A tare is the zero every later reading subtracts. Averaging a
+            # stuck converter into one writes a fabricated factor over a
+            # verified measurement, and the result looks entirely healthy.
+            return None
+        return statistics.fmean(collected)
 
     def close(self) -> None:
         self.reader.close()

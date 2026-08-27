@@ -85,7 +85,11 @@ class ScriptedCell:
             return None
         if self._drift:
             self.grams += self._drift
-        return RawSample(raw_counts=TARE_COUNTS + self.grams * COUNTS_PER_GRAM)
+        # One count of wander, centred, because a converting cell never repeats
+        # a value bit-for-bit - `app.weight.repeats_exactly` refuses a frozen
+        # series as the hardware fault it is. Far below any tolerance here.
+        wander = (self.reads % 3) - 1
+        return RawSample(raw_counts=TARE_COUNTS + self.grams * COUNTS_PER_GRAM + wander)
 
     def close(self):
         self.connected = False
@@ -792,7 +796,8 @@ class TestReplayedHardwareStream:
                     self.written.remove(line)
                     return f"AURUM/1 ACK {parts[5]}\n".encode()
             self.millis += 100
-            counts = self._counts_for()
+            # Centred one-count wander: see ScriptedCell.read.
+            counts = self._counts_for() + (self.millis // 100 % 3) - 1
             return f"W,1,{self.millis},{counts},OK\n".encode()
 
         def write(self, payload: bytes) -> int:

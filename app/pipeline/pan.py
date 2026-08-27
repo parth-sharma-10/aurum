@@ -135,6 +135,11 @@ class PanMachine:
                     getattr(sensor.reader, "last_error", None)
                     or "The load-cell reader disconnected."
                 )
+            # A reader that knows WHY it refused says so. The stuck-converter
+            # refusal in particular has a cause the generic text below gets
+            # wrong: its counts are in range and its frames do arrive.
+            if getattr(sensor.reader, "last_error", None):
+                return None, sensor.reader.last_error
             # Two causes, and the operator cannot tell them apart from here:
             # no weight frames are arriving at all, or every one carries a count
             # outside what a 24-bit converter can represent and is refused. The
