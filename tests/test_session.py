@@ -439,7 +439,7 @@ class TestMockMassFallback:
         run = self.mock_session(transport=transport)
         present(run, "PCB")
         result = run.measure_and_route()
-        assert result["weight_g"] == 180.0
+        assert result["weight_g"] == 60.0
         assert result["decision"]["decision"] == "B"
         assert transport.movements[0][0] == "B"
 
@@ -530,9 +530,9 @@ class TestPerClassMockMass:
 
     def test_each_class_gets_its_own_stand_in(self):
         masses = {c: self.run_for(c)["weight_g"] for c in ("CPU", "PCB", "RAM", "Connector")}
-        assert masses["CPU"] == 25.0
-        assert masses["PCB"] == 180.0
-        assert masses["RAM"] == 30.0
+        assert masses["CPU"] == 22.0
+        assert masses["PCB"] == 60.0
+        assert masses["RAM"] == 20.0
         assert masses["Connector"] == 5.0
 
     def test_a_cpu_reaches_bin_a_and_fires_servo_a(self):
@@ -549,9 +549,15 @@ class TestPerClassMockMass:
         assert transport.movements[0][0] == "A"
 
     def test_the_cpu_fraction_is_computed_against_a_cpu_sized_mass(self):
-        """4.71 mg of gold in 25 g is 188 ppm. In 180 g it would read 26."""
+        """4.71 mg of gold in 22 g is 214 ppm. In 60 g it would read 78.
+
+        The number moved on 2026-08-27 when the stand-in masses were set from
+        published figures - Intel's LGA1155 guide gives 21.5 g typical, so 22 g
+        replaced a round 25 g. CPU evidence is PER PIECE, so the fraction is a
+        fixed mass of gold over this number and tracks it directly.
+        """
         pmdi = self.run_for("CPU")["valuation"]["pmdi"]
-        assert pmdi["precious_mass_fraction_ppm"] == pytest.approx(188.4, abs=0.5)
+        assert pmdi["precious_mass_fraction_ppm"] == pytest.approx(214.1, abs=0.5)
 
     def test_an_unknown_class_falls_back_to_the_default(self):
         cfg = self.mock_cfg()
@@ -562,7 +568,7 @@ class TestPerClassMockMass:
     def test_the_snapshot_publishes_the_per_class_table(self):
         cfg = self.mock_cfg()
         per_class = DemoSession(cfg=cfg).snapshot()["mock_mass"]["per_class"]
-        assert per_class == {"CPU": 25.0, "PCB": 180.0, "RAM": 30.0, "Connector": 5.0}
+        assert per_class == {"CPU": 22.0, "PCB": 60.0, "RAM": 20.0, "Connector": 5.0}
 
 
 class TestCalibrationReload:

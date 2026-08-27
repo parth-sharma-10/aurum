@@ -812,6 +812,14 @@ class DemoSession:
             self._handled.add(assembly.assembly_id)
             if reading is None:
                 reading = _unavailable_reading("No reading was taken.")
+            # The stand-in mass belongs on BOTH paths. `_read_mass` applies it
+            # for `measure_and_route`, and the automatic path used to hand this
+            # method whatever `sensor.read()` returned - so with a dead cell and
+            # mock mass ON, the manual button produced a graded item and the
+            # automatic cycle produced "no usable mass". Same fallback, same
+            # condition, so the two cannot drift apart.
+            if not reading.usable and bool(self.cfg["demo.mock_mass.enabled"]):
+                reading = self._mock_mass(f"The cell returned {reading.status}.", assembly)
             assembly.attach_weight(reading.grams, str(reading.status), reading.timestamp)
             assembly.weight_reading = reading.as_dict()
 

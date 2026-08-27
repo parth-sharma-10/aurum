@@ -334,17 +334,62 @@ SPEC: dict[str, tuple] = {
     # nothing computed from it may be quoted as a measurement.
     # ------------------------------------------------------------------
     "demo.mock_mass.enabled": (_bool, False, "AURUM_DEMO_MOCK_MASS"),
-    #: Fallback for a class with no entry below.
-    "demo.mock_mass.grams": (_non_negative, 180.0, "AURUM_DEMO_MOCK_MASS_G"),
+    #: Fallback for a class with no entry below. A small board rather than the
+    #: old 180 g: the classes that DO have entries cover everything this model
+    #: detects, so this only fires for something unrecognised.
+    "demo.mock_mass.grams": (_non_negative, 60.0, "AURUM_DEMO_MOCK_MASS_G"),
     # Per class, because one flat mass makes the ppm figures wrong in a way a
     # judge can spot: a CPU is not 180 g, and pretending it is drags its
-    # precious fraction down by a factor of seven. These are plausible typical
-    # masses for the class, TEST values chosen to keep the arithmetic sensible.
-    # They are not measurements of anything and nothing was weighed to get them.
-    "demo.mock_mass.cpu_g": (_non_negative, 25.0, "AURUM_DEMO_MOCK_MASS_CPU_G"),
-    "demo.mock_mass.pcb_g": (_non_negative, 180.0, "AURUM_DEMO_MOCK_MASS_PCB_G"),
-    "demo.mock_mass.ram_g": (_non_negative, 30.0, "AURUM_DEMO_MOCK_MASS_RAM_G"),
+    # precious fraction down by a factor of seven.
+    #
+    # STILL FABRICATED - nothing here was weighed on this bench, every figure
+    # derived from one is stamped SIMULATED, and none may be quoted as a
+    # measurement. What changed on 2026-08-27 is that they are now typical
+    # published masses rather than round numbers:
+    #
+    #   CPU  22 g   Intel's own LGA1155 socket design guide gives 21.5 g typical
+    #               for a mainstream desktop package. LGA2011 is ~45 g and a
+    #               Xeon Scalable ~112 g, so this is the mainstream case, not
+    #               the range.
+    #   RAM  20 g   The scrap trade prices memory at roughly 200-300 sticks to
+    #               5 kg, i.e. 17-25 g a module. The old 30 g assumed a
+    #               heatspreader; a bare green DIMM does not have one.
+    #   PCB  60 g   THE WEAKEST OF THE FOUR, and unavoidably so: this class
+    #               spans a perfboard offcut to a full ATX motherboard, which
+    #               is 600-900 g. 60 g is a small scrap board or an expansion
+    #               card, which is what this bench actually handles. It was
+    #               180 g, which is a mid-size board and too heavy for the
+    #               objects on the table.
+    #   Conn  5 g   A DIMM socket or PCIe slot. Unchanged - no better figure
+    #               was found, and it is the least load-bearing of the four.
+    #
+    # THESE MOVE BIN DECISIONS. CPU and RAM evidence is PER PIECE (4.71 mg Au
+    # per processor, 18 mg per module), so precious fraction is a fixed mass of
+    # metal over this number: halving it doubles the ppm. Re-check the routing
+    # after changing one - RAM at 20 g sits closer to the 1000 ppm Bin A gate
+    # than it did at 30 g.
+    "demo.mock_mass.cpu_g": (_non_negative, 22.0, "AURUM_DEMO_MOCK_MASS_CPU_G"),
+    "demo.mock_mass.pcb_g": (_non_negative, 60.0, "AURUM_DEMO_MOCK_MASS_PCB_G"),
+    "demo.mock_mass.ram_g": (_non_negative, 20.0, "AURUM_DEMO_MOCK_MASS_RAM_G"),
     "demo.mock_mass.connector_g": (_non_negative, 5.0, "AURUM_DEMO_MOCK_MASS_CONNECTOR_G"),
+    # ------------------------------------------------------------------
+    # DEMONSTRATION TRIGGER - the camera starts the cycle instead of the pan.
+    #
+    # Ships OFF, like every other demonstration setting. The load cell is what
+    # starts a cycle on this machine; with a dead or absent cell nothing ever
+    # arrives, so the automatic chain never runs and a stand-in mass alone
+    # cannot help - it substitutes a mass for an object already being handled,
+    # not the arrival itself.
+    #
+    # With this on, an assembly the camera CONFIRMS is treated as the arrival.
+    # The rest of the cycle is unchanged: weigh (or stand in), estimate,
+    # decide, actuate, release. PADDLES FIRE ON CAMERA CONFIRMATION ALONE.
+    #
+    # Its limit, stated rather than discovered: one physical object that the
+    # tracker loses and re-acquires becomes a second assembly id, and will be
+    # sorted twice. The pan cannot tell it apart, because there is no pan.
+    # ------------------------------------------------------------------
+    "demo.camera_trigger.enabled": (_bool, False, "AURUM_DEMO_CAMERA_TRIGGER"),
     "conveyor.runtime.simulation": (_bool, False, "AURUM_SIMULATION"),
     "conveyor.runtime.host": (_text, "127.0.0.1", "AURUM_HOST"),
     "conveyor.runtime.port": (_int, 8000, "AURUM_PORT"),
