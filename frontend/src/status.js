@@ -433,6 +433,31 @@ export function machineState(state, startup) {
       "fault",
     );
   }
+  // The load cell is what STARTS the cycle, so a cell that cannot be read is
+  // not a machine waiting for an object - it is a machine that will wait for
+  // ever. `pan.grams` is null only when the pan could not get a mass at all,
+  // and `pan.reason` is the cell's own account of why: not connected, not
+  // calibrated, or stopped answering mid-run. All three used to fall through
+  // to "Aurum is ready and watching the platform", which is the exact lie the
+  // camera and board checks above exist to prevent, told by the one sensor
+  // that drives everything.
+  if (pan.state && pan.grams == null && pan.reason) {
+    return physical
+      ? STATE(
+          "LOAD_CELL_OFFLINE",
+          "Load cell not readable",
+          pan.reason,
+          "Fix the load cell below. Nothing can be weighed or sorted until it reads.",
+          "fault",
+        )
+      : STATE(
+          "LOAD_CELL_ABSENT",
+          "No load cell",
+          pan.reason,
+          "This is a simulated run. Drive the chain from Developer controls in Advanced mode.",
+          "ready",
+        );
+  }
 
   // The automatic cycle. One pass of the pan machine, in the operator's words.
   const item = state.current_item;
@@ -495,12 +520,26 @@ export function machineState(state, startup) {
           "busy",
         );
       }
+      // Only a cycle that actually produced a decision may be called complete.
+      // Without one there is mass on the platform that no sort accounts for -
+      // an object put down before the camera confirmed it, or a tare that has
+      // drifted above the clear threshold so the pan can never report itself
+      // empty. Both used to render as "Sort complete: this object has been
+      // handled", which is a success claim for an object that was never
+      // processed, and it is what the bench showed while nothing had run at all.
+      if (!item?.decision) {
+        return STATE(
+          "WAITING_FOR_CLEAR",
+          "Platform not clear",
+          pan.reason ?? "There is weight on the platform that no sort accounts for.",
+          "Take everything off the platform. If it still reads a weight when empty, the load cell needs re-taring.",
+          "warning",
+        );
+      }
       return STATE(
         "COMPLETE",
         "Sort complete",
-        item?.decision
-          ? `Object routed to bin ${item.decision.physical_bin ?? item.decision.decision}.`
-          : "This object has been handled.",
+        `Object routed to bin ${item.decision.physical_bin ?? item.decision.decision}.`,
         "Take the object off the platform. Aurum is ready for the next one.",
         "good",
       );
