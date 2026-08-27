@@ -130,7 +130,18 @@ class PanMachine:
                     getattr(sensor.reader, "last_error", None)
                     or "The load-cell reader disconnected."
                 )
-            return None, "No reading arrived from the load cell."
+            # Two causes, and the operator cannot tell them apart from here:
+            # no weight frames are arriving at all, or every one carries a count
+            # outside what a 24-bit converter can represent and is refused. The
+            # second is what an unplugged, shorted or unwired cell reads, and it
+            # is worth naming - it presents as a healthy link and a confident
+            # constant, which is the most misleading shape a sensor fault takes.
+            return None, (
+                "No usable reading from the load cell. Either no weight frames "
+                "are arriving, or every one is off the converter's scale - which "
+                "is what an open or shorted cell reads. Check the HX711 wiring: "
+                "DOUT/SCK on D2/D3, and the cell's four wires into the amplifier."
+            )
         grams = sensor.calibration.grams(sample.raw_counts)
         return grams, None
 

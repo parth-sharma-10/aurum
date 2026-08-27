@@ -188,6 +188,27 @@ def get_weight_source(mode: str = "auto", port: str | None = None) -> WeightSour
 #: a bare number could be counts or grams, and guessing which is exactly the
 #: kind of assumption this project refuses to make.
 PROTOCOL_VERSION = 1
+
+#: The rails of a signed 24-bit converter. The HX711 is 24-bit two's
+#: complement, and these two values are what it emits when its input is at or
+#: beyond full scale - which is what an open bridge, a shorted one, or no cell
+#: wired at all all produce.
+#:
+#: A reading AT a rail is refused, not just one beyond it. At the rail the
+#: converter is reporting "outside my range", not a quantity: the true mass is
+#: somewhere at-or-past full scale and is not knowable from the sample. That
+#: makes a saturated cell and a legitimately maxed-out one indistinguishable -
+#: correctly, because neither yields a mass. The cost is one count of headroom
+#: at each end of a range this rig uses about 0.1% of.
+#:
+#: Measured on the bench on 2026-08-27 with the pan EMPTY: 25 frames of 25
+#: carried exactly 8388607 with status OK, which a verified 392.2167 counts/g
+#: rendered as 22058.4 g on a pan rated for a few hundred grams.
+#:
+#: A physical bound, not a plausibility heuristic. Class-level plausibility
+#: stays in configs/grading.yaml, where it belongs.
+HX711_MIN_COUNTS = -(2**23)
+HX711_MAX_COUNTS = 2**23 - 1
 PROTOCOL = "W,<version>,<board_millis>,<raw_counts>,<status>"
 
 #: The sketch emits every 100 ms. A frame that arrives in appreciably less than
@@ -372,6 +393,15 @@ def parse_weight_line(line: object) -> RawSample | None:
     if version != PROTOCOL_VERSION or parts[4].strip().upper() != "OK":
         return None
     if math.isnan(counts) or math.isinf(counts):
+        return None
+    # A railed converter is not a heavy object. On 2026-08-27 an EMPTY pan
+    # reported raw 8388608 - exactly 2**23 - which a verified 392.2167 counts/g
+    # turned into 22058.4 g, repeated bit-for-bit for as long as it was watched,
+    # while the console told the operator to remove an object that was not
+    # there. A real cell wanders by tens of counts; only a rail repeats exactly.
+    # Dropped here rather than downstream so that no consumer - pan machine,
+    # calibration, estimator - can be handed one as a mass.
+    if counts >= HX711_MAX_COUNTS or counts <= HX711_MIN_COUNTS:
         return None
     return RawSample(raw_counts=counts, board_millis=millis)
 

@@ -125,6 +125,40 @@ class TestProtocol:
     def test_anything_else_is_dropped(self, line):
         assert parse_weight_line(line) is None
 
+    @pytest.mark.parametrize(
+        "counts",
+        [
+            8388607,  # +2**23-1, the positive rail — MEASURED on the bench
+            8388608,
+            -8388608,  # the negative rail
+            -8388609,
+            16777215,  # an all-ones word read as unsigned
+        ],
+    )
+    def test_a_count_at_the_converter_s_rail_is_not_a_mass(self, counts):
+        """An HX711 emits its rail when the input is at or past full scale, so a
+        sample there reports "outside my range" rather than a quantity. An open
+        bridge, a shorted one and an absent cell all produce it.
+
+        Measured on the bench on 2026-08-27 with the pan EMPTY: **25 frames of
+        25 carried exactly 8388607 with status OK**, which a verified 392.2167
+        counts/g rendered as 22058.4 g on a pan rated for a few hundred grams,
+        while the console told the operator to take an object off an empty
+        platform. A real cell wanders by tens of counts; only a rail repeats
+        bit-for-bit.
+
+        The rail itself is refused, not merely values beyond it — the first
+        version of this guard stopped at `2**23` and did nothing at all against
+        the reading the board was actually sending.
+        """
+        assert parse_weight_line(f"W,1,10432,{counts},OK") is None
+
+    @pytest.mark.parametrize("counts", [8388606, -8388607, 0, -261605])
+    def test_a_count_inside_the_rails_still_parses(self, counts):
+        """One count inside each rail, because this bound is off-by-one prone in
+        both directions and the range is otherwise untouched."""
+        assert parse_weight_line(f"W,1,10432,{counts},OK").raw_counts == float(counts)
+
     def test_the_protocol_carries_raw_counts_not_grams(self):
         """Calibration lives in Python, so the wire format must be raw."""
         assert "raw_counts" in __import__("app.weight", fromlist=["PROTOCOL"]).PROTOCOL
