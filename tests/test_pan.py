@@ -102,6 +102,15 @@ class FakeLink:
         #: The conveyor motor, which this rig's fake never runs.
         self.belt_running = False
         self.belt_pwm = 0
+        #: Every belt call this double was asked to make, so a test can assert
+        #: the shutdown path actually stopped the motor rather than assuming it.
+        self.belt_calls: list[tuple[bool, int]] = []
+
+    def belt(self, run: bool, pwm: int = 0, budget_s: float = 2.0) -> bool:
+        self.belt_calls.append((run, pwm))
+        self.belt_running = bool(run)
+        self.belt_pwm = pwm if run else 0
+        return True
 
     def snapshot(self):
         return {"connected": self.connected}
@@ -677,6 +686,33 @@ class TestMixedAssembly:
         assert pmdi["completeness"] == "COMPLETE"
         assert pmdi["precious_mass_fraction_ppm"] == 2200.0
         assert record["decision"]["decision"] == "B"
+
+
+class TestTheBeltStopsWhenTheMachineDoes:
+    """A belt is the one part that keeps acting after the software stops.
+
+    The firmware's 3 s lease is the last resort, not the mechanism: three
+    seconds of belt after a human hit stop is three seconds too many.
+    """
+
+    def test_shutdown_stops_the_belt_before_dropping_the_link(self):
+        run = session(ScriptedCell(0.0))
+        run.link.belt(True, 120)
+        run.link.belt_calls.clear()
+        run.stop()
+        assert (False, 0) in run.link.belt_calls
+
+    def test_a_belt_that_will_not_stop_does_not_cost_the_disconnect(self):
+        """Shutdown must not be stoppable by one sub-step."""
+
+        run = session(ScriptedCell(0.0))
+
+        def refuse(*_args, **_kwargs):
+            raise RuntimeError("the belt is not answering")
+
+        run.link.belt = refuse
+        run.stop()
+        assert run.link.connected is False
 
 
 class TestTheThread:

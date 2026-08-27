@@ -46,6 +46,7 @@ that could not be weighed, not a stack trace on a projector.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 import uuid
@@ -716,6 +717,16 @@ class DemoSession:
         if self._source is not None:
             self._source.release()
             self._source = None
+        # Before the link goes, not after. `disconnect()` resets the board and
+        # the firmware's watchdog would stop the motor 3 s later anyway, but a
+        # belt that keeps moving for three seconds after a human stopped the
+        # machine is not something to leave to a timeout.
+        #
+        # Suppressed because this is a shutdown path: a belt that will not stop
+        # must not also cost the caller `disconnect()`, which resets the board
+        # and stops the motor anyway.
+        with contextlib.suppress(Exception):
+            self.stop_belt()
         if self.link is not None:
             self.link.disconnect()
 
