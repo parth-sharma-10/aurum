@@ -22,6 +22,9 @@
  *   HX711 SCK      -> D3
  *   Servo A signal -> D9
  *   Servo B signal -> D10
+ *   L298N ENA      -> D5    (PWM, conveyor speed)
+ *   L298N IN1      -> D7
+ *   L298N IN2      -> D8
  *
  * Servo power comes from an external AKSHA 5V/3A supply whose ground is common
  * with the Arduino. The external +5V rail is NOT connected to the Arduino +5V
@@ -36,6 +39,9 @@
  *   in   AURUM/1 MOVE <A|B> <item_id> <command_id>
  *   in   AURUM/1 CFG <rest_deg> <push_deg> <hold_ms> <command_id>
  *   in   AURUM/1 PING <command_id>
+ *   in   AURUM/1 BELT RUN <pwm 0-255> <command_id>
+ *   in   AURUM/1 BELT STOP <command_id>
+ *   out  AURUM/1 BELTSTOP WATCHDOG        (the lease expired; motor stopped)
  *   out  AURUM/1 ACK <command_id> [DUP]
  *   out  AURUM/1 ERR <command_id> <code>
  *   out  AURUM/1 PONG <command_id>
@@ -60,6 +66,30 @@ const uint8_t PIN_SERVO_B = 10;
 // serial log. Also blinks a signature at boot - see setup().
 const uint8_t PIN_LED    = 6;
 
+// L298N conveyor motor driver, as physically wired:
+//   ENA -> D5   PWM speed. Timer0/OC0B - HARDWARE pwm, so unlike the Servo
+//               library's ISR-driven pulses it CANNOT be corrupted by the
+//               301 us `noInterrupts()` in readRaw(). analogWrite here does
+//               not disturb millis(), which uses Timer0's overflow, not OC0B.
+//   IN1 -> D7   direction
+//   IN2 -> D8   direction
+//   OUT1/OUT2 -> motor, VCC -> 12 V, GND common with the Arduino.
+const uint8_t PIN_BELT_ENA = 5;
+const uint8_t PIN_BELT_IN1 = 7;
+const uint8_t PIN_BELT_IN2 = 8;
+
+// THE BELT STOPS ON ITS OWN IF THE HOST STOPS ASKING.
+//
+// Every other failure in this machine is static - a paddle that does not move,
+// a mass that will not settle. A belt is the one part that keeps acting after
+// the software controlling it has gone, so `BELT RUN` is a lease rather than a
+// switch: the host must re-assert it, and if it does not - crashed backend,
+// unplugged USB, killed process - the motor stops without anybody present.
+//
+// Generously longer than the ~1.7 s a `push()` blocks for, so a paddle stroke
+// never starves the lease and stalls the belt mid-run.
+const unsigned long BELT_WATCHDOG_MS = 3000;
+
 const uint8_t  PROTOCOL_VERSION   = 1;
 const unsigned long SAMPLE_INTERVAL_MS = 100;   // 10 Hz, the HX711 rate
 const unsigned long READY_TIMEOUT_MS   = 500;
@@ -67,7 +97,7 @@ const unsigned long READY_TIMEOUT_MS   = 500;
 // Printed at boot and blinked on the LED. Bump it whenever this file changes,
 // so "which build is on the board" is answerable from the wire and from across
 // the room instead of being inferred.
-#define FIRMWARE_BUILD "2026-08-27c"
+#define FIRMWARE_BUILD "2026-08-27e"
 
 // How long to give a paddle to physically reach an angle before the pins are
 // released. An MG995 is about 0.2 s per 60 degrees, so a full rest<->push
@@ -110,6 +140,32 @@ uint8_t historyNext = 0;
 
 String inputLine;
 
+// Belt state. `beltPwm` is kept so the snapshot and the ACK can report what is
+// actually being driven rather than what was last asked for.
+bool beltRunning = false;
+uint8_t beltPwm = 0;
+unsigned long beltLeaseAt = 0;
+
+void beltStop() {
+  // ENA to 0 first, then both direction lines low: the motor coasts rather
+  // than being actively braked, which is what an L298N does with IN1 == IN2.
+  // Order matters - dropping direction while still enabled briefly brakes.
+  analogWrite(PIN_BELT_ENA, 0);
+  digitalWrite(PIN_BELT_IN1, LOW);
+  digitalWrite(PIN_BELT_IN2, LOW);
+  beltRunning = false;
+  beltPwm = 0;
+}
+
+void beltRun(uint8_t pwm) {
+  digitalWrite(PIN_BELT_IN1, HIGH);
+  digitalWrite(PIN_BELT_IN2, LOW);
+  analogWrite(PIN_BELT_ENA, pwm);
+  beltRunning = true;
+  beltPwm = pwm;
+  beltLeaseAt = millis();
+}
+
 bool alreadyDone(const String &id) {
   for (uint8_t i = 0; i < HISTORY; i++) {
     if (recentIds[i] == id) return true;
@@ -130,6 +186,14 @@ void setup() {
 
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
+
+  // THE BELT IS STOPPED BEFORE ANYTHING ELSE. A reset must never leave a
+  // motor running, and the pins float until they are driven, so claim them
+  // first and drive them low.
+  pinMode(PIN_BELT_ENA, OUTPUT);
+  pinMode(PIN_BELT_IN1, OUTPUT);
+  pinMode(PIN_BELT_IN2, OUTPUT);
+  beltStop();
 
   // Park at rest before anything else, so a reset cannot leave a paddle out in
   // the stream - then RELEASE both pins. See `park()` and `push()` below for
@@ -347,6 +411,31 @@ void handleCommand(const String &line) {
     return;
   }
 
+  if (verb == "BELT") {
+    String action = field(line, 2);
+    if (action == "RUN") {
+      String id = field(line, 4);
+      if (id.length() == 0) { err(field(line, 3), "BAD_FRAME"); return; }
+      long pwm = field(line, 3).toInt();
+      if (pwm < 0 || pwm > 255) { err(id, "BAD_PWM"); return; }
+      // NOT duplicate-suppressed, unlike MOVE. A repeated RUN is how the host
+      // renews the watchdog lease, and it is idempotent: it asserts a state
+      // rather than performing an action. Suppressing it would stop the belt.
+      beltRun((uint8_t) pwm);
+      ack(id, "");
+      return;
+    }
+    if (action == "STOP") {
+      String id = field(line, 3);
+      if (id.length() == 0) { err(action, "BAD_FRAME"); return; }
+      beltStop();
+      ack(id, "");
+      return;
+    }
+    err(field(line, 3), "BAD_FRAME");
+    return;
+  }
+
   if (verb == "MOVE") {
     String target = field(line, 2);
     String id     = field(line, 4);
@@ -379,6 +468,13 @@ void loop() {
     } else if (c != '\r' && inputLine.length() < 60) {
       inputLine += c;
     }
+  }
+
+  // The belt's lease. Checked before anything else in the loop, so a host that
+  // has gone away stops the motor even if the rest of this loop is starved.
+  if (beltRunning && millis() - beltLeaseAt > BELT_WATCHDOG_MS) {
+    beltStop();
+    Serial.println("AURUM/1 BELTSTOP WATCHDOG");
   }
 
   // Idle heartbeat. `push()` drives the LED solid for the whole stroke and

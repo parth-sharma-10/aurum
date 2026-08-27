@@ -27,6 +27,7 @@ import pytest
 
 from app import config
 from app.hardware import ArduinoController, FakeTransport
+from app.hardware.fault import FaultCode
 from app.hardware.link import BoardLink
 from app.pipeline.pan import PanState
 from app.pipeline.session import DemoSession
@@ -94,6 +95,9 @@ class FakeLink:
     def __init__(self, cell: ScriptedCell):
         self.connected = True
         self.weight_reader = cell
+        #: The conveyor motor, which this rig's fake never runs.
+        self.belt_running = False
+        self.belt_pwm = 0
 
     def snapshot(self):
         return {"connected": self.connected}
@@ -861,3 +865,114 @@ class TestReplayedHardwareStream:
         assert record["weight_status"] == "MEASURED"
         assert record["weight_g"] == pytest.approx(842.3, abs=0.5)
         assert record["valuation"]["pmdi"]["completeness"] == "PARTIAL_ESTIMATE"
+
+
+class BeltLink(FakeLink):
+    """A FakeLink whose conveyor motor records what it was asked to do.
+
+    Models the real `BoardLink.belt` contract: an ACK flips `belt_running`, and
+    a RUN is a lease the caller must keep renewing.
+    """
+
+    def __init__(self, cell: ScriptedCell):
+        FakeLink.__init__(self, cell)
+        self.calls: list[tuple[bool, int]] = []
+
+    def belt(self, run: bool, pwm: int = 0, budget_s: float = 2.0) -> bool:
+        self.calls.append((bool(run), int(pwm)))
+        self.belt_running = bool(run)
+        self.belt_pwm = int(pwm) if run else 0
+        return True
+
+
+class TestTheConveyorMotor:
+    """Stop-and-go, and the stopping half is the safety-critical one.
+
+    Measured on this bench, same pan, motor toggled: 0.084 g of noise stopped
+    against 36.044 g running - about 430x. Components here weigh 5-200 g, so a
+    mass taken while the belt runs is noise rather than a light object.
+    """
+
+    @staticmethod
+    def belted(cell, **env):
+        run = session(cell, AURUM_BELT_MOTOR_ENABLED="true", **env)
+        run.link = BeltLink(cell)
+        return run
+
+    def test_the_belt_runs_while_the_machine_waits_for_an_object(self):
+        run = self.belted(ScriptedCell(0.0))
+        run._drive_belt(PanState.WAITING_FOR_OBJECT)
+        assert run.link.belt_running is True
+        assert run.link.calls == [(True, 120)]
+
+    def test_the_belt_runs_again_to_carry_a_sorted_object_away(self):
+        """WAITING_FOR_CLEAR is not idle: it is the object leaving."""
+        run = self.belted(ScriptedCell(0.0))
+        run._drive_belt(PanState.WAITING_FOR_CLEAR)
+        assert run.link.belt_running is True
+
+    @pytest.mark.parametrize(
+        "state",
+        [
+            PanState.OBJECT_PRESENT,
+            PanState.WEIGHING,
+            PanState.WEIGHT_STABLE,
+            PanState.PROCESSING,
+            PanState.ROUTING,
+        ],
+    )
+    def test_the_belt_is_stopped_for_every_state_that_handles_an_object(self, state):
+        run = self.belted(ScriptedCell(0.0))
+        run._drive_belt(PanState.WAITING_FOR_OBJECT)
+        run.link.calls.clear()
+        run._drive_belt(state)
+        assert run.link.belt_running is False
+        assert run.link.calls == [(False, 0)]
+
+    def test_a_latched_fault_stops_the_belt(self):
+        run = self.belted(ScriptedCell(0.0))
+        run._drive_belt(PanState.WAITING_FOR_OBJECT)
+        run.fault.latch(FaultCode.ACK_TIMEOUT, "a paddle may be half out", "AUR-ITEM-1")
+        run._drive_belt(PanState.WAITING_FOR_OBJECT)
+        assert run.link.belt_running is False
+
+    def test_the_lease_is_renewed_rather_than_asserted_once(self):
+        """The firmware expires a RUN after its watchdog, so a belt that is
+        commanded once and never again stops on its own."""
+        run = self.belted(ScriptedCell(0.0), AURUM_BELT_MOTOR_KEEPALIVE_S="0")
+        for _ in range(3):
+            run._drive_belt(PanState.WAITING_FOR_OBJECT)
+        assert run.link.calls == [(True, 120)] * 3
+
+    def test_an_unexpired_lease_is_not_renewed_every_pass(self):
+        """The machine loop runs at 20 Hz; renewing on every pass would be 20
+        command frames a second competing with the weight stream."""
+        run = self.belted(ScriptedCell(0.0), AURUM_BELT_MOTOR_KEEPALIVE_S="60")
+        for _ in range(5):
+            run._drive_belt(PanState.WAITING_FOR_OBJECT)
+        assert run.link.calls == [(True, 120)]
+
+    def test_a_motor_that_is_not_enabled_is_never_commanded(self):
+        """Default off, like actuation. A rig with nothing wired to D5/D7/D8
+        must not be sent belt frames at all."""
+        run = session(ScriptedCell(0.0))
+        run.link = BeltLink(ScriptedCell(0.0))
+        run._drive_belt(PanState.WAITING_FOR_OBJECT)
+        assert run.link.calls == []
+
+    def test_weighing_is_refused_while_the_belt_is_running(self):
+        """The backstop under `_drive_belt`. A mass read over a running motor is
+        noise, and nothing downstream could tell it from a light object."""
+        cell = ScriptedCell(42.7)
+        run = self.belted(cell)
+        run.link.belt_running = True
+        run.pan.state = PanState.WEIGHING
+        assert run.pan.step() is PanState.WEIGHT_STABLE
+        assert run.pan._reading is None
+        assert "conveyor is running" in run.pan.reason
+
+    def test_stop_belt_works_from_any_state(self):
+        run = self.belted(ScriptedCell(0.0))
+        run._drive_belt(PanState.WAITING_FOR_OBJECT)
+        assert run.stop_belt() is True
+        assert run.link.belt_running is False

@@ -47,6 +47,40 @@ conveyor:
     # Used when mode is MANUAL or ENCODER and nothing better is available.
     speed_cm_s: UNMEASURED
 
+    # ---- the L298N conveyor motor ---------------------------------------
+    #
+    # Wired 2026-08-27: ENA -> D5 (PWM), IN1 -> D7, IN2 -> D8, motor on
+    # OUT1/OUT2, 12 V on VCC, ground common with the Arduino.
+    motor:
+      # OFF by default, exactly like arduino.enabled. A belt is the one part
+      # of this machine that keeps acting after the software stops, so it is
+      # never enabled as a side effect of connecting a board.
+      enabled: false
+
+      # 0-255 into analogWrite on ENA. 120 is what the noise measurement
+      # below was taken at; it is not a calibrated speed and cannot be, since
+      # conveyor.belt.speed_cm_s is still UNMEASURED.
+      pwm: 120
+
+      # How often the host re-asserts BELT RUN. The firmware treats a RUN as a
+      # 3000 ms lease and stops the motor when it expires, so this must stay
+      # comfortably under that - a crashed backend then stops the belt by
+      # doing nothing.
+      keepalive_s: 1.0
+
+      # THE BELT MUST BE STOPPED TO WEIGH. Not a preference - measured on this
+      # bench, same pan, belt toggled:
+      #
+      #     belt stopped   stdev     33 counts =  0.084 g
+      #     belt running   stdev  14137 counts = 36.044 g
+      #     belt stopped   stdev     42 counts =  0.108 g
+      #
+      # ~430x, and fully reversible. Components here weigh 5-200 g, so a mass
+      # taken while the motor runs is noise. The pan machine stops the belt
+      # before it weighs, and `weigh_requires_stopped` is the backstop that
+      # refuses a reading if it somehow does not.
+      weigh_requires_stopped: true
+
   manual:
     # MEASURE THIS if the belt has no encoder. Real, but entered once: it
     # cannot notice the belt slowing under load.

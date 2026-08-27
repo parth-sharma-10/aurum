@@ -75,6 +75,7 @@ class PanMachine:
         route,
         cfg: config_module.Config | None = None,
         clock=time.monotonic,
+        belt_running=None,
     ) -> None:
         self.cfg = config_module.load() if cfg is None else cfg
         self.zone = zone
@@ -82,6 +83,10 @@ class PanMachine:
         self._process = process
         self._route = route
         self._clock = clock
+        #: Is the conveyor motor turning? A callable rather than a flag, for the
+        #: same reason `sensor` is: this class owns no hardware. Defaults to
+        #: "no belt", so a rig without a motor behaves exactly as before.
+        self._belt_running = belt_running if belt_running is not None else (lambda: False)
 
         self.object_threshold_g = self.cfg["conveyor.weight.pan.object_threshold_g"]
         self.clear_threshold_g = self.cfg["conveyor.weight.pan.clear_threshold_g"]
@@ -187,6 +192,20 @@ class PanMachine:
         )
 
     def _weighing(self) -> PanState:
+        # THE BELT MUST BE STOPPED TO WEIGH, and this is the backstop rather
+        # than the mechanism: the machine loop stops the motor when the pan
+        # leaves WAITING_FOR_OBJECT, one iteration before this runs. If it
+        # somehow has not, refuse - measured on this bench, a running motor
+        # takes the reading from 0.084 g of noise to 36.044 g, and components
+        # here weigh 5-200 g. A mass read over a running belt is not a light
+        # object, it is noise, and nothing downstream could tell the difference.
+        if self.cfg["conveyor.belt.motor.weigh_requires_stopped"] and self._belt_running():
+            self._reading = None
+            return self._to(
+                PanState.WEIGHT_STABLE,
+                "Refusing to weigh while the conveyor is running: the motor swamps the "
+                "load cell. The belt should have stopped before this point.",
+            )
         sensor = self._sensor()
         if sensor is None:
             self._reading = None
@@ -258,6 +277,7 @@ class PanMachine:
             "seconds_in_state": round(self._clock() - self.since, 2),
             "cycles_completed": self.cycles,
             "automatic": True,
+            "belt_running": bool(self._belt_running()),
             "thresholds": {
                 "object_threshold_g": self.object_threshold_g,
                 "clear_threshold_g": self.clear_threshold_g,

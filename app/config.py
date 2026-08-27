@@ -252,6 +252,19 @@ SPEC: dict[str, tuple] = {
     # Actuation ships OFF. Nothing moves until someone turns this on with the
     # board connected and bench-verified.
     "conveyor.arduino.enabled": (_bool, False, "AURUM_ARDUINO_ENABLED"),
+    # The L298N conveyor motor. OFF by default, like actuation: a belt keeps
+    # acting after the software stops, so it is never enabled as a side effect.
+    "conveyor.belt.motor.enabled": (_bool, False, "AURUM_BELT_MOTOR_ENABLED"),
+    "conveyor.belt.motor.pwm": (_int, 120, "AURUM_BELT_MOTOR_PWM"),
+    "conveyor.belt.motor.keepalive_s": (_non_negative, 1.0, "AURUM_BELT_MOTOR_KEEPALIVE_S"),
+    # Measured 430x noise degradation with the motor running; see the comment
+    # in configs/conveyor.yaml. Configurable so a rig with a quiet drive can
+    # turn it off, NOT so a noisy one can be made to look like it works.
+    "conveyor.belt.motor.weigh_requires_stopped": (
+        _bool,
+        True,
+        "AURUM_BELT_WEIGH_REQUIRES_STOPPED",
+    ),
     "conveyor.arduino.baudrate": (_int, 115200, "AURUM_ARDUINO_BAUDRATE"),
     "conveyor.arduino.timeout_s": (_non_negative, 1.0, "AURUM_ARDUINO_TIMEOUT_S"),
     # The board acknowledges AFTER the paddle has finished its stroke, so this
