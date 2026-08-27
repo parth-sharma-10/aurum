@@ -404,3 +404,74 @@ class TestTheDashboardPayload:
         assert pricing["currency"] == "INR"
         for metal, quote in pricing["metals"].items():
             assert quote["status"] in ("LIVE", "REFERENCE", "STALE", "UNAVAILABLE", "ERROR"), metal
+
+
+class TestTheDemonstrationWithNothingPluggedIn:
+    """Camera only: no board, no load cell, no belt.
+
+    This is `configs/demo-profile.sh`, and it is the state the bench is in
+    whenever the board is not enumerating. The whole point of the fallback is
+    that this still runs: the camera supplies the arrival the pan cannot, the
+    stand-in supplies the mass the cell cannot, and the belt model supplies the
+    travel time the motor cannot.
+
+    Everything it produces is stamped SIMULATED and none of it may be quoted as
+    a measurement. What is real here is the decision: the same engine, the same
+    cited evidence, the same thresholds.
+    """
+
+    def run(self) -> DemoSession:
+        return DemoSession(
+            cfg=cfg(
+                AURUM_SIMULATION="true",
+                AURUM_CONVEYOR_MODE="SIMULATION",
+                AURUM_SIM_BELT_SPEED_CM_S="10.0",
+                AURUM_ARDUINO_ENABLED="true",
+                AURUM_DEMO_MOCK_MASS="true",
+            )
+        )
+
+    def sorted_cpu(self, run: DemoSession) -> dict:
+        from app.pipeline.pan import PanState
+
+        run.connect_board()
+        det = TrackedDetection(track_id=1, class_name="CPU", confidence=0.94, xyxy=(10, 10, 90, 90))
+        for frame in range(6):
+            run.pipeline.process_detections([det], frame_id=frame)
+        for _ in range(60):
+            if run.pan.state is PanState.WAITING_FOR_CLEAR:
+                break
+            run.pan.step()
+        held = run.zone.held
+        assert held is not None, f"nothing was latched: {run.pan.reason}"
+        return run._routed[held.assembly_id]
+
+    def test_the_chain_runs_with_no_hardware_at_all(self):
+        run = self.run()
+        # The precondition, asserted rather than assumed: there is no cell.
+        run.connect_board()
+        assert run.weight_sensor is None
+
+        record = self.sorted_cpu(self.run())
+
+        assert record["class_name"] == "CPU"
+        assert run.pan.snapshot()["trigger_fallback_armed"] is True
+
+    def test_it_reaches_a_bin_and_schedules_a_paddle(self):
+        record = self.sorted_cpu(self.run())
+        assert record["decision"]["decision"] == "A"
+        # A scheduled route is a time, not a movement - but it is the thing the
+        # demonstration shows, and without a belt model there would be none.
+        assert record["actuation"]["scheduled"] is True
+        assert record["actuation"]["servo"] == "SERVO_A"
+
+    def test_it_produces_the_pmdi_figures(self):
+        pmdi = self.sorted_cpu(self.run())["valuation"]["pmdi"]
+        assert pmdi["precious_mass_fraction_ppm"] is not None
+        assert pmdi["pmdi_value"] is not None
+
+    def test_nothing_it_produces_claims_to_be_measured(self):
+        record = self.sorted_cpu(self.run())
+        assert record["weight_status"] == "SIMULATED"
+        assert record["valuation"]["overall_status"] == "SIMULATED"
+        assert record["actuation"]["route"]["simulated"] is True

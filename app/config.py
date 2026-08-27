@@ -240,6 +240,26 @@ SPEC: dict[str, tuple] = {
     # The normal workflow. Off leaves POST /session/measure as the only way to
     # weigh anything, which is the developer fallback rather than the product.
     "conveyor.weight.pan.auto": (_bool, True, "AURUM_PAN_AUTO"),
+    # ------------------------------------------------------------------
+    # AUTOMATIC ZERO. Re-take the tare from the empty pan when the board
+    # connects, instead of trusting a zero recorded on an earlier day.
+    #
+    # ON, because the tare is the one calibration term that genuinely
+    # drifts: it is the raw count of an empty pan, and it moves with
+    # temperature, with the amplifier's supply, and with anything left
+    # resting on the pan. The counts-per-gram factor does NOT drift that
+    # way and is NOT touched here - deriving it needs a known reference
+    # mass on the pan, which no software can arrange for itself.
+    #
+    # THE PAN MUST BE EMPTY WHEN THE BOARD CONNECTS. A tare taken under an
+    # object subtracts that object from every later reading. Two things
+    # keep that from becoming a silent corruption: the new zero is held in
+    # memory and never written to configs/calibration.yaml, so a restart
+    # returns to the recorded one; and `WeightSensor.tare` refuses a stuck
+    # or repeating cell outright rather than averaging a dead converter
+    # into a fabricated zero.
+    # ------------------------------------------------------------------
+    "conveyor.weight.auto_tare": (_bool, True, "AURUM_WEIGHT_AUTO_TARE"),
     "conveyor.weight.calibration_factor": (
         _float,
         UNMEASURED,

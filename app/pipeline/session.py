@@ -47,6 +47,7 @@ that could not be weighed, not a stack trace on a projector.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import threading
 import time
 import uuid
@@ -64,6 +65,7 @@ from app.hardware.arduino import ArduinoController
 from app.hardware.fault import FaultCode, HardwareFault
 from app.hardware.link import BoardLink
 from app.hardware.servos import ActuationOutcome, ServoActuator
+from app.hardware.transport import autodetect_port
 from app.pipeline.association import SingleObjectZone
 from app.pipeline.item_pipeline import ItemPipeline
 from app.pipeline.pan import PanMachine, PanState
@@ -278,12 +280,27 @@ class DemoSession:
         if self.cfg["conveyor.runtime.simulation"]:
             return self._connect_simulated_board()
         port = self.cfg["conveyor.arduino.port"]
+        # "auto" means find it. The port name is not stable across reboots on
+        # this bench - the same board has come up as usbmodem101 and as
+        # usbmodem1101 - and a stale name in a profile presents as a board that
+        # will not connect thirty seconds before a demonstration.
+        #
+        # Only the explicit string "auto". An UNSET port still refuses below,
+        # because "no port is configured" has always meant this machine has no
+        # board and nothing may be invented for it; quietly adopting whatever
+        # happens to be plugged into an unconfigured machine would be exactly
+        # that. Autodetection is something an operator asks for.
+        if str(port).strip().lower() == "auto":
+            port, why = autodetect_port()
+            if port is None:
+                return {"connected": False, "reason": why, "autodetect": why}
         if not port:
             return {
                 "connected": False,
                 "reason": (
                     "No board port is configured. Set conveyor.arduino.port or "
-                    "AURUM_ARDUINO_PORT. Nothing is invented in its place."
+                    'AURUM_ARDUINO_PORT to a port or to "auto". Nothing is '
+                    "invented in its place."
                 ),
             }
         if self.link is None:
@@ -312,6 +329,7 @@ class DemoSession:
                     transport=self.link.transport, cfg=self.cfg, fault=self.fault
                 )
             self._ensure_actuator()
+            self.auto_tare()
             self.start_pan()
         else:
             self.errors.record(
@@ -1160,6 +1178,69 @@ class DemoSession:
                 ),
             }
         return assembly
+
+    def auto_tare(self) -> dict:
+        """Re-zero the empty pan against the cell as it reads today.
+
+        The tare is the one calibration term that drifts: it is the raw count
+        of an empty pan, and it moves with temperature, with the amplifier's
+        supply, and with anything left resting on the pan. The counts-per-gram
+        factor does not drift that way and is deliberately NOT touched here -
+        deriving it needs a known reference mass on the pan, which no software
+        can arrange for itself.
+
+        The new zero is held in memory and never written to
+        configs/calibration.yaml. A tare taken under an object would subtract
+        that object from every later reading, so the recorded zero stays the
+        one a restart returns to, and this only ever affects the running
+        process. `WeightSensor.tare` refuses a stuck or repeating cell, which
+        is what stops a dead converter being averaged into a fabricated zero.
+        """
+        if not self.cfg["conveyor.weight.auto_tare"]:
+            return {"tared": False, "reason": "conveyor.weight.auto_tare is off."}
+        sensor = self.weight_sensor
+        if sensor is None:
+            return {"tared": False, "reason": "No load cell is connected."}
+        if not self.calibration.has_factor:
+            # Without a factor the counts cannot become grams at all, and a
+            # zero on its own buys nothing. Calibrate first.
+            return {
+                "tared": False,
+                "reason": (
+                    "The load cell has no counts-per-gram factor. Run "
+                    "`python -m app.calibrate` against two known masses."
+                ),
+            }
+        before = self.calibration.tare_counts
+        counts = sensor.tare()
+        if counts is None:
+            self.errors.record(
+                ErrorCode.WEIGHT_ERROR,
+                "weight",
+                "auto-tare refused: the cell is not returning a live zero, so the "
+                "recorded tare was kept.",
+            )
+            return {
+                "tared": False,
+                "reason": (
+                    "The cell did not return a usable zero - no frames, or a stuck "
+                    "converter. The recorded tare was kept."
+                ),
+            }
+        # `Calibration` is frozen, and deliberately so: a calibration is a
+        # record of a measurement, not a mutable setting. Replacing the one
+        # term that drifts keeps the verified factor and its provenance intact.
+        self.calibration = dataclasses.replace(self.calibration, tare_counts=counts)
+        return {
+            "tared": True,
+            "tare_counts": counts,
+            "previous_tare_counts": before,
+            "drift_counts": None if before is None else counts - before,
+            "note": (
+                "In-memory only: configs/calibration.yaml still holds the recorded "
+                "tare, and a restart returns to it."
+            ),
+        }
 
     def mock_mass_for(self, component_class: str | None) -> float:
         """The stand-in mass for a class, in grams.

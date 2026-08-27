@@ -1017,3 +1017,102 @@ class TestTheConveyorMotor:
         run._drive_belt(PanState.WAITING_FOR_OBJECT)
         assert run.stop_belt() is True
         assert run.link.belt_running is False
+
+
+class TestTheHardwareFallback:
+    """A dead load cell must not cost the demonstration.
+
+    The cell is what starts a cycle. With an open or absent one nothing ever
+    arrives on the pan, so the automatic chain never runs at all - and a
+    stand-in mass alone cannot help, because it substitutes a mass for an
+    object already being handled, not the arrival itself.
+
+    With the fallback armed the camera starts the cycle instead, for exactly
+    as long as the cell cannot. Everything it produces stays SIMULATED.
+    """
+
+    def test_a_dead_cell_still_sorts_when_the_fallback_is_armed(self):
+        transport = FakeTransport(connected=True)
+        cell = ScriptedCell(0.0)
+        run = session(cell, transport, AURUM_DEMO_MOCK_MASS="true")
+        cell.unplug()
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+
+        record = cycle(run)
+
+        assert record["class_name"] == "CPU"
+        # The stand-in for a CPU, not the flat default: a precious fraction is
+        # metal over TOTAL mass, so the wrong mass is a wrong ppm.
+        assert record["weight_g"] == pytest.approx(run.mock_mass_for("CPU"))
+        assert record["weight_status"] == "SIMULATED"
+        assert run.pan.snapshot()["trigger"] == "camera"
+        # The whole point of the fallback: a real decision, really actuated.
+        assert record["decision"]["decision"] == "A"
+        assert transport.movements == [("A", record["actuation"]["command_id"])]
+
+    def test_the_fallback_produces_a_pmdi_figure(self):
+        """A stand-in mass must still reach the number the demonstration shows."""
+        cell = ScriptedCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true")
+        cell.unplug()
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+
+        pmdi = cycle(run)["valuation"]["pmdi"]
+
+        assert pmdi["precious_mass_fraction_ppm"] is not None
+        assert pmdi["pmdi_value"] is not None
+        # Fabricated, and it must say so everywhere it surfaces.
+        assert pmdi["mass_status"] == "SIMULATED"
+
+    def test_a_live_cell_is_preferred_over_the_camera(self):
+        """The fallback is armed, but a reading cell still drives the machine."""
+        cell = ScriptedCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true")
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+        cell.place(42.7)
+
+        record = cycle(run)
+
+        assert record["weight_status"] == "MEASURED"
+        assert record["weight_g"] == pytest.approx(42.7)
+        assert run.pan.snapshot()["trigger"] == "load-cell"
+
+    def test_without_the_fallback_a_dead_cell_stalls_as_before(self):
+        """The fallback ships off, and off it changes nothing."""
+        cell = ScriptedCell(0.0)
+        run = session(cell)
+        cell.unplug()
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+
+        for _ in range(10):
+            run.pan.step()
+
+        assert run.pan.state is PanState.WAITING_FOR_OBJECT
+        assert run.pan.snapshot()["trigger"] == "load-cell"
+
+
+class TestAutomaticTare:
+    def test_it_rezeroes_against_the_cell_as_it_reads_today(self):
+        cell = ScriptedCell(0.0)
+        run = session(cell)
+        run.link = FakeLink(cell)
+
+        result = run.auto_tare()
+
+        assert result["tared"] is True
+        # The empty pan, wherever the cell now says that is.
+        assert result["tare_counts"] == pytest.approx(TARE_COUNTS, abs=1.0)
+        # The factor is measured against a known mass and is never re-derived.
+        assert run.calibration.counts_per_gram == COUNTS_PER_GRAM
+
+    def test_it_refuses_a_cell_that_is_not_reading(self):
+        """A dead converter must not be averaged into a fabricated zero."""
+        cell = ScriptedCell(0.0)
+        run = session(cell)
+        cell.unplug()
+
+        result = run.auto_tare()
+
+        assert result["tared"] is False
+        # The recorded zero survives, so a restart is still calibrated.
+        assert run.calibration.tare_counts == TARE_COUNTS

@@ -67,7 +67,13 @@ AURUM_SIM_BELT_SPEED_CM_S=10.0
 # usbmodem101 on 2026-08-26 while the board was answering on usbmodem1101. The
 # number follows the USB location, so it changes when the board moves hub or
 # socket. Check it every session; a stale value here fails as "could not open".
-AURUM_ARDUINO_PORT=/dev/cu.usbmodem101
+# "auto" rather than a name: the same board has come up as usbmodem101 and as
+# usbmodem1101 on this bench, and a stale name presents as a board that will
+# not connect. Autodetection selects on the USB vendor id, so the Bluetooth and
+# debug-console cu.* nodes macOS also lists cannot be picked by mistake, and it
+# refuses outright if two USB serial devices are attached. Name the port here
+# instead if that ever happens.
+AURUM_ARDUINO_PORT=auto
 
 # Actuation ships OFF. Without this every move() returns ACTUATION_DISABLED
 # and no frame is written, which looks exactly like a dead servo.
@@ -82,4 +88,15 @@ AURUM_ARDUINO_ENABLED=true
 #
 # Set it true to run the vision and decision halves without touching the cell.
 # Every figure derived from a stand-in is stamped SIMULATED and never `usable`.
-AURUM_DEMO_MOCK_MASS=false
+# The demonstration fallback. ON, because the HX711 on this rig has read open
+# (raw 0, then a 0/-1 dither) and an unreadable cell otherwise costs the whole
+# demonstration: nothing arrives on the pan, so the automatic chain never runs.
+#
+# With this on, an item the cell cannot weigh is given a per-class stand-in
+# mass, and the camera starts the cycle for as long as the cell cannot. Both
+# reverse themselves the moment the cell reads again - the cell is asked first
+# on every pass, and a real arrival always wins.
+#
+# EVERY FIGURE DERIVED FROM A STAND-IN IS STAMPED SIMULATED, all the way to the
+# EPR ledger and the dashboard. None of them may be quoted as a measurement.
+AURUM_DEMO_MOCK_MASS=true

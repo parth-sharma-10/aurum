@@ -98,9 +98,14 @@ class TestTheBenchProfile:
     `AURUM_SIMULATION` unset is what reaches the serial port. `CONVEYOR_MODE`
     on SIMULATION is what makes a route schedulable, because the real geometry
     block is UNMEASURED and an unmeasured machine refuses to schedule rather
-    than guessing. `DEMO_MOCK_MASS` off is what puts the load cell in the loop
-    at all — with a stand-in mass the pan never sees an arrival and nothing is
-    ever triggered.
+    than guessing.
+
+    `DEMO_MOCK_MASS` is now ON. It used to be off, because a stand-in mass
+    alone meant the pan never saw an arrival and nothing was ever triggered.
+    That is no longer what it does: the fallback also hands the ARRIVAL to the
+    camera for as long as the cell cannot supply one, so the chain runs on a
+    rig whose HX711 reads open — which is what this one has been doing. The
+    cell is still asked first on every pass and still wins whenever it reads.
     """
 
     PROFILE = config.CONFIG_DIR / "bench-profile.sh"
@@ -133,15 +138,25 @@ class TestTheBenchProfile:
         assert speed.cm_s == pytest.approx(10.0)
         assert speed.status is SpeedStatus.SIMULATED
 
-    def test_the_load_cell_drives_the_cycle_not_a_stand_in_mass(self):
-        """With a stand-in mass the pan never sees an arrival, so nothing is
-        ever triggered and the servo never fires on its own — which is exactly
-        what the bench hit before this was turned off."""
-        assert self.environ()["AURUM_DEMO_MOCK_MASS"] == "false"
+    def test_the_fallback_is_armed_so_an_open_cell_cannot_stop_the_demonstration(self):
+        """The cell on this rig has read open. Armed, the camera starts the
+        cycle for as long as the cell cannot, and the stand-in mass carries a
+        SIMULATED stamp everywhere it surfaces."""
+        assert self.environ()["AURUM_DEMO_MOCK_MASS"] == "true"
 
-    def test_it_names_a_port_and_enables_actuation(self):
+    def test_the_load_cell_is_still_preferred_whenever_it_reads(self):
+        """Armed is not the same as forced. `camera_trigger.enabled` stays off,
+        so the pan is asked first on every pass and a real arrival always wins;
+        the camera is only reached once the cell has refused."""
+        assert "AURUM_DEMO_CAMERA_TRIGGER" not in self.environ()
+        assert cfg(**self.environ())["demo.camera_trigger.enabled"] is False
+
+    def test_it_resolves_a_port_and_enables_actuation(self):
         env = self.environ()
-        assert env["AURUM_ARDUINO_PORT"].startswith("/dev/")
+        # "auto" or an explicit node. This board has come up as usbmodem101 and
+        # as usbmodem1101, and a stale name presents as a board that will not
+        # connect thirty seconds before a demonstration.
+        assert env["AURUM_ARDUINO_PORT"] == "auto" or env["AURUM_ARDUINO_PORT"].startswith("/dev/")
         assert env["AURUM_ARDUINO_ENABLED"] == "true"
 
     def test_it_does_not_change_the_shipped_default(self):
