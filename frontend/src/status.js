@@ -698,21 +698,35 @@ export function subsystems(state) {
     ],
   });
 
+  // The belt motor is reported separately from belt SPEED, because they are
+  // different claims: the motor is either turning or it is not, and that is
+  // known: the speed is a measurement nobody has taken. A running motor with an
+  // unmeasured speed is the honest current state of this machine.
+  const beltRunning = Boolean(board.belt_running);
   rows.push({
     key: "conveyor",
     label: "Conveyor",
-    ...(speed.usable
+    ...(beltRunning
       ? {
           level: "ready",
-          headline: `${num(speed.cm_s, 1)} cm/s`,
-          detail: speed.status === "SIMULATED" ? "Simulated belt, for timing" : "Running",
+          headline: "Belt running",
+          detail: speed.usable
+            ? `${num(speed.cm_s, 1)} cm/s`
+            : "Speed has never been measured, so nothing is timed from it.",
         }
-      : {
-          level: "offline",
-          headline: "No speed",
-          detail: "Aurum cannot work out when an object reaches its bin.",
-        }),
+      : speed.usable
+        ? {
+            level: "ready",
+            headline: `${num(speed.cm_s, 1)} cm/s`,
+            detail: speed.status === "SIMULATED" ? "Simulated belt, for timing" : "Belt stopped",
+          }
+        : {
+            level: "offline",
+            headline: "Belt stopped",
+            detail: "No measured speed, so Aurum cannot time an object to its bin.",
+          }),
     technical: [
+      ["Motor", beltRunning ? `running, pwm ${board.belt_pwm ?? "--"}` : "stopped"],
       ["Mode", conveyor.mode ?? "--"],
       ["Speed source", conveyor.speed_source ?? "--"],
       ["Reason", speed.reason ?? "--"],

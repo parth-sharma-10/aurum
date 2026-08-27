@@ -233,6 +233,11 @@ class DemoSession:
             process=self._process,
             route=self._route,
             cfg=self.cfg,
+            # The backstop under `_drive_belt`. That method stops the motor
+            # before the pan ever reaches WEIGHING, and this refuses to weigh
+            # anyway if it somehow has not: a mass read over a running belt is
+            # noise, not a light object.
+            belt_running=lambda: bool(getattr(self.link, "belt_running", False)),
         )
 
         self._source = None
@@ -258,6 +263,9 @@ class DemoSession:
         self.scripted_index = 0
         #: When `_heal_link` last tried to reopen a dropped port.
         self._last_reconnect = 0.0
+        #: When the belt's lease was last renewed. The firmware expires a
+        #: `BELT RUN` after its watchdog, so this paces the renewal.
+        self._belt_renewed = 0.0
 
     # -- hardware ----------------------------------------------------------
     def connect_board(self) -> dict:
@@ -455,6 +463,14 @@ class DemoSession:
                     time.sleep(interval)
                     continue
             self._heal_link()
+            # BEFORE draining routes, and before the next step(). The pan
+            # returns OBJECT_PRESENT one iteration before it weighs, so
+            # stopping here is what guarantees the motor is off by the time
+            # WEIGHING runs - see `_drive_belt`.
+            try:
+                self._drive_belt(state)
+            except Exception as exc:  # a motor is not a reason to stop the loop
+                self.errors.record(ErrorCode.ARDUINO_ERROR, "belt", str(exc))
             try:
                 self.drain_routes()
             except Exception as exc:  # the belt must not take the loop down
@@ -463,6 +479,59 @@ class DemoSession:
             # through work that has already taken its own time.
             if state in (PanState.WAITING_FOR_OBJECT, PanState.WAITING_FOR_CLEAR):
                 time.sleep(interval)
+
+    #: The two pan states the conveyor may move in. Everything between them is
+    #: a measurement or a decision about ONE object that is already on the pan,
+    #: and moving the belt through any of it would either carry that object away
+    #: or drown the cell: measured on this bench, a running motor takes the
+    #: reading from 0.084 g of noise to 36.044 g, about 430x.
+    #:
+    #: WAITING_FOR_CLEAR runs the belt on purpose - that is how a sorted object
+    #: leaves the pan, and it is the same motion that brings the next one in.
+    BELT_RUNNING_STATES = (PanState.WAITING_FOR_OBJECT, PanState.WAITING_FOR_CLEAR)
+
+    def _drive_belt(self, state: PanState) -> None:
+        """Hold the conveyor in the state this step of the cycle calls for.
+
+        Stop-and-go, and the stopping half is the safety-critical one: a mass
+        cannot be measured while the motor runs. Called every pass of the
+        machine loop rather than only on transitions, because `BELT RUN` is a
+        lease the firmware expires after `BELT_WATCHDOG_MS` - re-asserting it is
+        what keeps the belt alive, and NOT re-asserting it is how a crashed
+        backend stops the motor without anybody present.
+        """
+        if self.link is None or not self.link.connected:
+            return
+        if not self.cfg["conveyor.belt.motor.enabled"]:
+            # Never touched unless deliberately enabled, so a rig with no motor
+            # wired to D5/D7/D8 is not sent belt frames at all.
+            return
+
+        should_run = state in self.BELT_RUNNING_STATES and not self.fault.active
+        if not should_run:
+            if self.link.belt_running:
+                self.link.belt(False)
+            return
+
+        now = time.monotonic()
+        if (
+            self.link.belt_running
+            and now - self._belt_renewed < self.cfg["conveyor.belt.motor.keepalive_s"]
+        ):
+            return
+        if self.link.belt(True, pwm=self.cfg["conveyor.belt.motor.pwm"]):
+            self._belt_renewed = now
+
+    def stop_belt(self) -> bool:
+        """Stop the conveyor now, whatever the cycle wanted. True if it stopped.
+
+        The one belt call that is safe from any thread and any state, so the
+        e-stop and the shutdown path can both reach it without reasoning about
+        where the pan machine happens to be.
+        """
+        if self.link is None or not self.link.connected:
+            return False
+        return self.link.belt(False)
 
     #: Don't hammer a port that is not coming back. The board takes ~2 s to
     #: boot after a reopen anyway, so trying oftener than this cannot help.

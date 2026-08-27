@@ -91,6 +91,12 @@ class BoardLink:
         #: measuring a throw needs to know which of the two is in force, and an
         #: unapplied CFG is otherwise invisible from outside this method.
         self.servo_config: tuple[int, int, int] | None = None
+        #: What the conveyor motor is doing, as last acknowledged by the board.
+        #: The firmware's watchdog can stop it without being told to, so this is
+        #: what we last successfully commanded, not a guarantee - which is why
+        #: the session re-asserts it rather than assuming it holds.
+        self.belt_running = False
+        self.belt_pwm = 0
         self.weight_reader = _WeightView(self)
         self.transport = _CommandView(self)
 
@@ -293,8 +299,13 @@ class BoardLink:
         self._responses.clear()
         # Reopening the port resets the board, so the angles it acknowledged
         # are gone with it. Keeping them would report a configuration that the
-        # bootloader has already thrown away.
+        # bootloader has already thrown away. The same reset stops the motor -
+        # `setup()` calls `beltStop()` before anything else - so a link that has
+        # gone down is a belt that is stopped, and saying otherwise would be a
+        # claim about a moving machine that nothing supports.
         self.servo_config = None
+        self.belt_running = False
+        self.belt_pwm = 0
 
     close = disconnect
 
@@ -397,6 +408,50 @@ class BoardLink:
         self.last_error = f"the board did not acknowledge the servo configuration ({command_id})"
         return False
 
+    def belt(self, run: bool, pwm: int = 0, budget_s: float = 2.0) -> bool:
+        """Start or stop the conveyor motor. True once the board acknowledges.
+
+        Under the same gate as everything else that waits for a reply, because
+        it drains the shared response queue exactly as `configure_servos` and
+        `move` do - two exchanges at once discard each other's acknowledgement.
+
+        `BELT RUN` is a LEASE, not a switch. The firmware stops the motor if it
+        is not renewed inside `BELT_WATCHDOG_MS`, so the caller must keep
+        asserting it while the belt should run - and a host that dies stops the
+        belt by doing nothing. Renewal is why this is not duplicate-suppressed
+        the way `move` is: it asserts a state rather than performing an action.
+        """
+        with self._gate:
+            return self._belt(run, pwm, budget_s)
+
+    def _belt(self, run: bool, pwm: int, budget_s: float) -> bool:
+        from app.hardware.arduino import new_command_id, parse_response
+
+        command_id = new_command_id()
+        frame = (
+            f"AURUM/1 BELT RUN {int(pwm)} {command_id}"
+            if run
+            else (f"AURUM/1 BELT STOP {command_id}")
+        )
+        if not self.send(frame):
+            return False
+        deadline = time.monotonic() + budget_s
+        while (remaining := deadline - time.monotonic()) > 0:
+            line = self._next(self._responses, remaining)
+            if line is None:
+                break
+            response = parse_response(line)
+            if response is not None and response.command_id == command_id:
+                if response.verb == "ACK":
+                    self.belt_running = bool(run)
+                    self.belt_pwm = int(pwm) if run else 0
+                    self.last_error = None
+                    return True
+                self.last_error = f"the board refused the belt command ({response.code})"
+                return False
+        self.last_error = f"the board did not acknowledge the belt command ({command_id})"
+        return False
+
     # -- frames ------------------------------------------------------------
     def send(self, line: str) -> bool:
         if self._serial is None or self._state is not LinkState.CONNECTED:
@@ -491,6 +546,8 @@ class BoardLink:
             "queued_weight_frames": len(self._weight),
             "queued_responses": len(self._responses),
             "dropped_lines": self.dropped,
+            "belt_running": self.belt_running,
+            "belt_pwm": self.belt_pwm,
             "servo_config_applied": self.servo_config is not None,
             "servo_config": (
                 dict(zip(("rest_deg", "push_deg", "hold_ms"), self.servo_config, strict=True))

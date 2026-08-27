@@ -82,6 +82,9 @@ class FakeLink:
     def __init__(self, grams: float | None = 42.7, connected: bool = True):
         self.connected = connected
         self.weight_reader = FakeCell(grams)
+        #: The conveyor motor, which this rig's fake never runs.
+        self.belt_running = False
+        self.belt_pwm = 0
 
     def snapshot(self):
         return {"connected": self.connected}
