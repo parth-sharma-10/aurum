@@ -499,3 +499,76 @@ class TestNoActuation:
             source += path.read_text().lower()
         for forbidden in ("import serial", "pyserial", "write(", "baudrate"):
             assert forbidden not in source, forbidden
+
+
+class TestSchedulingFromTheLoadCell:
+    """The object the pan machine routes is on the pan, not at the camera.
+
+    Distances are measured from the camera's field-of-view centre, so an object
+    that has already reached the load cell has already covered
+    `camera_to_load_cell_cm` of the way to its bin. Scheduling it from the
+    camera fires the paddle a whole pan-distance late.
+    """
+
+    def test_the_pan_distance_is_taken_off_the_travel(self):
+        route = scheduler().schedule("AUR-ITEM-1", "A", T0, from_load_cell=True)
+        assert route.status is RouteStatus.SCHEDULED
+        # 60 cm to servo A, less the 25 cm already covered to reach the pan.
+        assert route.distance_cm == pytest.approx(35.0)
+        assert route.travel_time_s == pytest.approx(35.0 / TEST_SPEED)
+
+    def test_without_the_flag_the_object_is_still_at_the_camera(self):
+        """The default is unchanged: a caller who has not said where the object
+        is gets the full camera-to-bin distance."""
+        route = scheduler().schedule("AUR-ITEM-1", "A", T0)
+        assert route.distance_cm == pytest.approx(TEST_A_CM)
+
+    def test_an_explicit_offset_still_wins(self):
+        route = scheduler().schedule(
+            "AUR-ITEM-1", "A", T0, position_offset_cm=10.0, from_load_cell=True
+        )
+        assert route.distance_cm == pytest.approx(TEST_A_CM - 10.0)
+
+    def test_an_unmeasured_pan_distance_is_refused_not_assumed_to_be_zero(self):
+        """The one case that must not silently work. Assuming zero would fire
+        every paddle 25 cm late on a rig whose other distances ARE measured."""
+        geo = geometry(camera_to_load_cell_cm=None)
+        route = scheduler(geo).schedule("AUR-ITEM-1", "A", T0, from_load_cell=True)
+        assert route.status is RouteStatus.UNSCHEDULED
+        assert route.reason_code is RouteReason.CAMERA_LOAD_CELL_GEOMETRY_UNMEASURED
+        assert route.execute_at is None
+
+
+class TestAbandoningARoute:
+    """Only an ACK moves a route to EXECUTED, so a route the hardware boundary
+    gave up on would otherwise stay SCHEDULED and be offered for ever."""
+
+    def test_an_abandoned_route_leaves_the_pending_queue(self):
+        queue = scheduler()
+        queue.schedule("AUR-ITEM-1", "A", T0)
+        assert [r.item_id for r in queue.pending()] == ["AUR-ITEM-1"]
+
+        queue.abandon("AUR-ITEM-1", RouteReason.ACTUATION_FAILED, "the board never answered")
+
+        assert queue.pending() == []
+        assert queue.due(T0 + 999) == []
+
+    def test_the_reason_survives_so_the_run_still_says_what_happened(self):
+        queue = scheduler()
+        queue.schedule("AUR-ITEM-1", "A", T0)
+        queue.abandon("AUR-ITEM-1", RouteReason.TIMING_EXPIRED, "0.400s late")
+
+        route = queue.get("AUR-ITEM-1")
+        assert route.status is RouteStatus.UNSCHEDULED
+        assert route.reason == "0.400s late"
+        assert [r.item_id for r in queue.rejected()] == ["AUR-ITEM-1"]
+
+    def test_an_executed_route_is_not_reopened_by_abandoning_it(self):
+        queue = scheduler()
+        queue.schedule("AUR-ITEM-1", "A", T0)
+        queue.mark_executed("AUR-ITEM-1", at=T0)
+        queue.abandon("AUR-ITEM-1", RouteReason.ACTUATION_FAILED, "late arrival of nonsense")
+        assert queue.get("AUR-ITEM-1").status is RouteStatus.EXECUTED
+
+    def test_abandoning_an_item_nobody_scheduled_is_not_an_error(self):
+        assert scheduler().abandon("AUR-ITEM-NONE", RouteReason.ACTUATION_FAILED, "x") is None

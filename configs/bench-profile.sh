@@ -1,19 +1,20 @@
-# Aurum — the BENCH configuration. Real board, simulated everything else.
+# Aurum — the BENCH configuration. Real components; only the belt is a model.
 #
 #   set -a; source configs/bench-profile.sh; set +a
 #   uvicorn app.api:app --port 8000
 #
-# THE ONLY REAL THING HERE IS THE SERVO COMMAND. The belt does not exist, the
-# mass is not weighed, and the geometry was never measured. What this profile
-# buys is the last link in the chain: a MOVE frame that leaves the host over a
-# real serial port and makes a physical paddle stroke.
+# REAL HERE: the camera, the HX711 mass (the cell carries a verified
+# calibration as of 2026-08-26), the serial transport, and the servo command —
+# a MOVE frame that leaves the host over a real port and makes a physical
+# paddle stroke.
 #
-# Nothing in this file may be quoted as a measurement. It differs from
-# configs/demo-profile.sh in exactly one respect — that file simulates the
-# board too, so no byte reaches a port even when one is attached.
+# NOT REAL HERE: the belt and the geometry. There is no conveyor, so the
+# transport distances are the TEST block and every figure derived from them is
+# stamped SIMULATED all the way to the EPR ledger. Those may not be quoted as
+# measurements. The mass and the routing decision may.
 #
 #   demo-profile.sh    everything simulated, nothing to plug in
-#   bench-profile.sh   everything simulated EXCEPT the servo command
+#   bench-profile.sh   real hardware, simulated belt
 #
 # Neither is the shipped default. configs/conveyor.yaml still ships
 # `mode: NONE`, `simulation: false` and `arduino.enabled: false`, because that
@@ -22,7 +23,7 @@
 # Before sourcing this, confirm the board is the sorter and not the weight-only
 # sketch — aurum_weight has no servo code at all, so nothing can move on it:
 #
-#   lsof /dev/cu.usbmodem101          # must be empty; close the IDE Serial Monitor
+#   lsof /dev/cu.usbmodem1101         # must be empty; close the IDE Serial Monitor
 #   AURUM/1 PING <id>  ->  AURUM/1 PONG <id>     only aurum_sorter answers
 #
 # ---------------------------------------------------------------------------

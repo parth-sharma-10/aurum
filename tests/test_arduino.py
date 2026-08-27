@@ -16,6 +16,8 @@ above is exercised rather than imitated.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from app import config
@@ -31,7 +33,7 @@ from app.hardware import (
     parse_response,
 )
 from app.hardware.fault import FaultCode
-from app.routing import RouteStatus, RoutingScheduler
+from app.routing import RouteReason, RouteStatus, RoutingScheduler
 from app.routing.geometry import Geometry, RoutingMode
 
 T0 = 10.0
@@ -238,6 +240,95 @@ class TestDuplicateProtection:
         ctl.move("B", "AUR-ITEM-2")
         assert len(board.movements) == 2
 
+    def test_one_item_cannot_be_commanded_twice_by_two_threads(self):
+        """Every other guard in this class is single-threaded, which is how this
+        survived: the per-item check and the per-item claim are separate
+        statements with a whole serial write between them. Two threads both read
+        an empty `_by_item`, both pass, and one physical object gets TWO frames -
+        the second paddle stroke landing on whatever is behind it.
+
+        Reachable on the real machine: `_route` runs on the pan thread while the
+        developer fallback runs on the HTTP thread, and both reach `move()`.
+
+        The slow write is what makes the window wide enough to observe every
+        time rather than once in a hundred runs; the defect does not need it.
+        """
+        import threading
+
+        class SlowMoveBoard(FakeTransport):
+            def send(self, line):
+                if " MOVE " in line:
+                    time.sleep(0.1)
+                return super().send(line)
+
+        board = SlowMoveBoard(connected=True)
+        ctl = controller(board)
+        ready = threading.Barrier(2)
+
+        def go():
+            ready.wait(timeout=5)
+            ctl.move("A", "AUR-ITEM-1")
+
+        threads = [threading.Thread(target=go) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=20)
+
+        assert len(board.movements) == 1, f"one item produced {board.movements}"
+
+    def test_two_moves_do_not_eat_each_others_acknowledgement(self):
+        """The reply queue is shared and a reader discards ids that are not its
+        own, so two exchanges at once throw away each other's ACK. The loser
+        then latches ACK_TIMEOUT - stopping the machine - over a paddle the
+        board acknowledged in milliseconds.
+
+        This is the same defect already fixed for CFG, on the one path where a
+        paddle physically exists. Overlap is measured directly, because "both
+        happened to get an answer" is what it looks like when the race simply
+        did not fire this run.
+        """
+        import threading
+
+        overlap = []
+
+        class CountingBoard(FakeTransport):
+            def __init__(self, **kw):
+                super().__init__(**kw)
+                self.inflight = 0
+                self.guard = threading.Lock()
+
+            def send(self, line):
+                if " MOVE " in line:
+                    with self.guard:
+                        self.inflight += 1
+                        overlap.append(self.inflight)
+                    time.sleep(0.05)
+                    with self.guard:
+                        self.inflight -= 1
+                return super().send(line)
+
+        board = CountingBoard(connected=True)
+        ctl = controller(board, AURUM_ARDUINO_ACK_TIMEOUT_MS=500)
+        results = {}
+        ready = threading.Barrier(2)
+
+        def go(item):
+            ready.wait(timeout=5)
+            results[item] = ctl.move("A", item)
+
+        threads = [threading.Thread(target=go, args=(f"AUR-ITEM-{i}",)) for i in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=20)
+
+        assert max(overlap) == 1, f"two moves were in flight at once: {overlap}"
+        assert {k: v.state for k, v in results.items()} == {
+            "AUR-ITEM-0": CommandState.ACKED,
+            "AUR-ITEM-1": CommandState.ACKED,
+        }
+
 
 class TestLinkLifecycle:
     def test_a_fresh_transport_is_disconnected(self):
@@ -376,17 +467,33 @@ class TestActuator:
         scheduler, actuator, _ = rig(board)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
         assert actuator.execute_due(now=DUE_A)[0].outcome is ActuationOutcome.FAILED
-        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
+        # UNSCHEDULED, not EXECUTED and not SCHEDULED: the paddle never moved,
+        # and the route is over rather than waiting for a moment that will
+        # never come.
+        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.UNSCHEDULED
+        assert scheduler.get("AUR-ITEM-1").reason_code is RouteReason.ACTUATION_FAILED
+
+    def test_a_failed_route_leaves_the_queue_instead_of_counting_down_for_ever(self):
+        """Only an ACK moves a route to EXECUTED, so before this a failed route
+        stayed SCHEDULED and `pending()` offered it until the process died -
+        the dashboard showing an ETA for a stroke nobody would ever make."""
+        board = FakeTransport(connected=True, fail_with="STALLED")
+        scheduler, actuator, _ = rig(board)
+        scheduler.schedule("AUR-ITEM-1", "A", T0)
+        actuator.execute_due(now=DUE_A)
+        assert scheduler.pending() == []
+        assert scheduler.due(DUE_A + 600) == []
 
     def test_a_timeout_does_not_mark_the_route_executed(self):
         board = FakeTransport(connected=True, silent=True)
         scheduler, actuator, _ = rig(board, AURUM_ARDUINO_ACK_TIMEOUT_MS=20)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
         assert actuator.execute_due(now=DUE_A)[0].outcome is ActuationOutcome.FAILED
-        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
+        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.UNSCHEDULED
 
     def test_a_failure_is_not_retried_on_the_next_tick(self):
-        """A failed route stays SCHEDULED, so `due()` keeps offering it.
+        """`_attempted` is the barrier, and it holds even for a route the queue
+        has since dropped.
 
         The loop must drop it silently rather than produce a SKIPPED result
         every tick: the machine loop runs at 20 Hz and each result became an
@@ -435,7 +542,7 @@ class TestActuator:
         scheduler, actuator, _ = rig(board)
         scheduler.schedule("AUR-ITEM-1", "A", T0)
         assert actuator.execute_due(now=DUE_A)[0].outcome is ActuationOutcome.FAILED
-        assert scheduler.get("AUR-ITEM-1").status is RouteStatus.SCHEDULED
+        assert scheduler.get("AUR-ITEM-1").status is not RouteStatus.EXECUTED
 
 
 class TestReporting:

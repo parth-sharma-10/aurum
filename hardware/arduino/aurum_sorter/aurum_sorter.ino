@@ -5,10 +5,13 @@
  * attached Arduino, sent MOVE, and had it acknowledged. What no one has done
  * is watch a paddle: see docs/hardware.md, and scripts/bench_check.py.
  *
- * WARNING: the board on the bench is NOT flashed with this file. It banners
- * `SERVO_INIT B rest=90`, a string that appears nowhere in this repository,
- * so the running firmware is an older build. Reflash before trusting any
- * behaviour described here.
+ * The boot banner says which build is on the board:
+ *
+ *   AURUM/1 BOOT <FIRMWARE_BUILD> rest=<restAngle>
+ *
+ * An older build bannered `SERVO_INIT B rest=90` - a string that appears
+ * nowhere in this repository. If you see that, the board is NOT running this
+ * file and its rest angle is 90 where this file says 0. Reflash.
  *
  * For CALIBRATION use hardware/arduino/aurum_weight/ instead: it has no servo
  * code at all, so nothing can move while you are handling reference masses.
@@ -64,7 +67,7 @@ const unsigned long READY_TIMEOUT_MS   = 500;
 // Printed at boot and blinked on the LED. Bump it whenever this file changes,
 // so "which build is on the board" is answerable from the wire and from across
 // the room instead of being inferred.
-#define FIRMWARE_BUILD "2026-08-26"
+#define FIRMWARE_BUILD "2026-08-27"
 
 // Heartbeat while idle. A board that has stopped executing keeps its LED
 // frozen instead of blinking, which is the cheapest possible detector for the
@@ -144,8 +147,38 @@ bool waitReady(unsigned long timeoutMs) {
   return true;
 }
 
+// The datasheet's own power-down: SCK held HIGH for >60 us powers the HX711
+// off, and dropping it LOW brings it back reset, on channel A at gain 128 and
+// re-running its internal calibration.
+//
+// Used as recovery, because that is also the ACCIDENTAL way to power it down.
+// A DOUT line stuck HIGH for ever - `waitReady` timing out at READY_TIMEOUT_MS
+// over and over, which is the 500 ms `0,ERR` cadence seen on this bench - is
+// what a powered-down converter looks like from here. Without this the board
+// emits ERR until somebody unplugs it; with it, the cell comes back on its own.
+void resetHx711() {
+  digitalWrite(PIN_SCK, HIGH);
+  delayMicroseconds(80);          // >60 us: the power-down threshold
+  digitalWrite(PIN_SCK, LOW);
+  delayMicroseconds(80);
+}
+
 long readRaw() {
   long value = 0;
+  // INTERRUPTS OFF FOR THE WHOLE PULSE TRAIN.
+  //
+  // The Servo library drives its pulses from a Timer1 ISR that keeps running
+  // while the paddles are attached - which is always. An ISR landing between
+  // `digitalWrite(PIN_SCK, HIGH)` and the matching LOW stretches that clock
+  // pulse, and a pulse longer than 60 us IS the HX711's power-down command.
+  // The converter then goes away mid-conversion and DOUT never falls again.
+  //
+  // This is the mechanism behind the intermittent lockups: the cell read
+  // cleanly on one boot and returned `0,ERR` for ever on the next, and nothing
+  // about the wiring differed between them. 25 pulses at ~2 us is about 50 us
+  // with interrupts off, which is well inside what the Servo library tolerates
+  // and happens between strokes in any case.
+  noInterrupts();
   for (uint8_t i = 0; i < 24; i++) {
     digitalWrite(PIN_SCK, HIGH);
     delayMicroseconds(1);
@@ -156,6 +189,7 @@ long readRaw() {
   digitalWrite(PIN_SCK, HIGH);   // 25th pulse: channel A, gain 128
   delayMicroseconds(1);
   digitalWrite(PIN_SCK, LOW);
+  interrupts();
   delayMicroseconds(1);
   if (value & 0x800000L) value |= ~0xFFFFFFL;
   return value;
@@ -284,6 +318,11 @@ void loop() {
       // Say so rather than repeating the last good value: Python drops any
       // line that is not OK, so a stuck cell reads as absent, never as a mass.
       emitWeight(0, "ERR");
+      // Then try to get it back. A DOUT stuck HIGH is what a powered-down
+      // converter looks like, and the only way out is the reset sequence.
+      // Reported first and recovered second, so a run that needed recovering
+      // still leaves the ERR line in the log that says it happened.
+      resetHx711();
     }
   }
 }

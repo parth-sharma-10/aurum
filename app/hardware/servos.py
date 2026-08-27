@@ -36,7 +36,7 @@ from app import config as config_module
 from app.hardware import verification
 from app.hardware.arduino import ArduinoController, Command, CommandState
 from app.hardware.fault import FaultCode
-from app.routing.scheduler import RouteStatus, ScheduledRoute
+from app.routing.scheduler import RouteReason, RouteStatus, ScheduledRoute
 
 
 class ActuationOutcome(StrEnum):
@@ -216,6 +216,14 @@ class ServoActuator:
         late_by = self.late_by(route, now)
         if late_by is not None:
             self._attempted.add(route.item_id)
+            # Out of the queue as well as out of `_attempted`. Only an ACK moves
+            # a route to EXECUTED, so without this it stays SCHEDULED for ever
+            # and the dashboard counts down to a stroke nobody will make.
+            self.scheduler.abandon(
+                route.item_id,
+                RouteReason.TIMING_EXPIRED,
+                f"Refused as {late_by:.3f}s late at the hardware boundary.",
+            )
             return self._record(
                 ActuationResult(
                     route.item_id,
@@ -279,8 +287,14 @@ class ServoActuator:
                 )
             )
 
-        # Not acknowledged: the route stays unexecuted rather than being
-        # recorded as done on the strength of a write that returned.
+        # Not acknowledged: the route is never recorded as done on the
+        # strength of a write that returned - but it does leave the queue, so
+        # the failure is a finished outcome rather than a permanent countdown.
+        self.scheduler.abandon(
+            route.item_id,
+            RouteReason.ACTUATION_FAILED,
+            command.reason or f"The command ended {command.state}.",
+        )
         return self._record(
             ActuationResult(
                 route.item_id,

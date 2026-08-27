@@ -588,3 +588,45 @@ class TestCalibrationReload:
         self.recalibrated(monkeypatch, 999.0)
         run.reload_calibration()
         assert run.snapshot()["calibration"]["counts_per_gram"] == 999.0
+
+
+class TestApplyingTheServoAngles:
+    """The first CFG after a port opens loses its acknowledgement often enough
+    to be the normal case: the board dumps a backlog when the port is opened
+    and the ACK is buried in the tail of it. Measured on this bench on
+    2026-08-27 - the first attempt burned its whole 4 s budget and failed, a
+    second moments later was answered at once, and the operator's only remedy
+    was to press Connect board a second time.
+    """
+
+    class CountingLink:
+        """A board that acknowledges only from the nth attempt onwards."""
+
+        def __init__(self, succeed_from: int):
+            self.succeed_from = succeed_from
+            self.attempts = 0
+
+        def configure_servos(self, rest, push, hold, budget_s=4.0):
+            self.attempts += 1
+            return self.attempts >= self.succeed_from
+
+    def test_a_first_attempt_that_is_not_acknowledged_is_offered_again(self):
+        run = session()
+        run.link = self.CountingLink(succeed_from=2)
+        assert run._apply_servo_config() is True
+        assert run.link.attempts == 2
+
+    def test_it_stops_as_soon_as_the_board_answers(self):
+        """CFG parks both paddles at rest, so a needless second one is a
+        needless movement."""
+        run = session()
+        run.link = self.CountingLink(succeed_from=1)
+        assert run._apply_servo_config() is True
+        assert run.link.attempts == 1
+
+    def test_a_board_that_never_answers_reports_failure(self):
+        """Retrying must not turn a dead board into a configured one."""
+        run = session()
+        run.link = self.CountingLink(succeed_from=99)
+        assert run._apply_servo_config() is False
+        assert run.link.attempts == run.SERVO_CONFIG_ATTEMPTS

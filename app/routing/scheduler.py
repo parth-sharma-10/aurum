@@ -67,6 +67,9 @@ class RouteReason(StrEnum):
     STALE_ITEM = "STALE_ITEM"
     TIMING_UNAVAILABLE = "TIMING_UNAVAILABLE"
     TIMING_EXPIRED = "TIMING_EXPIRED"
+    #: Handed to the board and not acknowledged. The route is over: a failed
+    #: command is not a licence to move the paddle again.
+    ACTUATION_FAILED = "ACTUATION_FAILED"
 
 
 #: Bin to paddle. C is absent on purpose: there is no Servo C.
@@ -232,9 +235,19 @@ class RoutingScheduler:
         detected_at: float,
         component_class: str | None = None,
         position_offset_cm: float | None = None,
+        from_load_cell: bool = False,
         now: float | None = None,
     ) -> ScheduledRoute:
-        """Turn a decision into a timed routing action, or explain why not."""
+        """Turn a decision into a timed routing action, or explain why not.
+
+        `from_load_cell` says the object is on the pan, not at the camera line.
+        That is where every automatically routed object actually is - the pan
+        machine only routes what it has just weighed - and distances here are
+        measured from the camera. Scheduling it as though it were still at the
+        camera adds the whole camera-to-pan distance to its travel and fires the
+        paddle that much late: 60 cm instead of 35 cm at 10 cm/s is 6.0 s where
+        the item arrives at 3.5 s.
+        """
         self._refresh()
         target = _target_of(decision)
         now = detected_at if now is None else now
@@ -363,6 +376,22 @@ class RoutingScheduler:
                 belt_speed_cm_s=geo.belt_speed_cm_s,
             )
 
+        if from_load_cell and position_offset_cm is None:
+            position_offset_cm = geo.camera_to_load_cell_cm
+            if position_offset_cm is None:
+                return self._refuse(
+                    item_id,
+                    target,
+                    RouteReason.CAMERA_LOAD_CELL_GEOMETRY_UNMEASURED,
+                    "The object is on the load cell, but the camera-to-load-cell "
+                    "distance is UNMEASURED. Measure it along the belt and set "
+                    "conveyor.geometry.camera_to_load_cell_cm. Assuming zero would "
+                    "fire the paddle a whole pan-distance late.",
+                    component_class=component_class,
+                    distance_cm=distance,
+                    belt_speed_cm_s=geo.belt_speed_cm_s,
+                )
+
         offset_cm = 0.0
         if position_offset_cm is not None:
             checked = _finite_number(position_offset_cm)
@@ -478,6 +507,27 @@ class RoutingScheduler:
             return route
         route.status = RouteStatus.EXECUTED
         route.executed_at = at
+        return route
+
+    def abandon(self, item_id: str, reason_code: RouteReason, reason: str) -> ScheduledRoute | None:
+        """Take a route out of the queue that will never be actuated.
+
+        Only an acknowledgement moves a route to EXECUTED, so a route the
+        actuation layer failed or refused as late stays SCHEDULED for ever -
+        `pending()` and `due()` keep offering it, and the dashboard shows a
+        countdown for a paddle nobody will ever fire. `ServoActuator` already
+        refuses to attempt it twice; this is the queue learning the same thing.
+
+        The reason is kept, so the run's record still says what happened rather
+        than the route simply vanishing.
+        """
+        route = self._routes.get(item_id)
+        if route is None or route.status is not RouteStatus.SCHEDULED:
+            return route
+        route.status = RouteStatus.UNSCHEDULED
+        route.reason_code = reason_code
+        route.reason = reason
+        self._rejected.append(route)
         return route
 
     def rejected(self) -> list[ScheduledRoute]:

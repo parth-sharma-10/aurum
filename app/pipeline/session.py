@@ -288,12 +288,10 @@ class DemoSession:
             # Not fatal, but not silent either: unacknowledged, the paddles keep
             # whatever angles the sketch booted with rather than the configured
             # ones, and nothing downstream would ever say so.
-            if not self.link.configure_servos(
-                self.cfg["conveyor.servo.rest_angle_deg"],
-                self.cfg["conveyor.servo.push_angle_deg"],
-                self.cfg["conveyor.servo.actuation_ms"],
-                budget_s=self.cfg["conveyor.arduino.ack_timeout_ms"] / 1000,
-            ):
+            # Already applied and the link never dropped: the board is holding
+            # these angles, and re-sending them would reset both paddles for
+            # nothing every time somebody opens the dashboard.
+            if self.link.servo_config is None and not self._apply_servo_config():
                 self.errors.record(
                     ErrorCode.ARDUINO_ERROR,
                     "board",
@@ -314,6 +312,35 @@ class DemoSession:
                 port=port,
             )
         return {"connected": self.link.connected, "state": str(state), **self.link.snapshot()}
+
+    #: How many times to offer the board its servo angles before giving up.
+    #:
+    #: TWO, because the first CFG after a port opens loses its acknowledgement
+    #: often enough to be the normal case: the board dumps a large backlog when
+    #: the port is opened, `_drain_backlog` does not always catch the tail of
+    #: it, and the ACK is buried in what is left. Measured on this bench on
+    #: 2026-08-27 - first attempt spent its whole 4 s budget and failed, a
+    #: second attempt moments later was answered immediately, and the operator's
+    #: only remedy was to press Connect board a second time.
+    #:
+    #: Safe to repeat because CFG is idempotent: it sets two angles and parks
+    #: the paddles at rest. It diverts nothing, so a second one cannot move an
+    #: object the first did not already move. This is NOT a licence to retry
+    #: MOVE, which stays un-retried on purpose.
+    SERVO_CONFIG_ATTEMPTS = 2
+
+    def _apply_servo_config(self) -> bool:
+        """Push the configured angles to the board. True once it acknowledges."""
+        budget_s = self.cfg["conveyor.arduino.ack_timeout_ms"] / 1000
+        return any(
+            self.link.configure_servos(
+                self.cfg["conveyor.servo.rest_angle_deg"],
+                self.cfg["conveyor.servo.push_angle_deg"],
+                self.cfg["conveyor.servo.actuation_ms"],
+                budget_s=budget_s,
+            )
+            for _ in range(self.SERVO_CONFIG_ATTEMPTS)
+        )
 
     def _connect_simulated_board(self) -> dict:
         """HARDWARE_MODE=SIMULATION: there is no port, so there is nothing to open.
@@ -468,12 +495,7 @@ class DemoSession:
                 "Any latched fault is left latched.",
                 port=self.link.port,
             )
-            self.link.configure_servos(
-                self.cfg["conveyor.servo.rest_angle_deg"],
-                self.cfg["conveyor.servo.push_angle_deg"],
-                self.cfg["conveyor.servo.actuation_ms"],
-                budget_s=self.cfg["conveyor.arduino.ack_timeout_ms"] / 1000,
-            )
+            self._apply_servo_config()
 
     # -- camera ------------------------------------------------------------
     def start_camera(self, mode: str = "webcam", path: str | None = None) -> dict:
@@ -841,13 +863,20 @@ class DemoSession:
         return actuation
 
     def _schedule(self, assembly: Assembly, target: str) -> dict:
-        """Hand the item to the belt's timing model. Nothing moves yet."""
+        """Hand the item to the belt's timing model. Nothing moves yet.
+
+        `from_load_cell` because this is only ever reached from the pan machine,
+        which routes an object it has just weighed. That object is on the pan,
+        not at the camera line the distances are measured from, and scheduling
+        it from the camera adds the whole camera-to-pan distance to its travel.
+        """
         detected_at = time.monotonic()
         route = self.scheduler.schedule(
             assembly.assembly_id,
             target,
             detected_at,
             component_class=assembly.class_name,
+            from_load_cell=True,
         )
         self._epr(
             assembly.assembly_id,

@@ -56,7 +56,7 @@ the board enumerates and then holds the port exclusively — it broke two upload
 and looked exactly like the board dropping off USB.
 
 ```bash
-lsof /dev/cu.usbmodem101      # anything listed owns the port, not you
+lsof /dev/cu.usbmodem1101     # anything listed owns the port, not you
 pkill -f serial-monitor       # release it
 ```
 
@@ -76,8 +76,13 @@ Both run at **115200 baud**, matching `configs/conveyor.yaml`.
 
 ```bash
 arduino-cli compile --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
-arduino-cli upload -p /dev/cu.usbmodem101 --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
+arduino-cli upload -p /dev/cu.usbmodem1101 --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
 ```
+
+The port number follows the USB location, so it changes when the board moves
+socket or hub. `ls /dev/cu.usbmodem*` every session — it was `usbmodem101` on
+2026-08-26 and `usbmodem1101` on 2026-08-27, and a stale value fails as
+"could not open", which reads exactly like a dead board.
 
 `arduino-cli lib install Servo` once, if the sorter sketch will not compile.
 
@@ -96,17 +101,26 @@ Do not change this — the other arrangement melted jumper wires once already.
 
 ### 3. Calibrate the load cell — two masses, not one
 
+The cell is mounted and **carries a verified calibration** as of 2026-08-26:
+392.2167 counts/g, tared at −263 078 counts, referenced on 204 g and verified
+against a second 170 g mass — predicted 171.130 g, error +1.130 g against a
+1.5 g tolerance. That record is `configs/calibration.yaml` and it is measured
+data about one physical rig, not a setting.
+
+Re-run it only if the mount is disturbed. The backend must be stopped first —
+it holds the serial port, and two readers get nothing.
+
 ```bash
 cd aurum && source .venv/bin/activate
 pip install -r requirements.txt          # pyserial is required now
-ls /dev/tty.usbmodem*                    # macOS; COM3 on Windows, /dev/ttyACM0 on Linux
+ls /dev/cu.usbmodem*                     # macOS; COM3 on Windows, /dev/ttyACM0 on Linux
 
-python -m app.calibrate --port /dev/tty.usbmodem1101 \
-    --reference-mass 180 --verify-mass 100
+python -m app.calibrate --port /dev/cu.usbmodem1101 \
+    --reference-mass 204 --verify-mass 170
 ```
 
-It tares an empty pan, records the counts for 180 g, derives counts/g, then
-asks for a **different** known mass and checks the prediction.
+It tares an empty pan, records the counts for the reference mass, derives
+counts/g, then asks for a **different** known mass and checks the prediction.
 
 Confirm the result:
 
@@ -116,19 +130,25 @@ grep verified configs/calibration.yaml     # must read: verified: true
 
 **Until this says `true`, no PCB can reach Bin B.** An unverified factor
 produces a `STABLE` reading, and a concentration estimate refuses it — by
-design. The bench experiment that suggested ~361.9 counts/g is evidence the
-hardware responds, not a calibration.
+design.
 
 If verification fails, check the tare, the mounting, and that both masses are
 what they claim to be before touching `--tolerance`.
 
+**Check the empty pan before the demonstration.** It read 7.9–8.3 g with
+nothing on it on 2026-08-27, and the arrival threshold is 5 g — so the pan
+machine sits in `WAITING_FOR_CLEAR` for ever and **the automatic cycle never
+arms**. `curl -s localhost:8000/session/pan` says so in one line. The fix is a
+re-tare, which means the calibration run above, which means stopping the
+backend. Do it the night before, not at the venue.
+
 ### 4. If the load cell will not calibrate — the mock-mass fallback
 
-As of 2026-08-22 the cell is **mechanically bypassed**: 180 g moves it 2.2
-counts against a 64-count noise floor, and 400 g moves it backwards. See
-`docs/hardware.md` for the measurements and the mounting fix.
+Not needed on this rig any more; kept for a bench where the cell is dead or
+absent. It was the standing arrangement until 2026-08-26, when the mount was
+rebuilt — see `docs/hardware.md`.
 
-Fixing it is a bench job. When the demonstration is sooner than the bench job:
+When the demonstration is sooner than the bench job:
 
 ```bash
 export AURUM_DEMO_MOCK_MASS=true
@@ -156,17 +176,24 @@ It ships **off**. Without the flag, a PCB routes to Bin C on
 
 ---
 
-## Running it
+## Running it — real components
+
+This is the path to use. Real camera, real board, real load cell, real servos;
+nothing simulated but the belt, which does not exist. `configs/bench-profile.sh`
+is the checked-in configuration — read it, it explains every line it sets.
 
 Three terminals.
 
 ```bash
+# 0 — nothing may already own the port or the ports
+lsof /dev/cu.usbmodem1101                          # must be empty
+lsof -ti tcp:8000 -ti tcp:5173                     # must be empty
+
 # 1 — the backend
 cd aurum && source .venv/bin/activate
-export AURUM_ARDUINO_PORT=/dev/cu.usbmodem101     # ls /dev/cu.usbmodem* to find yours
-export AURUM_ARDUINO_ENABLED=true                 # actuation ships OFF
-export AURUM_CAMERA_INDEX=0                       # 0 was the external webcam here
-export AURUM_DEMO_MOCK_MASS=true                  # ONLY while the load cell is broken
+ls /dev/cu.usbmodem*                               # confirm the port, then edit
+                                                   # AURUM_ARDUINO_PORT in the profile
+set -a; source configs/bench-profile.sh; set +a
 uvicorn app.api:app --port 8000
 
 # 2 — the dashboard
@@ -175,7 +202,24 @@ cd aurum/frontend && npm install && npm run dev    # http://localhost:5173
 # 3 — spare, for curl if the browser misbehaves
 ```
 
-### With no hardware at all — `configs/demo-profile.sh`
+The profile resolves to `HARDWARE_MODE=PHYSICAL`, actuation on, mock mass
+**off** so the load cell drives the cycle, and the belt left on `SIMULATION`
+because the timing model is the only belt there is. It does not set
+`AURUM_CAMERA_INDEX`; export it if the default is the wrong webcam.
+
+Confirm the machine agrees before you trust the screen:
+
+```bash
+curl -s localhost:8000/ready | python3 -m json.tool
+```
+
+`"ready": true` with an empty `blocked_by`, `"hardware_mode": "PHYSICAL"`, and
+eight checks green — vision model, camera, no latched fault, board link, servo
+angles applied, load cell calibrated, paddle movement verified, actuation
+enabled. Camera and board read *not started* until the dashboard opens and runs
+its start-up sequence; that is expected, not a fault.
+
+### Fallback — no hardware at all, `configs/demo-profile.sh`
 
 The block above drives a real board. On a laptop with nothing attached, source
 the checked-in demonstration profile instead:
@@ -209,27 +253,19 @@ controls → Measure & route now**.
 `configs/conveyor.yaml` is untouched by any of this. Without the profile the
 shipped machine is still `mode: NONE`, actuation off, geometry `UNMEASURED`.
 
-### With a real board — `configs/bench-profile.sh`
-
-`demo-profile.sh` simulates the board too, so **no byte reaches a port even when
-one is attached**. To make a physical paddle stroke, source the bench profile
-instead:
-
-```bash
-cd aurum && source .venv/bin/activate
-lsof /dev/cu.usbmodem101                 # must be empty
-set -a; source configs/bench-profile.sh; set +a
-uvicorn app.api:app --port 8000
-```
+### How the two profiles differ
 
 | | `demo-profile.sh` | `bench-profile.sh` |
 |---|---|---|
-| belt, geometry, mass | SIMULATED | SIMULATED — unchanged |
-| transport | in-process board | **real serial, `/dev/cu.usbmodem101`** |
+| belt, geometry | SIMULATED | SIMULATED — unchanged |
+| mass | per-class stand-in, `SIMULATED` | **HX711, `MEASURED`** |
+| transport | in-process board | **real serial, `/dev/cu.usbmodem1101`** |
 | `HARDWARE_MODE` | `SIMULATION` | **`PHYSICAL`** |
 
-The one difference is the servo command. Everything else is still a test value
-and still stamped `SIMULATED` to the EPR ledger.
+The belt is a model in both, and every figure derived from it is still stamped
+`SIMULATED` to the EPR ledger. The mass and the servo command are not: on the
+bench profile they are a real reading off a verified cell and a real frame down
+a real port.
 
 **The two flags are not interchangeable.** `AURUM_SIMULATION` picks the
 transport *and* the geometry, so turning it off alone drops the router onto the
@@ -241,23 +277,27 @@ Verify the firmware before trusting a silent paddle: `aurum_sorter` answers
 `AURUM/1 PING <id>` with `AURUM/1 PONG <id>`, and `aurum_weight` — which has no
 servo code at all — does not.
 
-Then, in the dashboard:
+Then, in the dashboard. It opens on the **operator** screen — the engineering
+view is behind the mode switch, and `Developer controls` lives there.
+
+Steps 1 and 2 run **by themselves** when the page loads: the start-up sequence
+asks `/ready`, starts the camera, connects the board, and asks `/ready` again.
+Do them by hand only if it fails.
 
 | # | Action | What to expect |
 |---|---|---|
-| 1 | **Start camera** | Live feed appears; pills show `CAMERA LIVE` |
-| 2 | **Connect board** | `BOARD LINKED` and `ACTUATION ON` green. `NOT CALIBRATED` stays amber while the cell is broken |
+| 1 | *(automatic)* **Start camera** | Live feed appears; pills show `CAMERA LIVE` |
+| 2 | *(automatic)* **Connect board** | `BOARD LINKED`, `ACTUATION ON`, `CALIBRATED` all green |
 | 3 | Hold the component to the camera | Box appears labelled `AUR-ITEM-xxxxxxxx CPU 0.94` |
 | 4 | Wait for CONFIRMED | Three observations; "current item" fills in |
 | 5 | Place it on the load cell | `Object detected on the pan` → `Measuring…` |
-| 6 | **Do nothing** | `842.3 g stable`; the same item id gains a mass, a PMDI, a bin |
+| 6 | **Do nothing** | A settled reading, `MEASURED`; the same item id gains a mass, a PMDI, a bin |
 | 7 | Watch the paddle | Servo A or Servo B strokes; Bin C moves nothing |
 | 8 | Take the object off | `Remove the object` → `Waiting for an object` |
 
 `CAMERA LIVE`, `BOARD LINKED` and `ACTUATION ON` must be green before step 6. A
 red or amber pill is the system telling you something is genuinely not ready —
-it is not cosmetic. `NOT CALIBRATED` and `MOCK MASS` are expected while the load
-cell is bypassed, and are exactly what you should be narrating.
+it is not cosmetic.
 
 Stages after the camera read "not weighed yet" / "waiting" until the object is
 on the pan. That is pending, not failed. The banner at the top of the dashboard
@@ -269,20 +309,44 @@ uncalibrated cell and an unidentified mass both say so in plain words.
 
 ## What each component does, and why
 
-Rehearse with all three so nothing is a surprise on camera.
+Rehearse with all four so nothing is a surprise on camera.
 
 | Component | Bin | Why | Needs a verified calibration? |
 |---|---|---|---|
 | **CPU** | **A** → Servo A | Configured premium class; cited gold per package (`CPU-AU-001`) is per-piece, so it needs no mass | No |
 | **PCB** | **B** → Servo B | 2 200 ppm precious from cited composition, above the 100 ppm recoverable threshold | **Yes** — or a mock mass |
-| **RAM** | **C** → nothing | No cited composition exists for a whole RAM module. Routing it anywhere would be a guess | No |
+| **RAM** | **B** → Servo B | 18 mg gold per module, cited per-piece (`RAM-AU-001`, Charles et al. 2017, n=12 DIMMs), so it needs no mass | No |
 | **Connector** | **A** → Servo A | Configured premium class, cited gold per piece | No |
 
-**RAM going to C is the best thing in the demonstration.** It is not a
-failure — it is the system refusing to invent data it does not have, and
-saying exactly why: `UNKNOWN_MATERIAL`. Point at it deliberately. Note
-that the mock-mass fallback does not rescue it: a stand-in mass changes the
-arithmetic, never the evidence.
+**Weigh the actual pieces you plan to demonstrate, and check them against the
+plausibility window** in `configs/grading.yaml` — CPU 5–500 g, RAM 3–200 g,
+PCB **20**–5 000 g, Connector 0.5–200 g. Outside it the decision is `UNKNOWN`
+with reason `UNKNOWN_MASS_ANOMALY` and the item goes to manual inspection. A
+real 10.8 g PCB did exactly that on 2026-08-27: correctly identified, correctly
+weighed, and refused because a 10.8 g board is not a plausible board. Bring one
+over 20 g if you want to see Bin B.
+
+**RAM routes to B, and this runbook used to say it routed to C.** It said the
+system had no cited composition for a whole module and refused rather than
+guessing. That stopped being true when `RAM-AU-001` was added: 18 mg of gold
+per module, measured by Charles et al. across twelve DIMMs, on a per-piece
+basis that needs no mass at all. Verified in simulation on 2026-08-27 — RAM
+routes to **B** on `B_PRECIOUS_FRACTION`. Do not say "watch it get refused".
+
+**The refusals are still the best thing in the demonstration** — there are just
+two real ones now, and both are worth showing:
+
+| Refusal | How to trigger it | What it proves |
+|---|---|---|
+| `UNKNOWN_CONFIDENCE` → C | Present a component badly — edge-on, moving, half out of frame — until confidence drops below the threshold | It will not act on a class it is not sure of |
+| `UNKNOWN_MASS_ANOMALY` → C | The 10.8 g PCB, or anything outside its class's mass window | A mass that cannot be right makes the identity suspect, and it says so rather than valuing it |
+
+`UNKNOWN_CLASS` is the third, but it needs an object of a class the model does
+not know — a heatsink. Bring one and it goes to C on `UNKNOWN_CLASS`, which is
+the cleanest refusal of the three: no class, no guess.
+
+In every case the mock-mass fallback does not rescue the item: a stand-in mass
+changes the arithmetic, never the evidence.
 
 **RAM is also the hardest class to get on camera.** The model scores 0.51 recall
 on it — the worst of the four — so a module flickers in and out where a CPU
@@ -307,7 +371,8 @@ board is invisible at the point of collection.
 identity is minted once. The mass, the estimate and the servo command all key
 off it, so one physical object cannot become three ledger rows."*
 
-**0:50 — mass.** Place it on the cell. Press Measure. Point at `MEASURED`.
+**0:50 — mass.** Place it on the cell and take your hand away. Point at
+`MEASURED`.
 *"That status means a settled reading on a calibration we verified against a
 second known mass. Anything less reads STABLE, and the estimator refuses it."*
 
@@ -320,10 +385,11 @@ decided that. Nobody typed it."*
 **2:20 — the servo.** The paddle strokes. *"That is a real command over real
 serial to a real Arduino."*
 
-**2:45 — RAM.** Run the RAM module. It goes to C, nothing moves. *"No cited
-composition exists for a whole DRAM module, so it refuses rather than guessing.
-Bin C needs no actuator — it is what happens when the software does nothing,
-which is also what happens if it crashes."*
+**2:45 — a refusal.** Present something badly, or use the 10.8 g PCB. It goes
+to C and nothing moves. *"It will not act on a class it is not sure of, or on a
+mass that cannot be right for that class. Bin C needs no actuator — it is what
+happens when the software does nothing, which is also what happens if it
+crashes."*
 
 **3:15 — the honest boundary.** *"No conveyor yet. I carried these between
 stages. Conveying and singulation are the next hardware stage — what is proven
@@ -341,6 +407,9 @@ today is perception, measurement, material intelligence and actuation."*
 | `ACTUATION OFF` | Safety default | `export AURUM_ARDUINO_ENABLED=true` and restart the backend |
 | Mass reads `UNSTABLE` | Bench vibration, or a hand still on the pan | Let it settle and press Measure again |
 | Mass reads `UNAVAILABLE` | Cell not responding | Check D2/D3, re-seat the HX711, confirm the sorter sketch is flashed |
+| `the board did not acknowledge the servo configuration` on the first connect | Known: the board dumps a large backlog when the port opens, and the first CFG's ACK is buried in it | **Press Connect board again.** The second attempt applies. Check `servo_config_applied: true` in `/session`, not `last_error`, which keeps the stale first message |
+| `x.x g still on the pan` with nothing on it | Tare drift — it sat at ~8 g on 2026-08-27, over the 5 g arrival threshold, so the automatic cycle never arms | Stop the backend, clear the pan, re-run `python -m app.calibrate` |
+| `UNKNOWN_MASS_ANOMALY` | The mass is outside the plausibility window for that class | Not a fault. Use a component inside the range — a PCB must clear 20 g |
 | `ALREADY_PROCESSED` | That item was already routed | Take the component out of frame, let the track drop, present it again |
 | Servo does not move but state is `ACKED` | Mechanical or supply-side | Check the external 5 V rail and the horn. An ACK is not proof of movement |
 | Everything is unplugged | — | Every item routes to C and nothing moves. The demo degrades to software, and the dashboard says why on every card |
@@ -368,10 +437,12 @@ No. It identifies the component and multiplies a published composition by a
 measured mass. That is an estimate of *contained* metal, labelled as one — not
 a recovery yield and not an assay.
 
-**"Why did the RAM get rejected?"**
-No source giving whole-module composition could be read in full, so the
-database has a stated gap rather than an invented number. The system refuses
-rather than guessing.
+**"Why did that one get rejected?"**
+One of three reasons, and the dashboard names which: the class was below the
+confidence threshold (`UNKNOWN_CONFIDENCE`), the mass was outside what is
+plausible for that class (`UNKNOWN_MASS_ANOMALY`), or the class has no cited
+composition in the database at all (`UNKNOWN_CLASS`). In none of them does the
+system substitute a guess — it routes to C and records the reason.
 
 **"Is the conveyor part built?"**
 No. I moved those by hand. Perception, measurement, material intelligence and

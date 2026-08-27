@@ -16,6 +16,7 @@ caller can act on, never an exception that takes the pipeline down.
 from __future__ import annotations
 
 import contextlib
+import threading
 import time
 from collections import deque
 from enum import StrEnum
@@ -35,6 +36,27 @@ class Transport:
     """The interface the actuation layer talks to."""
 
     name = "transport"
+
+    def __init__(self) -> None:
+        self._exchange_lock = threading.RLock()
+
+    @property
+    def exchange_lock(self) -> threading.RLock:
+        """Held for one whole send-then-await-the-reply exchange.
+
+        The reply queue is SHARED by every reader, and a reader that pops a
+        reply carrying somebody else's command id discards it and reads on. So
+        two exchanges running at once eat each other's acknowledgement: each
+        throws the other's ACK away and the loser reports a board that did not
+        answer while the board answered both in milliseconds. That was found
+        and fixed once for CFG alone; MOVE has the same shape and the same
+        queue, and a MOVE that loses its ACK latches ACK_TIMEOUT and stops the
+        machine over a paddle that moved perfectly well.
+
+        An RLock rather than a Lock because `BoardLink` hands out its own link
+        gate here, and that gate is already re-entered by `configure_servos`.
+        """
+        return self._exchange_lock
 
     @property
     def state(self) -> LinkState:  # pragma: no cover - interface
@@ -67,6 +89,7 @@ class SerialTransport(Transport):
     # 115200 to match the sketch (hardware/arduino/aurum_sorter/aurum_sorter.ino)
     # and BoardLink. A mismatched default reads as line noise, not as an error.
     def __init__(self, port: str, baudrate: int = 115200, timeout_s: float = 1.0) -> None:
+        super().__init__()
         self.port = port
         self.baudrate = baudrate
         self.timeout_s = timeout_s
@@ -156,6 +179,7 @@ class FakeTransport(Transport):
         silent: bool = False,
         connected: bool = False,
     ) -> None:
+        super().__init__()
         self.sent: list[str] = []
         self._inbox: deque[str] = deque()
         self.auto_ack = auto_ack

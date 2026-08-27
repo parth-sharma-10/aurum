@@ -244,6 +244,10 @@ class ArduinoController:
         Keeps the bench values in `configs/conveyor.yaml` rather than compiled
         into the sketch, so tuning them on a real machine needs no reflash.
         """
+        with self.transport.exchange_lock:
+            return self._configure()
+
+    def _configure(self) -> Command:
         command_id = new_command_id()
         rest = self.cfg["conveyor.servo.rest_angle_deg"]
         push = self.cfg["conveyor.servo.push_angle_deg"]
@@ -287,11 +291,12 @@ class ArduinoController:
         """Round-trip the link. False when the board does not answer."""
         if not self.connected:
             return False
-        command_id = new_command_id()
-        if not self.transport.send(f"{PROTOCOL} PING {command_id}"):
-            return False
-        response = self._await(command_id)
-        return response is not None and response.verb == "PONG"
+        with self.transport.exchange_lock:
+            command_id = new_command_id()
+            if not self.transport.send(f"{PROTOCOL} PING {command_id}"):
+                return False
+            response = self._await(command_id)
+            return response is not None and response.verb == "PONG"
 
     # -- commands ----------------------------------------------------------
     def commands(self) -> list[Command]:
@@ -305,7 +310,26 @@ class ArduinoController:
         return self._commands.get(command_id) if command_id else None
 
     def move(self, target: str, item_id: str, command_id: str | None = None) -> Command:
-        """Ask the board to move a paddle, and report exactly what happened."""
+        """Ask the board to move a paddle, and report exactly what happened.
+
+        SERIALISED for the whole exchange, which buys two separate things.
+
+        The reply queue is shared, so two moves in flight discard each other's
+        acknowledgement and the loser latches ACK_TIMEOUT over a paddle that
+        moved - the same defect found in `configure_servos`, on the one path
+        where a paddle actually exists.
+
+        And the duplicate guards below are check-then-act. Two threads asking
+        for the same item both read an empty `_by_item`, both pass, and one
+        physical object gets TWO frames and two strokes - the second landing on
+        whatever is behind it. Measured: two MOVE frames for one item id.
+        Reachable because `_route` runs on the pan thread and the developer
+        fallback runs on the HTTP thread.
+        """
+        with self.transport.exchange_lock:
+            return self._move(target, item_id, command_id)
+
+    def _move(self, target: str, item_id: str, command_id: str | None) -> Command:
         command_id = command_id or new_command_id()
         now = self._clock()
 

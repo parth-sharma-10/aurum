@@ -141,8 +141,12 @@ class TestTheChainOverTheMockBelt:
         assert record["decision"]["decision"] == "A"
         assert record["actuation"]["scheduled"] is True
         assert record["actuation"]["route"]["servo"] == "SERVO_A"
-        # 60 cm at 10 cm/s. Nothing has been written to the board.
-        assert record["actuation"]["route"]["geometry"]["travel_time_s"] == pytest.approx(6.0)
+        # The object is ON THE PAN, 25 cm downstream of the camera line the
+        # distances are measured from, so 35 cm of the 60 cm to servo A is left:
+        # 3.5 s at 10 cm/s. Scheduling it from the camera - which is what this
+        # test used to assert - fires the paddle 2.5 s after the item passed.
+        assert record["actuation"]["route"]["geometry"]["travel_time_s"] == pytest.approx(3.5)
+        assert record["actuation"]["route"]["geometry"]["distance_cm"] == pytest.approx(35.0)
         assert board.sent == []
 
     def test_the_route_is_stamped_simulated(self):
@@ -190,7 +194,9 @@ class TestTheChainOverTheMockBelt:
         show(session, det(1, "PCB", BOARD))
         record = session.measure_and_route()
         assert record["decision"]["decision"] == "B"
-        assert record["actuation"]["route"]["geometry"]["travel_time_s"] == pytest.approx(9.0)
+        # 90 cm to servo B, less the 25 cm the object has already travelled
+        # to reach the pan.
+        assert record["actuation"]["route"]["geometry"]["travel_time_s"] == pytest.approx(6.5)
 
     def test_bin_c_schedules_no_movement_and_confirms_no_sort(self):
         session, board = self.belt()
