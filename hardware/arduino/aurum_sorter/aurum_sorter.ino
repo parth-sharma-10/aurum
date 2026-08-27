@@ -67,7 +67,25 @@ const unsigned long READY_TIMEOUT_MS   = 500;
 // Printed at boot and blinked on the LED. Bump it whenever this file changes,
 // so "which build is on the board" is answerable from the wire and from across
 // the room instead of being inferred.
-#define FIRMWARE_BUILD "2026-08-27"
+#define FIRMWARE_BUILD "2026-08-27c"
+
+// How long to give a paddle to physically reach an angle before the pins are
+// released. An MG995 is about 0.2 s per 60 degrees, so a full rest<->push
+// throw is ~0.3 s; 500 ms covers it with margin. Too short and `detach()`
+// cuts the pulse train mid-travel, leaving the paddle wherever it got to.
+const unsigned long SERVO_TRAVEL_MS = 500;
+
+// MEASURED, frame to ACK, on this board: PING 0.007 s, CFG 0.009 s, MOVE
+// 1.711 s = 500 (settle at rest) + 700 (holdMs) + 500 (return). The paddle
+// therefore starts moving ~500 ms after the MOVE frame, and that figure is
+// what `conveyor.timing.servo_actuation_delay_ms` must carry - the scheduler
+// fires this much EARLY so the stroke lands on the item.
+//
+// The 500 ms settle is longer than it needs to be: the paddle is already
+// parked at rest, so only a couple of pulse periods are required to establish
+// the train. Shortening it to ~40 ms would cut the actuation delay by an order
+// of magnitude. NOT DONE HERE, because it must be flashed and re-measured
+// together, and the board must never run a build this file does not describe.
 
 // Heartbeat while idle. A board that has stopped executing keeps its LED
 // frozen instead of blinking, which is the cheapest possible detector for the
@@ -113,12 +131,11 @@ void setup() {
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
 
-  // Attach and park at rest before anything else, so a reset cannot leave a
-  // paddle out in the stream.
-  servoA.attach(PIN_SERVO_A);
-  servoB.attach(PIN_SERVO_B);
-  servoA.write(restAngle);
-  servoB.write(restAngle);
+  // Park at rest before anything else, so a reset cannot leave a paddle out in
+  // the stream - then RELEASE both pins. See `park()` and `push()` below for
+  // why nothing stays attached.
+  park(servoA, PIN_SERVO_A);
+  park(servoB, PIN_SERVO_B);
   inputLine.reserve(64);
 
   // Three quick blinks, then the banner. Both exist for the same reason: the
@@ -165,19 +182,35 @@ void resetHx711() {
 
 long readRaw() {
   long value = 0;
-  // INTERRUPTS OFF FOR THE WHOLE PULSE TRAIN.
+  // INTERRUPTS OFF FOR THE WHOLE PULSE TRAIN. Keep it that way.
   //
-  // The Servo library drives its pulses from a Timer1 ISR that keeps running
-  // while the paddles are attached - which is always. An ISR landing between
-  // `digitalWrite(PIN_SCK, HIGH)` and the matching LOW stretches that clock
-  // pulse, and a pulse longer than 60 us IS the HX711's power-down command.
-  // The converter then goes away mid-conversion and DOUT never falls again.
+  // An ISR landing between `digitalWrite(PIN_SCK, HIGH)` and the matching LOW
+  // stretches that clock pulse, and a pulse longer than 60 us IS the HX711's
+  // power-down command: the converter goes away mid-conversion and DOUT never
+  // falls again. That is the intermittent lockup - the cell reading cleanly on
+  // one boot and returning `0,ERR` for ever on the next with nothing about the
+  // wiring different.
   //
-  // This is the mechanism behind the intermittent lockups: the cell read
-  // cleanly on one boot and returned `0,ERR` for ever on the next, and nothing
-  // about the wiring differed between them. 25 pulses at ~2 us is about 50 us
-  // with interrupts off, which is well inside what the Servo library tolerates
-  // and happens between strokes in any case.
+  // THE COST IS NOT ~50 us. Measured against real AVR costs, stock
+  // digitalWrite/digitalRead are ~3.4 us each on a 16 MHz Uno, so one bit is
+  // ~12 us and the whole train is ~301 us. An earlier comment here claimed
+  // ~50 us and that error invited an attempt to "fix" it by re-enabling
+  // interrupts between bits. DO NOT DO THAT. Measured on this bench, same pan,
+  // same 60 s procedure:
+  //
+  //     interrupts off for the whole train : stdev    33 counts (0.08 g)
+  //     interrupts re-enabled between bits : stdev 10232 counts (26.09 g)
+  //
+  // 310x worse. Servo pulses firing during a microvolt-level bridge read
+  // couple straight into it, so this block is not only about SCK timing - it
+  // is what keeps the read electrically quiet.
+  //
+  // What 301 us DOES break is the servo, if one is attached: it delays the
+  // Servo library's Timer1 ISR and stretches whatever pulse it lands in by up
+  // to 301 us, which at ~10.3 us per degree is up to 29 degrees of unwanted
+  // travel. That is fixed where it belongs - `push()` and `park()` attach a
+  // servo only while commanding it, so while this runs there is no servo ISR
+  // to delay and no pulse to corrupt.
   noInterrupts();
   for (uint8_t i = 0; i < 24; i++) {
     digitalWrite(PIN_SCK, HIGH);
@@ -222,13 +255,55 @@ void err(const String &id, const char *code) {
   Serial.println(code);
 }
 
+// A SERVO IS ATTACHED ONLY WHILE IT IS BEING COMMANDED. Everywhere else both
+// pins are released, and this is the single most important property in this
+// file. Two independent faults come from leaving them attached:
+//
+//   THE PADDLES TWITCH ON THEIR OWN. The Servo library builds its pulse width
+//   in a Timer1 ISR. `readRaw()` blocks interrupts for the whole 25-pulse
+//   train - ~301 us measured against real AVR costs, not the ~50 us its
+//   comment used to claim - so whichever servo pulse that lands in is
+//   stretched by up to 301 us. An AVR servo is ~10.3 us per degree, so that is
+//   up to 29 DEGREES of unwanted travel, roughly 18 times a minute at 10 Hz
+//   sampling. No MOVE, no route, no command: just a corrupted pulse.
+//
+//   THE LOAD CELL GETS NOISY. Servo pulses firing during a microvolt-level
+//   bridge read couple straight into it. MEASURED on this bench, same pan,
+//   same 60 s procedure: attached and interrupt-interleaved gave a standard
+//   deviation of 10232 counts (26.09 g); with the read left electrically quiet
+//   it is 33 counts (0.08 g). A factor of 310.
+//
+// Detaching fixes both at once rather than trading one for the other, because
+// `Servo::detach()` calls `finISR()` once the last servo goes inactive: while
+// the machine is idle there is no servo ISR at all, so there is no pulse to
+// corrupt and nothing to couple into the cell. `readRaw()` keeps its
+// whole-train `noInterrupts()`, which now costs nothing.
+//
+// The trade is that a released paddle has no holding torque. These are
+// horizontal and stay put; a spring- or gravity-loaded paddle would need a
+// mechanical detent rather than a permanently energised servo.
+void park(Servo &servo, uint8_t pin) {
+  servo.attach(pin);
+  // Immediately, before the ISR can emit a pulse: `attach()` seeds the channel
+  // with DEFAULT_PULSE_WIDTH (1500 us = 90 deg), and on this geometry 90 deg
+  // is the PUSH angle. Left for even one pulse that would fire the paddle.
+  servo.write(restAngle);
+  delay(SERVO_TRAVEL_MS);
+  servo.detach();
+}
+
 // Blocking on purpose. One paddle moves at a time, weight sampling pauses for
-// holdMs, and there is nothing else this board should be doing meanwhile.
-void push(Servo &servo) {
+// the stroke, and there is nothing else this board should be doing meanwhile.
+void push(Servo &servo, uint8_t pin) {
   digitalWrite(PIN_LED, HIGH);    // lit for exactly as long as the paddle is out
+  servo.attach(pin);
+  servo.write(restAngle);         // claim the current position before any pulse
+  delay(SERVO_TRAVEL_MS);         // hold at rest before committing to the throw
   servo.write(pushAngle);
   delay(holdMs);
   servo.write(restAngle);
+  delay(SERVO_TRAVEL_MS);         // reach rest BEFORE the pulses stop
+  servo.detach();
   digitalWrite(PIN_LED, LOW);
 }
 
@@ -262,8 +337,12 @@ void handleCommand(const String &line) {
     restAngle = field(line, 2).toInt();
     pushAngle = field(line, 3).toInt();
     holdMs    = (unsigned long) field(line, 4).toInt();
-    servoA.write(restAngle);
-    servoB.write(restAngle);
+    // ANGLES ONLY. CFG used to `write()` both servos here, which made
+    // configuration a physical movement - and the host sends CFG on every
+    // connect and every automatic reconnect, so opening the dashboard moved
+    // both paddles. A configuration frame must never actuate. The new angles
+    // take effect at the next `park()` or `push()`, which are the only two
+    // places a pin is ever driven.
     ack(id, "");
     return;
   }
@@ -275,8 +354,8 @@ void handleCommand(const String &line) {
 
     if (alreadyDone(id)) { ack(id, "DUP"); return; }   // never move twice
 
-    if (target == "A")      { remember(id); push(servoA); ack(id, ""); }
-    else if (target == "B") { remember(id); push(servoB); ack(id, ""); }
+    if (target == "A")      { remember(id); push(servoA, PIN_SERVO_A); ack(id, ""); }
+    else if (target == "B") { remember(id); push(servoB, PIN_SERVO_B); ack(id, ""); }
     else                    { err(id, "BAD_TARGET"); }   // C has no servo
     return;
   }
