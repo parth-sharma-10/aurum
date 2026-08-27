@@ -373,7 +373,7 @@ Software status, which is a different claim:
 |---|---|
 | Camera → detection → tracking → item id | **RUNNING** — real webcam, real model |
 | Item id → mass → PMDI → decision → command | **RUNNING** — `app/pipeline/session.py` |
-| Command layer, link layer, session | **TESTED** — 836 tests, hardware layer covered |
+| Command layer, link layer, session | **TESTED** — 1428 tests, hardware layer covered |
 | Serial link against a real board | **VERIFIED** — no longer a fake |
 
 ### The five levels, kept apart
@@ -399,7 +399,7 @@ and the machine reports which one it is in:
 and no camera on the paddle, so the only thing that can is a person answering:
 
 ```
-python -m scripts.bench_check --port /dev/cu.usbmodem101 --move A --move B
+python -m scripts.bench_check --port /dev/cu.usbmodem1101 --move A --move B
 ```
 
 The answer — either answer — is appended to `reports/movement_verification.json`
@@ -425,7 +425,7 @@ the tables above keep them apart.
 
 ```bash
 arduino-cli compile --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
-arduino-cli upload -p /dev/cu.usbmodem101 --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
+arduino-cli upload -p /dev/cu.usbmodem1101 --fqbn arduino:avr:uno hardware/arduino/aurum_sorter
 ```
 
 `arduino-cli lib install Servo` once, if the sorter sketch will not compile.
@@ -439,7 +439,7 @@ from USB" during the first bench session, and it will silently break
 calibration the same way.
 
 ```bash
-lsof /dev/cu.usbmodem101      # anything listed here owns the port, not you
+lsof /dev/cu.usbmodem1101     # anything listed here owns the port, not you
 pkill -f serial-monitor       # releases it; the IDE reopens it on demand
 ```
 
@@ -450,9 +450,11 @@ pkill -f serial-monitor       # releases it; the IDE reopens it on demand
 2. Run `python -m app.calibrate` to `verified: true`.
 3. Flash `aurum_sorter`. Confirm weight frames still stream.
 4. `POST /session/board/connect`, then check `GET /arduino`.
-5. CPU → watch **Servo A**. PCB → watch **Servo B**. RAM → watch **nothing**.
+5. CPU → watch **Servo A**. PCB (over 20 g) → watch **Servo B**. RAM → watch **Servo B**.
 
-Steps 1, 3, 4 and 5 are done. Step 2 is blocked on the mounting fault.
+Steps 1-4 are done: the mount was rebuilt and step 2 recorded `verified: true` on
+2026-08-26. Step 5 has been done paddle-by-paddle but **never as one automatic
+cycle from camera to bin**, which is the one thing still outstanding.
 
 
 ## Routing geometry — future work, not the demonstration

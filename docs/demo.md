@@ -402,12 +402,12 @@ today is perception, measurement, material intelligence and actuation."*
 | Symptom | Cause | Do this |
 |---|---|---|
 | `CAMERA OFF`, permission error | macOS camera permission | System Settings → Privacy & Security → Camera → your terminal. **Grant it before the venue.** |
-| `NO BOARD` | Wrong port, or cable | `ls /dev/tty.usbmodem*`, re-export `AURUM_ARDUINO_PORT`, press Connect board again |
+| `NO BOARD` | Wrong port, or cable | `ls /dev/cu.usbmodem*`, re-export `AURUM_ARDUINO_PORT`, press Connect board again |
 | `NOT CALIBRATED` | `verified: false` | Re-run `python -m app.calibrate`. Do not hand-edit the YAML |
 | `ACTUATION OFF` | Safety default | `export AURUM_ARDUINO_ENABLED=true` and restart the backend |
-| Mass reads `UNSTABLE` | Bench vibration, or a hand still on the pan | Let it settle and press Measure again |
+| Mass reads `UNSTABLE` | Bench vibration, or a hand still on the pan | Take your hand off and leave it alone. The cycle re-reads on its own — there is no button to press |
 | Mass reads `UNAVAILABLE` | Cell not responding | Check D2/D3, re-seat the HX711, confirm the sorter sketch is flashed |
-| `the board did not acknowledge the servo configuration` on the first connect | Known: the board dumps a large backlog when the port opens, and the first CFG's ACK is buried in it | **Press Connect board again.** The second attempt applies. Check `servo_config_applied: true` in `/session`, not `last_error`, which keeps the stale first message |
+| `the board did not acknowledge the servo configuration` | The board dumps a large backlog when the port opens and the first CFG's ACK is buried in it | The backend now offers the angles **twice** on its own, which should absorb it. If it still fails, press Connect board again and check `servo_config_applied: true` in `/session`. **Not yet confirmed against the board** — the Arduino was off USB when the retry was written |
 | `x.x g still on the pan` with nothing on it | Tare drift — it sat at ~8 g on 2026-08-27, over the 5 g arrival threshold, so the automatic cycle never arms | Stop the backend, clear the pan, re-run `python -m app.calibrate` |
 | `UNKNOWN_MASS_ANOMALY` | The mass is outside the plausibility window for that class | Not a fault. Use a component inside the range — a PCB must clear 20 g |
 | `ALREADY_PROCESSED` | That item was already routed | Take the component out of frame, let the track drop, present it again |

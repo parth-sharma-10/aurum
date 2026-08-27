@@ -359,15 +359,28 @@ concentrations and are **not** used as composition; see §4.
 in WEEE: Implications for long term recycling potential**
 *Waste Management* 60:505–520 · DOI [10.1016/j.wasman.2016.11.018](https://doi.org/10.1016/j.wasman.2016.11.018)
 
-Used by Aurum for: **nothing numeric.** This is the most directly relevant study
-found for whole RAM modules — Au, Ag, Pd and Cu in DRAM modules placed on the
-market 1991–2008, by AAS after comminution and acid digestion. It is nominally
-CC-BY, but every route to the full text was blocked during this work, so **its
-tables were never read and no number is taken from it.** Its abstract was
-verified and supports only qualitative claims: stable gold and silver over time,
-an 80 % fall in palladium across 1991–2008, and a 0.23 g/module/year rise in
-copper. It is cited here as evidence that RAM composition **varies by
-generation**, and as the reason RAM has no figure.
+Used by Aurum for: **every RAM figure.** This is the most directly relevant
+study found for whole RAM modules — Au, Ag, Pd and Cu in DRAM modules placed on
+the market 1991–2008, by AAS after comminution and acid digestion.
+
+The full text was unreachable when this database was first written, and this
+entry used to say so. It is CC-BY, and the Internet Archive's capture of the
+CORE deposit serves it, so **the tables have now been read** —
+`https://web.archive.org/web/2019/https://core.ac.uk/download/pdf/82319983.pdf`,
+accessed 2026-08-23. ScienceDirect 403s and cronfa times out; the working route
+is recorded so nobody repeats the search.
+
+From Table 2, "DIMMs (4–15)", n = 12: **Au 18.0 mg, Ag 28.4 mg, Pd 1.2 mg and
+Cu 3.4 g per module.** Each average was recomputed from the twelve per-sample
+rows before being accepted. The three SIMMs are excluded, as the authors
+themselves exclude them in their Table 4 — two of the three carry tin rather
+than gold edge contacts. Platinum is recorded as a cited **negative** result
+(none detected, < 6 µg per module), not as a zero.
+
+The qualitative findings still stand and are why generation subtypes stay
+empty: stable gold and silver over time, an 80 % fall in palladium across
+1991–2008, a 0.23 g/module/year rise in copper, and n = 1 to 4 per generation
+with nothing later than DDR3.
 
 ## 12. Limitations
 
@@ -406,9 +419,18 @@ generation**, and as the reason RAM has no figure.
   contains. Establishing that requires XRF or destructive assay, neither of which
   is part of this system.
 
-**The single largest gap**
+**The largest gap, now closed**
 
-- **RAM has no composition data at all**, despite being one of the four detected
+- **RAM had no composition data at all**, despite being one of the four detected
   classes and despite gold fingers being its most valuable feature. Closing it
-  means obtaining the Charles et al. (2017) tables, or an equivalent
-  whole-module characterization.
+  meant obtaining the Charles et al. (2017) tables — which is what
+  `RAM-AU-001`/`AG`/`PD`/`CU` are: the mean of the twelve DIMM samples in their
+  Table 2, on a **per-module** basis, so it needs no mass. Confidence is capped
+  at medium and the reason is stated in the record: one study, n = 12, and no
+  module later than 2008, so there is no DDR4 or DDR5 in the sample.
+
+**What is still missing**
+
+- **No recovery factors are cited anywhere**, so every figure in this system is
+  *contained* metal and never recoverable yield. That gap is open and is the
+  reason the recovery layer refuses rather than estimating.

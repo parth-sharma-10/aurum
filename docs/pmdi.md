@@ -278,7 +278,7 @@ it fires, and every bound is an engineering approximation with no source.
 | `B_SUPPORTED_RECOVERABLE` | Per-piece evidence, no mass needed, no density formable. |
 | `UNKNOWN_CLASS` | No cited material profile for this class. |
 | *(every `UNKNOWN_` code carries `decision: UNKNOWN`, `physical_bin: C`)* | |
-| `UNKNOWN_MATERIAL` | Class known, no cited composition. **RAM today.** |
+| `UNKNOWN_MATERIAL` | Class known, no cited composition. No detected class is in this state today — RAM was, until `RAM-AU-001`. |
 | `UNKNOWN_EVIDENCE` | The material estimate is unavailable. |
 | `UNKNOWN_WEIGHT` | Concentration evidence without a measured mass. |
 | `UNKNOWN_CONFIDENCE` | Below the minimum for any routed bin. |
