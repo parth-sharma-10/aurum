@@ -62,6 +62,17 @@ from app.weight import (
 #: at 0.008 g, not by the slope. Override with --tolerance.
 DEFAULT_VERIFY_TOLERANCE_G = 1.5
 
+#: How long one burst of samples may take before the workflow gives up, in
+#: seconds.
+#:
+#: A board streaming at 10 Hz delivers the default 20 samples in about 2 s, so
+#: this is fifteen times the expected cost and will not fire on a healthy rig.
+#: It exists because every exit from the collection loop below used to depend on
+#: frames actually arriving: a reader that returns nothing while staying
+#: connected - which is exactly what a frozen or open converter does - left
+#: `python -m app.calibrate` running for ever with no output.
+READ_BUDGET_S = 30.0
+
 
 def derive_counts_per_gram(
     tare_counts: float, loaded_counts: float, reference_mass_g: float
@@ -115,7 +126,9 @@ def verify(
     )
 
 
-def _average(sensor: WeightSensor, samples: int, label: str) -> float:
+def _average(
+    sensor: WeightSensor, samples: int, label: str, budget_s: float = READ_BUDGET_S
+) -> float:
     """Average a burst of readings taken NOW, not whatever was already queued.
 
     The drain is the whole point. Each step of this workflow waits on a human
@@ -131,12 +144,32 @@ def _average(sensor: WeightSensor, samples: int, label: str) -> float:
 
     started = time.monotonic()
     collected: list[float] = []
+    deadline = started + budget_s
     while len(collected) < samples:
         sample = sensor.reader.read()
         if sample is not None:
             collected.append(sample.raw_counts)
-        elif not getattr(sensor.reader, "connected", True):
+            continue
+        if not getattr(sensor.reader, "connected", True):
             raise RuntimeError(f"the load cell disconnected while reading {label}")
+        # A converter that has stopped converting stays CONNECTED and returns
+        # nothing, so neither the check above nor `len(collected) < samples`
+        # can ever end this loop. Refuse with the reader's own diagnosis.
+        #
+        # This is the one workflow that MUST refuse rather than cope: a tare
+        # averaged off a dead cell writes a fabricated zero over a verified
+        # factor, and the result looks entirely healthy afterwards.
+        if getattr(sensor.reader, "stuck", False):
+            raise RuntimeError(
+                f"{label}: {getattr(sensor.reader, 'last_error', None) or 'the load cell is not converting.'}"
+            )
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                f"{label}: only {len(collected)} of {samples} frames arrived in "
+                f"{budget_s:.0f} s. The board should send ten a second - check it is "
+                "running a sketch that streams weight frames, and that nothing else owns "
+                "the port."
+            )
     elapsed = time.monotonic() - started
     spread = max(collected) - min(collected)
     print(

@@ -66,11 +66,17 @@ class FakeCell:
         self.connected = True
         self.grams = grams
         self.last_error = None
+        self.reads = 0
 
     def read(self):
         if self.grams is None:
             return None
-        return RawSample(raw_counts=TARE_COUNTS + self.grams * COUNTS_PER_GRAM)
+        self.reads += 1
+        # One count of wander, centred, because a converting cell never repeats
+        # a value bit-for-bit - `app.weight.repeats_exactly` refuses a frozen
+        # series as the hardware fault it is. Far below any tolerance here.
+        wander = (self.reads % 3) - 1
+        return RawSample(raw_counts=TARE_COUNTS + self.grams * COUNTS_PER_GRAM + wander)
 
     def close(self):
         self.connected = False
@@ -433,7 +439,7 @@ class TestMockMassFallback:
         run = self.mock_session(transport=transport)
         present(run, "PCB")
         result = run.measure_and_route()
-        assert result["weight_g"] == 180.0
+        assert result["weight_g"] == 60.0
         assert result["decision"]["decision"] == "B"
         assert transport.movements[0][0] == "B"
 
@@ -524,9 +530,9 @@ class TestPerClassMockMass:
 
     def test_each_class_gets_its_own_stand_in(self):
         masses = {c: self.run_for(c)["weight_g"] for c in ("CPU", "PCB", "RAM", "Connector")}
-        assert masses["CPU"] == 25.0
-        assert masses["PCB"] == 180.0
-        assert masses["RAM"] == 30.0
+        assert masses["CPU"] == 22.0
+        assert masses["PCB"] == 60.0
+        assert masses["RAM"] == 20.0
         assert masses["Connector"] == 5.0
 
     def test_a_cpu_reaches_bin_a_and_fires_servo_a(self):
@@ -543,9 +549,15 @@ class TestPerClassMockMass:
         assert transport.movements[0][0] == "A"
 
     def test_the_cpu_fraction_is_computed_against_a_cpu_sized_mass(self):
-        """4.71 mg of gold in 25 g is 188 ppm. In 180 g it would read 26."""
+        """4.71 mg of gold in 22 g is 214 ppm. In 60 g it would read 78.
+
+        The number moved on 2026-08-27 when the stand-in masses were set from
+        published figures - Intel's LGA1155 guide gives 21.5 g typical, so 22 g
+        replaced a round 25 g. CPU evidence is PER PIECE, so the fraction is a
+        fixed mass of gold over this number and tracks it directly.
+        """
         pmdi = self.run_for("CPU")["valuation"]["pmdi"]
-        assert pmdi["precious_mass_fraction_ppm"] == pytest.approx(188.4, abs=0.5)
+        assert pmdi["precious_mass_fraction_ppm"] == pytest.approx(214.1, abs=0.5)
 
     def test_an_unknown_class_falls_back_to_the_default(self):
         cfg = self.mock_cfg()
@@ -556,7 +568,7 @@ class TestPerClassMockMass:
     def test_the_snapshot_publishes_the_per_class_table(self):
         cfg = self.mock_cfg()
         per_class = DemoSession(cfg=cfg).snapshot()["mock_mass"]["per_class"]
-        assert per_class == {"CPU": 25.0, "PCB": 180.0, "RAM": 30.0, "Connector": 5.0}
+        assert per_class == {"CPU": 22.0, "PCB": 60.0, "RAM": 20.0, "Connector": 5.0}
 
 
 class TestCalibrationReload:
@@ -633,3 +645,58 @@ class TestApplyingTheServoAngles:
         run.link = self.CountingLink(succeed_from=99)
         assert run._apply_servo_config() is False
         assert run.link.attempts == run.SERVO_CONFIG_ATTEMPTS
+
+
+class TestRetryingConnectOnAHealthyLink:
+    """`connect_board` returns early on a link that is already up, so that a
+    page load cannot hang draining an endless backlog. That early return also
+    used to skip the angles, which made the Connect board button a no-op
+    against the one fault an operator presses it for: a link that opened but
+    whose first CFG was never acknowledged.
+    """
+
+    class ConfigurableLink(FakeLink):
+        """A connected board that counts the CFGs it is sent."""
+
+        port = "/dev/fake"
+        last_error = None
+
+        def __init__(self, acknowledges: bool = True, configured: bool = False):
+            super().__init__()
+            self.acknowledges = acknowledges
+            self.servo_config = {"rest_deg": 10, "push_deg": 80} if configured else None
+            self.cfgs = 0
+
+        def configure_servos(self, rest, push, hold, budget_s=4.0):
+            self.cfgs += 1
+            if self.acknowledges:
+                self.servo_config = {"rest_deg": rest, "push_deg": push}
+            return self.acknowledges
+
+    def run(self, link):
+        # Pan off: this test is about the CFG, and `start_pan` would otherwise
+        # leave a live loop polling a fake cell for the rest of the suite.
+        cfg = config.load(environ={"AURUM_ARDUINO_ENABLED": "true", "AURUM_PAN_AUTO": "false"})
+        run = DemoSession(cfg=cfg, controller=ArduinoController(transport=FakeTransport(), cfg=cfg))
+        run.calibration = VERIFIED
+        run.link = link
+        return run
+
+    def test_an_unconfigured_link_is_offered_the_angles_again(self):
+        run = self.run(self.ConfigurableLink(acknowledges=True))
+        result = run.connect_board()
+        assert result["already"] is True
+        assert run.link.cfgs >= 1
+        assert run.link.servo_config is not None
+
+    def test_a_link_that_already_has_its_angles_is_left_alone(self):
+        """CFG parks both paddles at rest; a page load must not move them."""
+        run = self.run(self.ConfigurableLink(configured=True))
+        run.connect_board()
+        assert run.link.cfgs == 0
+
+    def test_a_board_that_still_will_not_answer_is_recorded_not_swallowed(self):
+        run = self.run(self.ConfigurableLink(acknowledges=False))
+        result = run.connect_board()
+        assert result["already"] is True
+        assert any(e.code is ErrorCode.ARDUINO_ERROR for e in run.errors.entries())

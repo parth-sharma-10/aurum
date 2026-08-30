@@ -27,28 +27,19 @@ Nothing above `app.hardware` imports pyserial, including through this file.
 from __future__ import annotations
 
 import contextlib
-import fcntl
-import os
 import threading
 import time
 from collections import deque
 
 from app.hardware.transport import LinkState, Transport
-from app.weight import RawSample, parse_weight_line
+from app.portlock import PortLock, contention_message
+from app.weight import RawSample, StuckWatch, parse_weight_line
 
 #: How many unread frames of each type to keep. The weight stream runs at
 #: 10 Hz and a stale sample is worse than an absent one, so the queue is short
 #: on purpose: a consumer that stops reading should see fresh data when it
 #: comes back, not work through a minute of history first.
 QUEUE_LIMIT = 64
-
-#: Where the per-port advisory lock lives. One file per device node, so two
-#: boards on two ports do not exclude each other.
-LOCK_DIR = "/tmp"
-
-
-def lock_path(port: str) -> str:
-    return os.path.join(LOCK_DIR, f"aurum-{os.path.basename(port)}.lock")
 
 
 class BoardLink:
@@ -72,7 +63,7 @@ class BoardLink:
         self._serial = None
         self._state = LinkState.DISCONNECTED
         #: The advisory lock on this port, held for the life of the link.
-        self._lock = None
+        self._lock = PortLock(port)
         #: Guards opening and closing only - NOT pumping, which stays
         #: single-reader by design. The pan thread reopens a dropped board in
         #: `_heal_link` while the HTTP thread may be connecting the same link
@@ -112,62 +103,15 @@ class BoardLink:
     def _acquire_lock(self) -> str | None:
         """Take this port's advisory lock. None on success, else who holds it.
 
-        macOS `cu.*` device nodes do not lock. A second process opens the same
-        port successfully and the two then SPLIT the board's replies between
-        them - each `readline()` takes whatever the other has not taken yet. The
-        symptom is not a refused open: it is PING, CFG and MOVE all timing out
-        against a port that looks perfectly healthy, which is what a failed
-        bench run on 2026-08-26 turned out to be after an hour of suspecting the
-        firmware. This module's own docstring said "this module owns the port
-        once"; nothing made that true until here.
-
-        `flock` is per open-file-description, so this also catches two
-        `BoardLink`s inside one process, which is the same bug with a shorter
-        cable.
-
-        A lock file that cannot be OPENED is not treated as contention: that
-        says nothing about who holds the port, and refusing on it would brick a
-        working machine over a /tmp permission. Only a lock somebody else holds
-        refuses.
+        The mechanism, and the two bench sessions that paid for it, are in
+        `app.portlock`. Kept as a method because the connect path reads better
+        for it and every call site already exists.
         """
-        # Already ours. Re-connecting through the same link - which is what
-        # `connect_board()` does every time the dashboard is opened - must not
-        # be refused by this link's own lock. `flock` is per open-file-
-        # description, so a second `open()` in this process would fail against
-        # the descriptor we are still holding.
-        if self._lock is not None:
-            return None
-
-        path = lock_path(self.port)
-        try:
-            handle = open(path, "a+")  # noqa: SIM115 - held for the link's life
-        except OSError:
-            return None
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            owner = ""
-            with contextlib.suppress(Exception):
-                handle.seek(0)
-                owner = handle.read().strip()
-            handle.close()
-            return owner or "another process"
-        handle.seek(0)
-        handle.truncate()
-        handle.write(f"PID {os.getpid()}\n")
-        handle.flush()
-        self._lock = handle
-        return None
+        return self._lock.acquire()
 
     def _release_lock(self) -> None:
         """Give the port back. Safe on a link that never held it."""
-        handle, self._lock = self._lock, None
-        if handle is None:
-            return
-        with contextlib.suppress(Exception):
-            fcntl.flock(handle, fcntl.LOCK_UN)
-        with contextlib.suppress(Exception):
-            handle.close()
+        self._lock.release()
 
     def connect(self) -> LinkState:
         with self._gate:
@@ -190,12 +134,7 @@ class BoardLink:
         owner = self._acquire_lock()
         if owner is not None:
             self._state = LinkState.DISCONNECTED
-            self.last_error = (
-                f"{self.port} is already owned by {owner}. Two readers on one "
-                "macOS cu.* port do not fail to open - they split the board's "
-                "replies, and every command times out against a healthy port. "
-                "Stop the other process and try again."
-            )
+            self.last_error = contention_message(self.port, owner)
             return self._state
 
         self._state = LinkState.CONNECTING
@@ -564,17 +503,27 @@ class _WeightView:
 
     def __init__(self, link: BoardLink) -> None:
         self._link = link
+        # A frozen converter is not a link fault: frames keep arriving and
+        # `connected` stays true, which is precisely why it needs catching
+        # here. This is the reader the RUNNING machine uses - the pan machine
+        # takes one sample per poll from it - so a rule applied only in
+        # `WeightSensor` would never see the reading the operator is shown.
+        self._stuck = StuckWatch()
 
     @property
     def connected(self) -> bool:
         return self._link.connected
 
     @property
+    def stuck(self) -> bool:
+        return self._stuck.error is not None
+
+    @property
     def last_error(self) -> str | None:
-        return self._link.last_error
+        return self._stuck.error or self._link.last_error
 
     def read(self) -> RawSample | None:
-        return self._link.next_weight()
+        return self._stuck.accept(self._link.next_weight())
 
     def close(self) -> None:
         self._link.disconnect()

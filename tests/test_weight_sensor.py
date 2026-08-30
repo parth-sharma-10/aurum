@@ -19,10 +19,14 @@ import pytest
 from app import config, materials
 from app.calibrate import DEFAULT_VERIFY_TOLERANCE_G, derive_counts_per_gram, verify
 from app.weight import (
+    HX711_OPEN_INPUT_COUNTS,
     PROTOCOL_VERSION,
+    STUCK_RUN_SAMPLES,
     Calibration,
+    HX711SerialReader,
     RawSample,
     SimulatedRawReader,
+    StuckWatch,
     WeightSensor,
     WeightStatus,
     parse_weight_line,
@@ -51,6 +55,21 @@ def calibration(verified: bool = True) -> Calibration:
 def counts_for(grams: float, cal: Calibration | None = None) -> float:
     cal = cal or calibration()
     return cal.tare_counts + grams * cal.counts_per_gram
+
+
+def still_series(grams: float, n: int) -> list[float]:
+    """A cell holding a steady mass: still, but never frozen.
+
+    Bit-for-bit repetition is a hardware fault (see `repeats_exactly`), so a
+    fixture that repeats one count is not a still pan - it is a dead converter,
+    and asserting it MEASURED is asserting the 2026-08-27 bug. The wander here
+    is one count, ~0.003 g against a 0.5 g tolerance, so nothing about
+    settling, filtering or window arithmetic changes.
+    """
+    base = counts_for(grams)
+    # Centred on `base`, so the median of any five consecutive samples is
+    # exactly `base` and the gram arithmetic these tests assert is unchanged.
+    return [base + ((i % 3) - 1) for i in range(n)]
 
 
 class ScriptedReader:
@@ -190,7 +209,7 @@ class TestCalibrationRecord:
             assert shipped.present is False
 
     def test_a_factor_converts_counts_to_grams(self):
-        assert calibration().grams(counts_for(180.0)) == pytest.approx(180.0)
+        assert calibration().grams(counts_for(180.0)) == pytest.approx(180.0, abs=0.01)
 
     def test_zero_grams_is_a_real_reading_not_an_absence(self):
         """An empty pan after tare weighs zero, and that is a measurement."""
@@ -235,7 +254,7 @@ class TestCalibrationRecord:
             counts_per_gram=BENCH_COUNTS_PER_GRAM, tare_counts=BENCH_TARE, verified=False
         )
         assert unverified.present is False
-        assert unverified.grams(counts_for(180.0)) == pytest.approx(180.0)
+        assert unverified.grams(counts_for(180.0)) == pytest.approx(180.0, abs=0.01)
 
 
 class TestCalibrationWorkflow:
@@ -244,7 +263,7 @@ class TestCalibrationWorkflow:
 
     def test_a_reference_mass_reads_itself_back(self):
         cal = Calibration(counts_per_gram=BENCH_COUNTS_PER_GRAM, tare_counts=BENCH_TARE)
-        assert cal.grams(BENCH_LOADED_180G) == pytest.approx(180.0)
+        assert cal.grams(BENCH_LOADED_180G) == pytest.approx(180.0, abs=0.01)
 
     @pytest.mark.parametrize("mass", [0.0, -5.0])
     def test_an_impossible_reference_mass_is_refused(self, mass):
@@ -323,15 +342,15 @@ class TestUncalibratedSensor:
 
 class TestStability:
     def test_a_settled_series_on_a_verified_calibration_is_measured(self):
-        reader = ScriptedReader([counts_for(180.0)] * 40)
+        reader = ScriptedReader(still_series(180.0, 40))
         reading = sensor_for(reader).read(now=clock_factory())
         assert reading.status is WeightStatus.MEASURED
         assert reading.usable is True
-        assert reading.grams == pytest.approx(180.0)
+        assert reading.grams == pytest.approx(180.0, abs=0.01)
 
     def test_the_first_reading_is_never_accepted(self):
         """A cell settles; whichever number arrives first is the worst one."""
-        reader = ScriptedReader([counts_for(180.0)] * 40)
+        reader = ScriptedReader(still_series(180.0, 40))
         sensor_for(reader).read(now=clock_factory())
         assert reader.reads > 1
 
@@ -345,12 +364,12 @@ class TestStability:
         however still the mass was, and the shipped 500 ms default only worked
         because 100 ms divides into it.
         """
-        reader = ScriptedReader([counts_for(180.0)] * 400)
+        reader = ScriptedReader(still_series(180.0, 400))
         reading = sensor_for(
             reader, weight_stability_window_ms=window_ms, weight_timeout_s=30
         ).read(now=clock_factory(step=0.1))
         assert reading.status is WeightStatus.MEASURED
-        assert reading.grams == pytest.approx(180.0)
+        assert reading.grams == pytest.approx(180.0, abs=0.01)
 
     def test_a_moving_series_is_unstable(self):
         drifting = [counts_for(180.0 + i * 5.0) for i in range(200)]
@@ -380,13 +399,13 @@ class TestStability:
         assert reading.status is WeightStatus.UNSTABLE
 
     def test_a_median_filter_absorbs_a_single_spike(self):
-        series = [counts_for(180.0)] * 40
+        series = still_series(180.0, 40)
         series[10] = counts_for(9000.0)
         reading = sensor_for(ScriptedReader(series)).read(now=clock_factory())
-        assert reading.grams == pytest.approx(180.0)
+        assert reading.grams == pytest.approx(180.0, abs=0.01)
 
     def test_the_stability_window_is_configurable(self):
-        reader = ScriptedReader([counts_for(180.0)] * 400)
+        reader = ScriptedReader(still_series(180.0, 400))
         sensor = sensor_for(reader, weight_stability_window_ms=1000)
         assert sensor.window_ms == 1000.0
         assert sensor.read(now=clock_factory(step=0.05)).status is WeightStatus.MEASURED
@@ -394,13 +413,13 @@ class TestStability:
 
 class TestUnverifiedCalibration:
     def test_a_settled_reading_on_an_unverified_factor_is_stable_not_measured(self):
-        reader = ScriptedReader([counts_for(180.0)] * 40)
+        reader = ScriptedReader(still_series(180.0, 40))
         reading = sensor_for(reader, cal=calibration(verified=False)).read(now=clock_factory())
         assert reading.status is WeightStatus.STABLE
         assert reading.usable is False
 
     def test_the_reason_names_the_missing_second_mass(self):
-        reader = ScriptedReader([counts_for(180.0)] * 40)
+        reader = ScriptedReader(still_series(180.0, 40))
         reading = sensor_for(reader, cal=calibration(verified=False)).read(now=clock_factory())
         assert "second known mass" in reading.reason
 
@@ -429,7 +448,7 @@ class TestFailureModes:
 
     def test_dropped_lines_do_not_end_the_read(self):
         """A few unparseable lines are normal on a serial link."""
-        series = [None, None, *([counts_for(180.0)] * 40)]
+        series = [None, None, *still_series(180.0, 40)]
         reading = sensor_for(ScriptedReader(series)).read(now=clock_factory())
         assert reading.status is WeightStatus.MEASURED
 
@@ -489,10 +508,10 @@ class TestItemIdentity:
         )[0]
         original = item.item_id
 
-        sensor = sensor_for(ScriptedReader([counts_for(42.7)] * 40))
+        sensor = sensor_for(ScriptedReader(still_series(42.7, 40)))
         weighed = pipeline.weigh_item(original, sensor, now=clock_factory())
         assert weighed.item_id == original
-        assert weighed.weight_g == pytest.approx(42.7)
+        assert weighed.weight_g == pytest.approx(42.7, abs=0.01)
         assert weighed.weight_status == "MEASURED"
         assert weighed.weight_timestamp is not None
 
@@ -528,3 +547,112 @@ class TestItemIdentity:
             now=clock_factory(),
         )
         assert {i.item_id for i in pipeline.active_items} == before
+
+
+class FakeSerial:
+    """The bytes an HX711 sketch would put on the wire, and nothing else."""
+
+    def __init__(self, lines):
+        self._lines = list(lines)
+
+    def readline(self):
+        return self._lines.pop(0) if self._lines else b""
+
+
+def serial_reader(counts):
+    """An `HX711SerialReader` over scripted wire bytes, with no port to open."""
+    reader = object.__new__(HX711SerialReader)
+    reader.port = "fake"
+    reader._ser = FakeSerial(
+        [f"W,{PROTOCOL_VERSION},{i * 100},{c:g},OK\n".encode() for i, c in enumerate(counts)]
+    )
+    reader.connected = True
+    reader.last_error = None
+    reader._stuck = StuckWatch()
+    return reader
+
+
+class TestStuckConverter:
+    """A converter that has stopped converting is not a still pan.
+
+    Measured on the bench 2026-08-27: an HX711 with DOUT held LOW emitted
+    `W,1,<millis>,0,OK` at 8 Hz, 121 frames of 121, in range and well-formed.
+    A verified factor rendered that as a steady 670.7 g on an EMPTY pan.
+    """
+
+    def test_a_repeated_count_is_refused_rather_than_returned(self):
+        reader = serial_reader([0.0] * STUCK_RUN_SAMPLES)
+        samples = [reader.read() for _ in range(STUCK_RUN_SAMPLES)]
+        assert samples[-1] is None
+        assert reader.stuck is True
+
+    def test_the_link_stays_up_because_this_is_not_a_disconnect(self):
+        reader = serial_reader([0.0] * STUCK_RUN_SAMPLES)
+        for _ in range(STUCK_RUN_SAMPLES):
+            reader.read()
+        assert reader.connected is True
+        assert "bit-for-bit" in reader.last_error
+
+    def test_it_does_not_fire_one_sample_early(self):
+        reader = serial_reader([0.0] * (STUCK_RUN_SAMPLES - 1))
+        samples = [reader.read() for _ in range(STUCK_RUN_SAMPLES - 1)]
+        assert all(s is not None for s in samples)
+        assert reader.stuck is False
+
+    def test_a_live_cell_wandering_by_a_few_counts_is_never_refused(self):
+        """This bench measures 33 counts of stdev with the belt stopped."""
+        base = counts_for(180.0)
+        series = [base + (i % 5) for i in range(STUCK_RUN_SAMPLES * 4)]
+        reader = serial_reader(series)
+        samples = [reader.read() for _ in range(len(series))]
+        assert all(s is not None for s in samples)
+        assert reader.stuck is False
+
+    def test_a_stuck_cell_never_becomes_a_measured_mass(self):
+        """The safety property. Zero counts settle with a spread of exactly
+        0.000 g, so without this guard they earn MEASURED - the one status a
+        concentration calculation is allowed to consume."""
+        reader = serial_reader([0.0] * 200)
+        reading = sensor_for(reader).read(now=clock_factory())
+        assert reading.status is WeightStatus.UNAVAILABLE
+        assert reading.usable is False
+
+    def test_a_floating_line_dithering_around_zero_is_refused(self):
+        """The second shape of the fault, measured on the bench the same day.
+
+        66 frames of 0, 20 of -1 and single bit-pattern spikes. `repeats_exactly`
+        does not catch it - 0 and -1 alternate - and the median of it is a
+        confident 670.7 g on an empty pan.
+        """
+        wire = [0, -1, 0, 0, 8191, 0, -1, 0, 4095, -1, 0, 0, -16, 0, 63, -1, 0]
+        reader = serial_reader([float(c) for c in wire])
+        samples = [reader.read() for _ in range(len(wire))]
+        assert samples[-1] is None
+        assert "digital zero" in reader.last_error
+
+    def test_a_bit_pattern_spike_does_not_excuse_the_run(self):
+        """A spike above the threshold is exactly what the median discards."""
+        wire = [0.0] * 4 + [8191.0] + [0.0, -1.0] * 4
+        reader = serial_reader(wire)
+        for _ in range(len(wire)):
+            reader.read()
+        assert reader.stuck is True
+
+    def test_a_live_cell_at_its_tare_is_never_called_open(self):
+        """This rig's empty pan is -263078 counts, nowhere near digital zero."""
+        series = [BENCH_TARE + (i % 7) - 3 for i in range(STUCK_RUN_SAMPLES * 6)]
+        reader = serial_reader(series)
+        assert all(reader.read() is not None for _ in series)
+
+    def test_the_threshold_sits_below_the_arrival_threshold(self):
+        """An open input must never be confusable with a real small object.
+
+        1000 counts is ~2.5 g on this rig; the pan calls 5 g an arrival.
+        """
+        assert HX711_OPEN_INPUT_COUNTS / BENCH_COUNTS_PER_GRAM < 5.0
+
+    def test_tare_refuses_to_average_a_stuck_count_into_a_factor(self):
+        """Calibrating against a stuck converter writes a fabricated zero over
+        a verified factor. Phase 2's first instruction was: do NOT re-tare."""
+        reader = serial_reader([0.0] * 200)
+        assert sensor_for(reader).tare() is None

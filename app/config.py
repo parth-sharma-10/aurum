@@ -94,6 +94,20 @@ def _non_negative(value: Any, key: str) -> float:
     return out
 
 
+def _duty(value: Any, key: str) -> int:
+    """A PWM duty an L298N can actually turn a motor with: 1-255.
+
+    Zero is rejected rather than clamped. `analogWrite(ENA, 0)` leaves the
+    motor still while the firmware reports the belt running, and the pan
+    machine refuses to weigh while the belt runs - so a duty of zero is a
+    machine that can never weigh again. STOP is how you stop.
+    """
+    out = _int(value, key)
+    if not 1 <= out <= 255:
+        raise ConfigError(f"{key}: must be between 1 and 255, got {out}")
+    return out
+
+
 def _bool(value: Any, key: str) -> bool:
     if isinstance(value, bool):
         return value
@@ -226,6 +240,26 @@ SPEC: dict[str, tuple] = {
     # The normal workflow. Off leaves POST /session/measure as the only way to
     # weigh anything, which is the developer fallback rather than the product.
     "conveyor.weight.pan.auto": (_bool, True, "AURUM_PAN_AUTO"),
+    # ------------------------------------------------------------------
+    # AUTOMATIC ZERO. Re-take the tare from the empty pan when the board
+    # connects, instead of trusting a zero recorded on an earlier day.
+    #
+    # ON, because the tare is the one calibration term that genuinely
+    # drifts: it is the raw count of an empty pan, and it moves with
+    # temperature, with the amplifier's supply, and with anything left
+    # resting on the pan. The counts-per-gram factor does NOT drift that
+    # way and is NOT touched here - deriving it needs a known reference
+    # mass on the pan, which no software can arrange for itself.
+    #
+    # THE PAN MUST BE EMPTY WHEN THE BOARD CONNECTS. A tare taken under an
+    # object subtracts that object from every later reading. Two things
+    # keep that from becoming a silent corruption: the new zero is held in
+    # memory and never written to configs/calibration.yaml, so a restart
+    # returns to the recorded one; and `WeightSensor.tare` refuses a stuck
+    # or repeating cell outright rather than averaging a dead converter
+    # into a fabricated zero.
+    # ------------------------------------------------------------------
+    "conveyor.weight.auto_tare": (_bool, True, "AURUM_WEIGHT_AUTO_TARE"),
     "conveyor.weight.calibration_factor": (
         _float,
         UNMEASURED,
@@ -255,7 +289,7 @@ SPEC: dict[str, tuple] = {
     # The L298N conveyor motor. OFF by default, like actuation: a belt keeps
     # acting after the software stops, so it is never enabled as a side effect.
     "conveyor.belt.motor.enabled": (_bool, False, "AURUM_BELT_MOTOR_ENABLED"),
-    "conveyor.belt.motor.pwm": (_int, 120, "AURUM_BELT_MOTOR_PWM"),
+    "conveyor.belt.motor.pwm": (_duty, 120, "AURUM_BELT_MOTOR_PWM"),
     "conveyor.belt.motor.keepalive_s": (_non_negative, 1.0, "AURUM_BELT_MOTOR_KEEPALIVE_S"),
     # Measured 430x noise degradation with the motor running; see the comment
     # in configs/conveyor.yaml. Configurable so a rig with a quiet drive can
@@ -320,17 +354,62 @@ SPEC: dict[str, tuple] = {
     # nothing computed from it may be quoted as a measurement.
     # ------------------------------------------------------------------
     "demo.mock_mass.enabled": (_bool, False, "AURUM_DEMO_MOCK_MASS"),
-    #: Fallback for a class with no entry below.
-    "demo.mock_mass.grams": (_non_negative, 180.0, "AURUM_DEMO_MOCK_MASS_G"),
+    #: Fallback for a class with no entry below. A small board rather than the
+    #: old 180 g: the classes that DO have entries cover everything this model
+    #: detects, so this only fires for something unrecognised.
+    "demo.mock_mass.grams": (_non_negative, 60.0, "AURUM_DEMO_MOCK_MASS_G"),
     # Per class, because one flat mass makes the ppm figures wrong in a way a
     # judge can spot: a CPU is not 180 g, and pretending it is drags its
-    # precious fraction down by a factor of seven. These are plausible typical
-    # masses for the class, TEST values chosen to keep the arithmetic sensible.
-    # They are not measurements of anything and nothing was weighed to get them.
-    "demo.mock_mass.cpu_g": (_non_negative, 25.0, "AURUM_DEMO_MOCK_MASS_CPU_G"),
-    "demo.mock_mass.pcb_g": (_non_negative, 180.0, "AURUM_DEMO_MOCK_MASS_PCB_G"),
-    "demo.mock_mass.ram_g": (_non_negative, 30.0, "AURUM_DEMO_MOCK_MASS_RAM_G"),
+    # precious fraction down by a factor of seven.
+    #
+    # STILL FABRICATED - nothing here was weighed on this bench, every figure
+    # derived from one is stamped SIMULATED, and none may be quoted as a
+    # measurement. What changed on 2026-08-27 is that they are now typical
+    # published masses rather than round numbers:
+    #
+    #   CPU  22 g   Intel's own LGA1155 socket design guide gives 21.5 g typical
+    #               for a mainstream desktop package. LGA2011 is ~45 g and a
+    #               Xeon Scalable ~112 g, so this is the mainstream case, not
+    #               the range.
+    #   RAM  20 g   The scrap trade prices memory at roughly 200-300 sticks to
+    #               5 kg, i.e. 17-25 g a module. The old 30 g assumed a
+    #               heatspreader; a bare green DIMM does not have one.
+    #   PCB  60 g   THE WEAKEST OF THE FOUR, and unavoidably so: this class
+    #               spans a perfboard offcut to a full ATX motherboard, which
+    #               is 600-900 g. 60 g is a small scrap board or an expansion
+    #               card, which is what this bench actually handles. It was
+    #               180 g, which is a mid-size board and too heavy for the
+    #               objects on the table.
+    #   Conn  5 g   A DIMM socket or PCIe slot. Unchanged - no better figure
+    #               was found, and it is the least load-bearing of the four.
+    #
+    # THESE MOVE BIN DECISIONS. CPU and RAM evidence is PER PIECE (4.71 mg Au
+    # per processor, 18 mg per module), so precious fraction is a fixed mass of
+    # metal over this number: halving it doubles the ppm. Re-check the routing
+    # after changing one - RAM at 20 g sits closer to the 1000 ppm Bin A gate
+    # than it did at 30 g.
+    "demo.mock_mass.cpu_g": (_non_negative, 22.0, "AURUM_DEMO_MOCK_MASS_CPU_G"),
+    "demo.mock_mass.pcb_g": (_non_negative, 60.0, "AURUM_DEMO_MOCK_MASS_PCB_G"),
+    "demo.mock_mass.ram_g": (_non_negative, 20.0, "AURUM_DEMO_MOCK_MASS_RAM_G"),
     "demo.mock_mass.connector_g": (_non_negative, 5.0, "AURUM_DEMO_MOCK_MASS_CONNECTOR_G"),
+    # ------------------------------------------------------------------
+    # DEMONSTRATION TRIGGER - the camera starts the cycle instead of the pan.
+    #
+    # Ships OFF, like every other demonstration setting. The load cell is what
+    # starts a cycle on this machine; with a dead or absent cell nothing ever
+    # arrives, so the automatic chain never runs and a stand-in mass alone
+    # cannot help - it substitutes a mass for an object already being handled,
+    # not the arrival itself.
+    #
+    # With this on, an assembly the camera CONFIRMS is treated as the arrival.
+    # The rest of the cycle is unchanged: weigh (or stand in), estimate,
+    # decide, actuate, release. PADDLES FIRE ON CAMERA CONFIRMATION ALONE.
+    #
+    # Its limit, stated rather than discovered: one physical object that the
+    # tracker loses and re-acquires becomes a second assembly id, and will be
+    # sorted twice. The pan cannot tell it apart, because there is no pan.
+    # ------------------------------------------------------------------
+    "demo.camera_trigger.enabled": (_bool, False, "AURUM_DEMO_CAMERA_TRIGGER"),
     "conveyor.runtime.simulation": (_bool, False, "AURUM_SIMULATION"),
     "conveyor.runtime.host": (_text, "127.0.0.1", "AURUM_HOST"),
     "conveyor.runtime.port": (_int, 8000, "AURUM_PORT"),

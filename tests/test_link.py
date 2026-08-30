@@ -21,7 +21,7 @@ import time
 
 import pytest
 
-from app.hardware import link as link_module
+from app import portlock
 from app.hardware.link import BoardLink
 from app.hardware.transport import LinkState
 from app.weight import RawSample
@@ -592,7 +592,7 @@ class TestOnePortOneOwner:
 
     @pytest.fixture(autouse=True)
     def _isolated_lock_dir(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+        monkeypatch.setattr(portlock, "LOCK_DIR", str(tmp_path))
 
     def test_a_second_link_on_the_same_port_is_refused(self):
         first = BoardLink("/dev/cu.fake")
@@ -641,7 +641,7 @@ class TestOnePortOneOwner:
     def test_an_unwritable_lock_directory_does_not_block_the_machine(self, monkeypatch):
         """A lock file that cannot be OPENED says nothing about who holds the
         port. Refusing on it would brick a working rig over a /tmp permission."""
-        monkeypatch.setattr(link_module, "LOCK_DIR", "/proc/nonexistent-for-aurum")
+        monkeypatch.setattr(portlock, "LOCK_DIR", "/proc/nonexistent-for-aurum")
         assert BoardLink("/dev/cu.fake")._acquire_lock() is None
 
     def test_reconnecting_through_the_same_link_is_not_refused_by_its_own_lock(self):
@@ -662,7 +662,7 @@ class TestOnePortOneOwner:
     def test_the_open_waits_for_the_firmware_rather_than_a_fixed_sleep(self, monkeypatch, tmp_path):
         """A fixed 2 s sleep raced the bootloader: the first CFG after every
         open went unacknowledged, and the second was answered in 10 ms."""
-        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+        monkeypatch.setattr(portlock, "LOCK_DIR", str(tmp_path))
 
         class BootingSerial(FakeSerial):
             """Silent while the bootloader runs, then the sketch's banner."""
@@ -688,7 +688,7 @@ class TestOnePortOneOwner:
         assert port.quiet == 0, "it stopped waiting before the board had spoken"
 
     def test_a_board_that_never_speaks_gives_up_rather_than_hanging(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+        monkeypatch.setattr(portlock, "LOCK_DIR", str(tmp_path))
         monkeypatch.setattr(BoardLink, "BOOT_TIMEOUT_S", 0.05)
 
         class Mute(FakeSerial):
@@ -778,7 +778,7 @@ class TestOnePortOneOwner:
         sender that is still mid-burst, and every line of it is counted as
         dropped - so the first CFG spent its whole budget reading rubbish and
         never reached its own ACK."""
-        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+        monkeypatch.setattr(portlock, "LOCK_DIR", str(tmp_path))
 
         class Backlogged(FakeSerial):
             def __init__(self):
@@ -804,7 +804,7 @@ class TestOnePortOneOwner:
         assert port.resets >= 3, "it stopped clearing while the board was still sending"
 
     def test_a_backlog_that_never_ends_does_not_hang_the_open(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(link_module, "LOCK_DIR", str(tmp_path))
+        monkeypatch.setattr(portlock, "LOCK_DIR", str(tmp_path))
         monkeypatch.setattr(BoardLink, "DRAIN_TIMEOUT_S", 0.2)
 
         class Endless(FakeSerial):

@@ -606,6 +606,26 @@ class TestEmergencyStop:
         assert body["fault"]["code"] == "EMERGENCY_STOP"
         assert client.get("/hardware").json()["fault"]["active"] is True
 
+    def test_it_stops_the_belt_rather_than_waiting_for_the_pan_loop(self, client):
+        """Latching stops SERVO commands. A turning motor is not a servo.
+
+        Before this, the belt ran until the pan loop next noticed the fault -
+        and not at all if that thread was dead or pan.auto was off.
+        """
+        session = api_mod.demo_session()
+        calls = []
+        session.link = type(
+            "L",
+            (),
+            {
+                "connected": True,
+                "belt": lambda _self, run, pwm=0, budget_s=2.0: calls.append(run) or True,
+            },
+        )()
+        body = client.post("/hardware/estop").json()
+        assert body["belt_stopped"] is True
+        assert calls == [False]
+
     def test_a_latched_machine_refuses_to_actuate(self, client):
         """The point of the button, and the only test that proves it works."""
         client.post("/hardware/estop")

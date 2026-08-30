@@ -85,7 +85,11 @@ class ScriptedCell:
             return None
         if self._drift:
             self.grams += self._drift
-        return RawSample(raw_counts=TARE_COUNTS + self.grams * COUNTS_PER_GRAM)
+        # One count of wander, centred, because a converting cell never repeats
+        # a value bit-for-bit - `app.weight.repeats_exactly` refuses a frozen
+        # series as the hardware fault it is. Far below any tolerance here.
+        wander = (self.reads % 3) - 1
+        return RawSample(raw_counts=TARE_COUNTS + self.grams * COUNTS_PER_GRAM + wander)
 
     def close(self):
         self.connected = False
@@ -98,6 +102,15 @@ class FakeLink:
         #: The conveyor motor, which this rig's fake never runs.
         self.belt_running = False
         self.belt_pwm = 0
+        #: Every belt call this double was asked to make, so a test can assert
+        #: the shutdown path actually stopped the motor rather than assuming it.
+        self.belt_calls: list[tuple[bool, int]] = []
+
+    def belt(self, run: bool, pwm: int = 0, budget_s: float = 2.0) -> bool:
+        self.belt_calls.append((run, pwm))
+        self.belt_running = bool(run)
+        self.belt_pwm = pwm if run else 0
+        return True
 
     def snapshot(self):
         return {"connected": self.connected}
@@ -675,6 +688,33 @@ class TestMixedAssembly:
         assert record["decision"]["decision"] == "B"
 
 
+class TestTheBeltStopsWhenTheMachineDoes:
+    """A belt is the one part that keeps acting after the software stops.
+
+    The firmware's 3 s lease is the last resort, not the mechanism: three
+    seconds of belt after a human hit stop is three seconds too many.
+    """
+
+    def test_shutdown_stops_the_belt_before_dropping_the_link(self):
+        run = session(ScriptedCell(0.0))
+        run.link.belt(True, 120)
+        run.link.belt_calls.clear()
+        run.stop()
+        assert (False, 0) in run.link.belt_calls
+
+    def test_a_belt_that_will_not_stop_does_not_cost_the_disconnect(self):
+        """Shutdown must not be stoppable by one sub-step."""
+
+        run = session(ScriptedCell(0.0))
+
+        def refuse(*_args, **_kwargs):
+            raise RuntimeError("the belt is not answering")
+
+        run.link.belt = refuse
+        run.stop()
+        assert run.link.connected is False
+
+
 class TestTheThread:
     """The machine as it actually runs: its own thread, nothing driving it.
 
@@ -792,7 +832,8 @@ class TestReplayedHardwareStream:
                     self.written.remove(line)
                     return f"AURUM/1 ACK {parts[5]}\n".encode()
             self.millis += 100
-            counts = self._counts_for()
+            # Centred one-count wander: see ScriptedCell.read.
+            counts = self._counts_for() + (self.millis // 100 % 3) - 1
             return f"W,1,{self.millis},{counts},OK\n".encode()
 
         def write(self, payload: bytes) -> int:
@@ -976,3 +1017,102 @@ class TestTheConveyorMotor:
         run._drive_belt(PanState.WAITING_FOR_OBJECT)
         assert run.stop_belt() is True
         assert run.link.belt_running is False
+
+
+class TestTheHardwareFallback:
+    """A dead load cell must not cost the demonstration.
+
+    The cell is what starts a cycle. With an open or absent one nothing ever
+    arrives on the pan, so the automatic chain never runs at all - and a
+    stand-in mass alone cannot help, because it substitutes a mass for an
+    object already being handled, not the arrival itself.
+
+    With the fallback armed the camera starts the cycle instead, for exactly
+    as long as the cell cannot. Everything it produces stays SIMULATED.
+    """
+
+    def test_a_dead_cell_still_sorts_when_the_fallback_is_armed(self):
+        transport = FakeTransport(connected=True)
+        cell = ScriptedCell(0.0)
+        run = session(cell, transport, AURUM_DEMO_MOCK_MASS="true")
+        cell.unplug()
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+
+        record = cycle(run)
+
+        assert record["class_name"] == "CPU"
+        # The stand-in for a CPU, not the flat default: a precious fraction is
+        # metal over TOTAL mass, so the wrong mass is a wrong ppm.
+        assert record["weight_g"] == pytest.approx(run.mock_mass_for("CPU"))
+        assert record["weight_status"] == "SIMULATED"
+        assert run.pan.snapshot()["trigger"] == "camera"
+        # The whole point of the fallback: a real decision, really actuated.
+        assert record["decision"]["decision"] == "A"
+        assert transport.movements == [("A", record["actuation"]["command_id"])]
+
+    def test_the_fallback_produces_a_pmdi_figure(self):
+        """A stand-in mass must still reach the number the demonstration shows."""
+        cell = ScriptedCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true")
+        cell.unplug()
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+
+        pmdi = cycle(run)["valuation"]["pmdi"]
+
+        assert pmdi["precious_mass_fraction_ppm"] is not None
+        assert pmdi["pmdi_value"] is not None
+        # Fabricated, and it must say so everywhere it surfaces.
+        assert pmdi["mass_status"] == "SIMULATED"
+
+    def test_a_live_cell_is_preferred_over_the_camera(self):
+        """The fallback is armed, but a reading cell still drives the machine."""
+        cell = ScriptedCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true")
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+        cell.place(42.7)
+
+        record = cycle(run)
+
+        assert record["weight_status"] == "MEASURED"
+        assert record["weight_g"] == pytest.approx(42.7)
+        assert run.pan.snapshot()["trigger"] == "load-cell"
+
+    def test_without_the_fallback_a_dead_cell_stalls_as_before(self):
+        """The fallback ships off, and off it changes nothing."""
+        cell = ScriptedCell(0.0)
+        run = session(cell)
+        cell.unplug()
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+
+        for _ in range(10):
+            run.pan.step()
+
+        assert run.pan.state is PanState.WAITING_FOR_OBJECT
+        assert run.pan.snapshot()["trigger"] == "load-cell"
+
+
+class TestAutomaticTare:
+    def test_it_rezeroes_against_the_cell_as_it_reads_today(self):
+        cell = ScriptedCell(0.0)
+        run = session(cell)
+        run.link = FakeLink(cell)
+
+        result = run.auto_tare()
+
+        assert result["tared"] is True
+        # The empty pan, wherever the cell now says that is.
+        assert result["tare_counts"] == pytest.approx(TARE_COUNTS, abs=1.0)
+        # The factor is measured against a known mass and is never re-derived.
+        assert run.calibration.counts_per_gram == COUNTS_PER_GRAM
+
+    def test_it_refuses_a_cell_that_is_not_reading(self):
+        """A dead converter must not be averaged into a fabricated zero."""
+        cell = ScriptedCell(0.0)
+        run = session(cell)
+        cell.unplug()
+
+        result = run.auto_tare()
+
+        assert result["tared"] is False
+        # The recorded zero survives, so a restart is still calibrated.
+        assert run.calibration.tare_counts == TARE_COUNTS

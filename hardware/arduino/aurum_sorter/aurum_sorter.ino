@@ -39,7 +39,7 @@
  *   in   AURUM/1 MOVE <A|B> <item_id> <command_id>
  *   in   AURUM/1 CFG <rest_deg> <push_deg> <hold_ms> <command_id>
  *   in   AURUM/1 PING <command_id>
- *   in   AURUM/1 BELT RUN <pwm 0-255> <command_id>
+ *   in   AURUM/1 BELT RUN <pwm 1-255> <command_id>
  *   in   AURUM/1 BELT STOP <command_id>
  *   out  AURUM/1 BELTSTOP WATCHDOG        (the lease expired; motor stopped)
  *   out  AURUM/1 ACK <command_id> [DUP]
@@ -97,7 +97,7 @@ const unsigned long READY_TIMEOUT_MS   = 500;
 // Printed at boot and blinked on the LED. Bump it whenever this file changes,
 // so "which build is on the board" is answerable from the wire and from across
 // the room instead of being inferred.
-#define FIRMWARE_BUILD "2026-08-27e"
+#define FIRMWARE_BUILD "2026-08-27g"
 
 // How long to give a paddle to physically reach an angle before the pins are
 // released. An MG995 is about 0.2 s per 60 degrees, so a full rest<->push
@@ -121,6 +121,15 @@ const unsigned long SERVO_TRAVEL_MS = 500;
 // frozen instead of blinking, which is the cheapest possible detector for the
 // hang seen on the bench (millis() stuck, the same counts repeating for ever).
 const unsigned long HEARTBEAT_MS = 1000;
+
+// The same LED blinks FAST while the belt is commanded on, so "is the Arduino
+// actually driving ENA?" is answerable by looking at the board rather than by
+// trusting an ACK. An ACK only proves the frame was parsed; this proves the
+// pins are being driven, which is the difference between a firmware fault and
+// a fault downstream of D5/D7/D8 - 12 V absent, ENA jumper fitted, a loose
+// OUT lead, or a dead driver. Added 2026-08-27 when the belt ACKed happily and
+// did not turn.
+const unsigned long BELT_BLINK_MS = 120;
 
 // BENCH/TEST defaults, overridden by the CFG frame at startup.
 int restAngle  = 0;
@@ -417,7 +426,12 @@ void handleCommand(const String &line) {
       String id = field(line, 4);
       if (id.length() == 0) { err(field(line, 3), "BAD_FRAME"); return; }
       long pwm = field(line, 3).toInt();
-      if (pwm < 0 || pwm > 255) { err(id, "BAD_PWM"); return; }
+      // Zero is refused, not clamped. analogWrite(ENA, 0) leaves the motor
+      // still while beltRunning says otherwise, and the host believes the
+      // board: PanMachine refuses to weigh while the belt is running, so one
+      // BELT RUN 0 leaves the machine unable to weigh anything ever again.
+      // A request to run at zero speed is a caller bug; STOP is how you stop.
+      if (pwm < 1 || pwm > 255) { err(id, "BAD_PWM"); return; }
       // NOT duplicate-suppressed, unlike MOVE. A repeated RUN is how the host
       // renews the watchdog lease, and it is idempotent: it asserts a state
       // rather than performing an action. Suppressing it would stop the belt.
@@ -477,9 +491,10 @@ void loop() {
     Serial.println("AURUM/1 BELTSTOP WATCHDOG");
   }
 
-  // Idle heartbeat. `push()` drives the LED solid for the whole stroke and
-  // this only runs between strokes, so the two never fight over the pin.
-  if (millis() - lastBeat >= HEARTBEAT_MS) {
+  // Idle heartbeat, or the fast belt blink. `push()` drives the LED solid for
+  // the whole stroke and this only runs between strokes, so they never fight.
+  const unsigned long beat = beltRunning ? BELT_BLINK_MS : HEARTBEAT_MS;
+  if (millis() - lastBeat >= beat) {
     lastBeat = millis();
     beatOn = !beatOn;
     digitalWrite(PIN_LED, beatOn ? HIGH : LOW);

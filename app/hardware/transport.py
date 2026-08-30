@@ -273,3 +273,46 @@ class SimulatedTransport(FakeTransport):
     """
 
     name = "simulated"
+
+
+def autodetect_port() -> tuple[str | None, str]:
+    """The one USB serial port that could be the sorter, and why it was chosen.
+
+    Returns `(port, reason)`. The port is None whenever the answer is not
+    unambiguous, and the reason says which of the three cases it was: pyserial
+    missing, nothing plugged in, or more than one candidate.
+
+    **Selection is on the USB vendor id, not on the name.** macOS lists
+    Bluetooth serial profiles as `/dev/cu.*` nodes beside real USB devices -
+    this bench sees `cu.Bluetooth-Incoming-Port`, `cu.debug-console` and a pair
+    of earbuds - and every one of them would match a name pattern written for
+    `cu.usbmodem`. None of them carries a vendor id, because none is on the USB
+    bus; the Arduino does. Opening one of those instead presents as a healthy
+    link that never answers PING.
+
+    **It refuses to guess between two boards.** An operator naming the port
+    explicitly is always honoured; this only fills in when they have not.
+    """
+    try:
+        from serial.tools import list_ports
+    except ImportError:  # pragma: no cover - pyserial is a hard dependency here
+        return None, "pyserial is not installed, so no port could be detected."
+
+    candidates = [p.device for p in list_ports.comports() if p.device and p.vid is not None]
+    # macOS lists both /dev/cu.* and /dev/tty.* for one device. cu is the
+    # callout node and the one that does not block waiting for carrier detect.
+    if any(c.startswith("/dev/cu.") for c in candidates):
+        candidates = [c for c in candidates if c.startswith("/dev/cu.")]
+
+    if not candidates:
+        return None, (
+            "No USB serial device is present. The board is not enumerating - "
+            "check the cable and reseat it."
+        )
+    if len(candidates) > 1:
+        return None, (
+            f"{len(candidates)} USB serial devices are present "
+            f"({', '.join(sorted(candidates))}); refusing to guess which is the "
+            "sorter. Set AURUM_ARDUINO_PORT."
+        )
+    return candidates[0], f"one USB serial device present: {candidates[0]}"

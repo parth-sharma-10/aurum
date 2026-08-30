@@ -88,6 +88,33 @@ class PanMachine:
         #: "no belt", so a rig without a motor behaves exactly as before.
         self._belt_running = belt_running if belt_running is not None else (lambda: False)
 
+        #: Does the CAMERA start a cycle instead of the pan?
+        #:
+        #: The load cell is what starts a cycle on this machine. With a dead or
+        #: absent cell nothing ever arrives, so the automatic chain never runs -
+        #: and a stand-in mass cannot help, because it substitutes a mass for an
+        #: object already being handled, not the arrival itself.
+        #:
+        #: With this on, an assembly the camera has CONFIRMED is the arrival.
+        #: Everything after it is the same states in the same order.
+        #:
+        #: `demo.camera_trigger.enabled` forces it on for every cycle. Left off,
+        #: the demonstration fallback engages it BY ITSELF, for exactly as long
+        #: as the pan cannot start a cycle: `_waiting_for_object` asks the cell
+        #: first every time, and only reaches for the camera once the cell has
+        #: refused. A cell that starts reading again takes the machine back
+        #: without a restart, because a real arrival is better evidence than a
+        #: confirmed sighting and is preferred whenever one is available.
+        self.camera_trigger = bool(self.cfg["demo.camera_trigger.enabled"])
+        self.camera_trigger_auto = bool(self.cfg["demo.mock_mass.enabled"])
+        #: Did THIS cycle start at the camera? `_waiting_for_clear` has to
+        #: match `_waiting_for_object`: an object that never sat on a pan can
+        #: never be watched leaving one, so a camera-started cycle must be
+        #: released rather than waited out. Kept per cycle rather than read
+        #: from config, so a cell that recovers mid-cycle still finishes the
+        #: cycle it started the way it started it.
+        self._camera_cycle = False
+
         self.object_threshold_g = self.cfg["conveyor.weight.pan.object_threshold_g"]
         self.clear_threshold_g = self.cfg["conveyor.weight.pan.clear_threshold_g"]
         self.clear_samples = self.cfg["conveyor.weight.pan.clear_samples"]
@@ -135,6 +162,11 @@ class PanMachine:
                     getattr(sensor.reader, "last_error", None)
                     or "The load-cell reader disconnected."
                 )
+            # A reader that knows WHY it refused says so. The stuck-converter
+            # refusal in particular has a cause the generic text below gets
+            # wrong: its counts are in range and its frames do arrive.
+            if getattr(sensor.reader, "last_error", None):
+                return None, sensor.reader.last_error
             # Two causes, and the operator cannot tell them apart from here:
             # no weight frames are arriving at all, or every one carries a count
             # outside what a 24-bit converter can represent and is refused. The
@@ -167,10 +199,43 @@ class PanMachine:
             return self._routing()
         return self._waiting_for_clear()
 
+    def _camera_arrival(self, why: str) -> PanState:
+        """Start a cycle on a camera confirmation, because the pan cannot.
+
+        No mass gate: there is no pan reading to gate on. The zone already
+        refuses anything it has handled, so an object cannot be sorted twice
+        for as long as the tracker keeps one id on it.
+        """
+        self.grams = None
+        assembly = self.zone.latch()
+        if assembly is None:
+            self._camera_cycle = False
+            return self._to(
+                PanState.WAITING_FOR_OBJECT,
+                f"Waiting for the camera to confirm an object. {why} "
+                "Hold the component in view until it is confirmed.",
+            )
+        self._camera_cycle = True
+        return self._to(
+            PanState.OBJECT_PRESENT,
+            f"{assembly.assembly_id} confirmed by the camera. Its mass is a stand-in, "
+            "not a measurement.",
+        )
+
     def _waiting_for_object(self) -> PanState:
+        if self.camera_trigger:
+            return self._camera_arrival("The camera is configured to start cycles.")
+
         grams, problem = self._live_grams()
         self.grams = grams
         if grams is None:
+            # The cell is what starts a cycle, and it has refused. With the
+            # demonstration fallback on, hand the arrival to the camera rather
+            # than stalling here - a dead cell would otherwise mean the
+            # automatic chain never runs at all. The cell is asked FIRST on
+            # every pass, so this reverses itself the moment one reads.
+            if self.camera_trigger_auto:
+                return self._camera_arrival(f"The load cell is not starting cycles: {problem}")
             return self._to(PanState.WAITING_FOR_OBJECT, problem)
         if grams <= self.object_threshold_g:
             return self._to(PanState.WAITING_FOR_OBJECT, None)
@@ -246,6 +311,16 @@ class PanMachine:
         )
 
     def _waiting_for_clear(self) -> PanState:
+        if self.camera_trigger or self._camera_cycle:
+            # Nothing to wait for: no object was ever on a pan, so no pan can
+            # report itself empty. Release immediately and let the zone's
+            # handled set stop this id coming round again.
+            self.zone.release()
+            self._clear_run = 0
+            self.grams = None
+            self._camera_cycle = False
+            return self._to(PanState.WAITING_FOR_OBJECT, "Ready for the next object.")
+
         grams, problem = self._live_grams()
         self.grams = grams
         if grams is None:
@@ -277,6 +352,8 @@ class PanMachine:
             "seconds_in_state": round(self._clock() - self.since, 2),
             "cycles_completed": self.cycles,
             "automatic": True,
+            "trigger": "camera" if (self.camera_trigger or self._camera_cycle) else "load-cell",
+            "trigger_fallback_armed": bool(self.camera_trigger_auto),
             "belt_running": bool(self._belt_running()),
             "thresholds": {
                 "object_threshold_g": self.object_threshold_g,

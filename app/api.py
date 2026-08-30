@@ -545,7 +545,17 @@ def hardware_emergency_stop(by: str = "dashboard") -> dict:
         FaultCode.EMERGENCY_STOP,
         f"Emergency stop by {by}. Nothing will actuate until it is reset.",
     )
-    return {"stopped": True, "fault": fault.as_dict(), "hardware": session.fault.snapshot()}
+    # Latching stops SERVO commands. It does not stop a motor that is already
+    # turning: the belt would run until the pan loop next noticed the fault -
+    # and not at all if that thread is dead or `conveyor.weight.pan.auto` is
+    # off. An emergency stop that leaves the belt moving is not one.
+    belt_stopped = session.stop_belt()
+    return {
+        "stopped": True,
+        "belt_stopped": belt_stopped,
+        "fault": fault.as_dict(),
+        "hardware": session.fault.snapshot(),
+    }
 
 
 @app.post("/hardware/fault/reset")

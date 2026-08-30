@@ -46,6 +46,8 @@ that could not be weighed, not a stack trace on a projector.
 
 from __future__ import annotations
 
+import contextlib
+import dataclasses
 import threading
 import time
 import uuid
@@ -63,6 +65,7 @@ from app.hardware.arduino import ArduinoController
 from app.hardware.fault import FaultCode, HardwareFault
 from app.hardware.link import BoardLink
 from app.hardware.servos import ActuationOutcome, ServoActuator
+from app.hardware.transport import autodetect_port
 from app.pipeline.association import SingleObjectZone
 from app.pipeline.item_pipeline import ItemPipeline
 from app.pipeline.pan import PanMachine, PanState
@@ -276,13 +279,56 @@ class DemoSession:
         """
         if self.cfg["conveyor.runtime.simulation"]:
             return self._connect_simulated_board()
+        # Already up: say so and touch nothing. The dashboard calls this on
+        # every page load, and re-opening a healthy link is not free - the
+        # connect path drains the board's backlog first, and an open load cell
+        # holds DOUT LOW, so the sketch's waitReady returns instantly and it
+        # emits as fast as the port allows. Draining that backlog never
+        # finishes, so the second connect hangs and the boot screen sits on
+        # "Connecting..." in front of a machine that was already connected.
+        #
+        # Idempotent, not a reconnect: the loop's `_heal_link` owns recovering
+        # a link that actually dropped, and it can tell the difference.
+        if self.link is not None and self.link.connected:
+            # One thing a healthy link may still be missing: its angles. The
+            # first CFG after a port opens loses its acknowledgement often
+            # enough to be the normal case here - the board dumps a backlog when
+            # the port opens, and an open load cell makes that backlog endless -
+            # so an operator pressing Retry must be able to land it. Without
+            # this the early return made Retry a no-op against the one fault it
+            # was being pressed for.
+            if self.link.servo_config is None and not self._apply_servo_config():
+                self.errors.record(
+                    ErrorCode.ARDUINO_ERROR,
+                    "board",
+                    self.link.last_error or "the servo configuration was not acknowledged",
+                    port=self.link.port,
+                )
+            self._ensure_actuator()
+            self.start_pan()
+            return {"connected": True, "already": True, **self.link.snapshot()}
         port = self.cfg["conveyor.arduino.port"]
+        # "auto" means find it. The port name is not stable across reboots on
+        # this bench - the same board has come up as usbmodem101 and as
+        # usbmodem1101 - and a stale name in a profile presents as a board that
+        # will not connect thirty seconds before a demonstration.
+        #
+        # Only the explicit string "auto". An UNSET port still refuses below,
+        # because "no port is configured" has always meant this machine has no
+        # board and nothing may be invented for it; quietly adopting whatever
+        # happens to be plugged into an unconfigured machine would be exactly
+        # that. Autodetection is something an operator asks for.
+        if str(port).strip().lower() == "auto":
+            port, why = autodetect_port()
+            if port is None:
+                return {"connected": False, "reason": why, "autodetect": why}
         if not port:
             return {
                 "connected": False,
                 "reason": (
                     "No board port is configured. Set conveyor.arduino.port or "
-                    "AURUM_ARDUINO_PORT. Nothing is invented in its place."
+                    'AURUM_ARDUINO_PORT to a port or to "auto". Nothing is '
+                    "invented in its place."
                 ),
             }
         if self.link is None:
@@ -311,6 +357,7 @@ class DemoSession:
                     transport=self.link.transport, cfg=self.cfg, fault=self.fault
                 )
             self._ensure_actuator()
+            self.auto_tare()
             self.start_pan()
         else:
             self.errors.record(
@@ -716,6 +763,16 @@ class DemoSession:
         if self._source is not None:
             self._source.release()
             self._source = None
+        # Before the link goes, not after. `disconnect()` resets the board and
+        # the firmware's watchdog would stop the motor 3 s later anyway, but a
+        # belt that keeps moving for three seconds after a human stopped the
+        # machine is not something to leave to a timeout.
+        #
+        # Suppressed because this is a shutdown path: a belt that will not stop
+        # must not also cost the caller `disconnect()`, which resets the board
+        # and stops the motor anyway.
+        with contextlib.suppress(Exception):
+            self.stop_belt()
         if self.link is not None:
             self.link.disconnect()
 
@@ -801,6 +858,14 @@ class DemoSession:
             self._handled.add(assembly.assembly_id)
             if reading is None:
                 reading = _unavailable_reading("No reading was taken.")
+            # The stand-in mass belongs on BOTH paths. `_read_mass` applies it
+            # for `measure_and_route`, and the automatic path used to hand this
+            # method whatever `sensor.read()` returned - so with a dead cell and
+            # mock mass ON, the manual button produced a graded item and the
+            # automatic cycle produced "no usable mass". Same fallback, same
+            # condition, so the two cannot drift apart.
+            if not reading.usable and bool(self.cfg["demo.mock_mass.enabled"]):
+                reading = self._mock_mass(f"The cell returned {reading.status}.", assembly)
             assembly.attach_weight(reading.grams, str(reading.status), reading.timestamp)
             assembly.weight_reading = reading.as_dict()
 
@@ -1141,6 +1206,69 @@ class DemoSession:
                 ),
             }
         return assembly
+
+    def auto_tare(self) -> dict:
+        """Re-zero the empty pan against the cell as it reads today.
+
+        The tare is the one calibration term that drifts: it is the raw count
+        of an empty pan, and it moves with temperature, with the amplifier's
+        supply, and with anything left resting on the pan. The counts-per-gram
+        factor does not drift that way and is deliberately NOT touched here -
+        deriving it needs a known reference mass on the pan, which no software
+        can arrange for itself.
+
+        The new zero is held in memory and never written to
+        configs/calibration.yaml. A tare taken under an object would subtract
+        that object from every later reading, so the recorded zero stays the
+        one a restart returns to, and this only ever affects the running
+        process. `WeightSensor.tare` refuses a stuck or repeating cell, which
+        is what stops a dead converter being averaged into a fabricated zero.
+        """
+        if not self.cfg["conveyor.weight.auto_tare"]:
+            return {"tared": False, "reason": "conveyor.weight.auto_tare is off."}
+        sensor = self.weight_sensor
+        if sensor is None:
+            return {"tared": False, "reason": "No load cell is connected."}
+        if not self.calibration.has_factor:
+            # Without a factor the counts cannot become grams at all, and a
+            # zero on its own buys nothing. Calibrate first.
+            return {
+                "tared": False,
+                "reason": (
+                    "The load cell has no counts-per-gram factor. Run "
+                    "`python -m app.calibrate` against two known masses."
+                ),
+            }
+        before = self.calibration.tare_counts
+        counts = sensor.tare()
+        if counts is None:
+            self.errors.record(
+                ErrorCode.WEIGHT_ERROR,
+                "weight",
+                "auto-tare refused: the cell is not returning a live zero, so the "
+                "recorded tare was kept.",
+            )
+            return {
+                "tared": False,
+                "reason": (
+                    "The cell did not return a usable zero - no frames, or a stuck "
+                    "converter. The recorded tare was kept."
+                ),
+            }
+        # `Calibration` is frozen, and deliberately so: a calibration is a
+        # record of a measurement, not a mutable setting. Replacing the one
+        # term that drifts keeps the verified factor and its provenance intact.
+        self.calibration = dataclasses.replace(self.calibration, tare_counts=counts)
+        return {
+            "tared": True,
+            "tare_counts": counts,
+            "previous_tare_counts": before,
+            "drift_counts": None if before is None else counts - before,
+            "note": (
+                "In-memory only: configs/calibration.yaml still holds the recorded "
+                "tare, and a restart returns to it."
+            ),
+        }
 
     def mock_mass_for(self, component_class: str | None) -> float:
         """The stand-in mass for a class, in grams.
