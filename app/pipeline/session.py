@@ -290,6 +290,20 @@ class DemoSession:
         # Idempotent, not a reconnect: the loop's `_heal_link` owns recovering
         # a link that actually dropped, and it can tell the difference.
         if self.link is not None and self.link.connected:
+            # One thing a healthy link may still be missing: its angles. The
+            # first CFG after a port opens loses its acknowledgement often
+            # enough to be the normal case here - the board dumps a backlog when
+            # the port opens, and an open load cell makes that backlog endless -
+            # so an operator pressing Retry must be able to land it. Without
+            # this the early return made Retry a no-op against the one fault it
+            # was being pressed for.
+            if self.link.servo_config is None and not self._apply_servo_config():
+                self.errors.record(
+                    ErrorCode.ARDUINO_ERROR,
+                    "board",
+                    self.link.last_error or "the servo configuration was not acknowledged",
+                    port=self.link.port,
+                )
             self._ensure_actuator()
             self.start_pan()
             return {"connected": True, "already": True, **self.link.snapshot()}

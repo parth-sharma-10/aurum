@@ -149,15 +149,25 @@ export default function App() {
     }
 
     if (board?.connected) {
+      // WARN, not BAD, when the angles were not acknowledged. The backend
+      // already decides what is blocking, and it files this as ADVISORY: an
+      // unacknowledged CFG leaves the board on the angles the sketch booted
+      // with, which on this rig are the same numbers the config would have
+      // sent. Failing the boot on it stopped a machine that could sort - and
+      // in SIMULATION there is no board to accept a configuration at all, so
+      // it could never be anything but unapplied.
+      //
+      // Only `blocking` from /ready gates the boot now. Re-deriving that here
+      // is exactly the second place to be wrong that the note below warns of.
       put(
         3,
-        board.servo_config_applied ? "ok" : "bad",
+        board.servo_config_applied ? "ok" : "warn",
         board.servo_config_applied
           ? `Rest ${board.servo_config?.rest_deg}°, push ${board.servo_config?.push_deg}°`
-          : "The board did not accept its configuration",
+          : "Running the angles the sketch booted with",
       );
     } else {
-      put(3, "bad", "No Arduino");
+      put(3, "warn", "No Arduino - paddles cannot move");
     }
 
     await load();

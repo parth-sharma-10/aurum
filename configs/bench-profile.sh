@@ -75,6 +75,23 @@ AURUM_SIM_BELT_SPEED_CM_S=10.0
 # instead if that ever happens.
 AURUM_ARDUINO_PORT=auto
 
+# The board acknowledges a MOVE only after the paddle finishes its stroke, and
+# an open load cell makes the sketch emit as fast as the port allows - the ACK
+# arrives buried in that flood. 4000 ms was latching ACK_TIMEOUT mid-run and
+# stopping the machine. Raised for the bench; the real fix is the load cell.
+AURUM_ARDUINO_ACK_TIMEOUT_MS=8000
+
+# THE LENOVO FHD WEBCAM, which is the one aimed at the rig. Index 0 is the
+# MacBook's built-in camera pointing at the ceiling - it opens, it reads, and
+# it streams a plausible blue-grey gradient, so nothing downstream complains
+# and the operator watches a wall. Index 1 enumerates but never returns a
+# frame. Only 2 is the external webcam.
+#
+# OpenCV has no name lookup on macOS, so this is an index and indices can
+# shuffle when USB devices change. If the feed is not the rig, re-probe:
+#   for i in 0 1 2 3: cv2.VideoCapture(i).read()
+AURUM_CAMERA_INDEX=2
+
 # Actuation ships OFF. Without this every move() returns ACTUATION_DISABLED
 # and no frame is written, which looks exactly like a dead servo.
 AURUM_ARDUINO_ENABLED=true

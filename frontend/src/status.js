@@ -466,7 +466,11 @@ export function machineState(state, startup) {
     // loudly - every number downstream is an illustration - but "nothing can be
     // sorted until it reads" is now false, and an operator who is told the
     // machine is dead while it sorts stops believing the screen.
-    if (physical && pan.trigger_fallback_armed) {
+    // Not gated on `physical`: the fallback arms in a simulated run too, and
+    // the zero-hardware path is exactly the one a demonstration falls back to.
+    // Telling that operator to drive the chain by hand from Developer controls
+    // was wrong - the camera is already starting cycles for them.
+    if (pan.trigger_fallback_armed) {
       return STATE(
         "LOAD_CELL_OFFLINE_FALLBACK",
         "Sorting on assumed weights",

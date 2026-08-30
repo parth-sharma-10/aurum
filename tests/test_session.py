@@ -645,3 +645,58 @@ class TestApplyingTheServoAngles:
         run.link = self.CountingLink(succeed_from=99)
         assert run._apply_servo_config() is False
         assert run.link.attempts == run.SERVO_CONFIG_ATTEMPTS
+
+
+class TestRetryingConnectOnAHealthyLink:
+    """`connect_board` returns early on a link that is already up, so that a
+    page load cannot hang draining an endless backlog. That early return also
+    used to skip the angles, which made the Connect board button a no-op
+    against the one fault an operator presses it for: a link that opened but
+    whose first CFG was never acknowledged.
+    """
+
+    class ConfigurableLink(FakeLink):
+        """A connected board that counts the CFGs it is sent."""
+
+        port = "/dev/fake"
+        last_error = None
+
+        def __init__(self, acknowledges: bool = True, configured: bool = False):
+            super().__init__()
+            self.acknowledges = acknowledges
+            self.servo_config = {"rest_deg": 10, "push_deg": 80} if configured else None
+            self.cfgs = 0
+
+        def configure_servos(self, rest, push, hold, budget_s=4.0):
+            self.cfgs += 1
+            if self.acknowledges:
+                self.servo_config = {"rest_deg": rest, "push_deg": push}
+            return self.acknowledges
+
+    def run(self, link):
+        # Pan off: this test is about the CFG, and `start_pan` would otherwise
+        # leave a live loop polling a fake cell for the rest of the suite.
+        cfg = config.load(environ={"AURUM_ARDUINO_ENABLED": "true", "AURUM_PAN_AUTO": "false"})
+        run = DemoSession(cfg=cfg, controller=ArduinoController(transport=FakeTransport(), cfg=cfg))
+        run.calibration = VERIFIED
+        run.link = link
+        return run
+
+    def test_an_unconfigured_link_is_offered_the_angles_again(self):
+        run = self.run(self.ConfigurableLink(acknowledges=True))
+        result = run.connect_board()
+        assert result["already"] is True
+        assert run.link.cfgs >= 1
+        assert run.link.servo_config is not None
+
+    def test_a_link_that_already_has_its_angles_is_left_alone(self):
+        """CFG parks both paddles at rest; a page load must not move them."""
+        run = self.run(self.ConfigurableLink(configured=True))
+        run.connect_board()
+        assert run.link.cfgs == 0
+
+    def test_a_board_that_still_will_not_answer_is_recorded_not_swallowed(self):
+        run = self.run(self.ConfigurableLink(acknowledges=False))
+        result = run.connect_board()
+        assert result["already"] is True
+        assert any(e.code is ErrorCode.ARDUINO_ERROR for e in run.errors.entries())
