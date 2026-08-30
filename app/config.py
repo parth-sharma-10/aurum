@@ -156,6 +156,15 @@ def _one_of(*allowed: str):
 # annotated "engineering approximation" in configs/*.yaml are prototype
 # starting points and are not research-derived; see docs/COMPLETION_PLAN.md.
 SPEC: dict[str, tuple] = {
+    # CHECK THIS BEFORE A DEMONSTRATION. A wrong index does not fail: on a
+    # laptop, index 0 is the built-in camera, which opens, reads, and streams a
+    # plausible grey gradient of the ceiling while the operator believes they
+    # are watching the rig. Nothing downstream can tell - the detector simply
+    # finds nothing, which looks exactly like a model that is not working.
+    #
+    # OpenCV has no name lookup on macOS, so this is an index, and indices
+    # shuffle when USB devices change. Re-probe rather than assume:
+    #   for i in 0 1 2 3: cv2.VideoCapture(i).read()
     "conveyor.camera.index": (_int, 0, "AURUM_CAMERA_INDEX"),
     "conveyor.camera.backend": (_text, "auto", "AURUM_CAMERA_BACKEND"),
     "conveyor.camera.width": (_int, 1280, "AURUM_CAMERA_WIDTH"),
@@ -282,6 +291,20 @@ SPEC: dict[str, tuple] = {
         200.0,
         "AURUM_ROUTING_LATE_TOLERANCE_MS",
     ),
+    # A port name, or the literal string "auto" to find the board.
+    #
+    # The name is not stable: the same board has come up as usbmodem101 and as
+    # usbmodem1101 on this bench, because the number follows the USB socket, and
+    # a stale name in a profile presents as a board that will not connect.
+    # "auto" selects on the USB vendor id rather than the name - macOS also
+    # lists Bluetooth, debug-console and paired earbuds as cu.* nodes, and a
+    # pattern written for "usbmodem" picked the earbuds - and it refuses
+    # outright if two USB serial devices are attached.
+    #
+    # UNSET still refuses. "No port is configured" has always meant this machine
+    # has no board and nothing may be invented for it; adopting whatever happens
+    # to be plugged into an unconfigured machine would be exactly that.
+    # Autodetection is something an operator asks for.
     "conveyor.arduino.port": (_optional_text, None, "AURUM_ARDUINO_PORT"),
     # Actuation ships OFF. Nothing moves until someone turns this on with the
     # board connected and bench-verified.

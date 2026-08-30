@@ -420,5 +420,5 @@ rotations of the same RAM module in both train and test. See
 Aurum Vision stops at identification. There is no endpoint that returns a metal
 content, because the model does not produce one. Recovery estimation is a
 separate, currently **disabled** mechanism — see
-[model-card.md](model-card.md#recovery-estimation) and
+[model-card.md](model-card.md#material-estimation) and
 `configs/material_reference.yaml`.

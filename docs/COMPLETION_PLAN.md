@@ -6,37 +6,46 @@
 
 | | |
 |---|---|
-| Branch | merged to `main` — PRs #12, #13, #14 |
+| Branch | merged to `main` — PRs #12, #13, #14, #19 |
 | Phases 0-11 | **COMPLETE** |
 | Phase 1 software audit | **COMPLETE** 2026-08-27 (PR #14) |
-| Tests | **1428 passing**, ruff clean, format clean, frontend builds |
-| Hardware | Board, both sketches, both servos: **PHYSICALLY VERIFIED** 2026-08-22. Both paddles watched moving 2026-08-26 |
-| Load cell | **CALIBRATED AND VERIFIED** 2026-08-26 — 392.2167 counts/g, second-mass check +1.130 g |
-| Blocking | Nothing in software. Three physical items below |
+| Tests | **1491 passing**, ruff clean, format clean, frontend builds |
+| Hardware | Board, both sketches, both servos: **PHYSICALLY VERIFIED** 2026-08-22. Both paddles watched moving 2026-08-26. Board answering on `usbmodem101` 2026-08-27 |
+| Calibration record | **VERIFIED** 2026-08-26 — 392.2167 counts/g, second-mass check +1.130 g. Untouched and sound |
+| Load cell | **OPEN — NOT READING** as of 2026-08-27. The record above does not describe the present wiring |
+| Blocking | Nothing in software. One physical fault, below |
 
 ### THE REMAINING TASKS ARE PHYSICAL
 
-The mounting fault that blocked everything until 2026-08-26 is **fixed**; the
-cantilever was rebuilt and `configs/calibration.yaml` carries a verified record.
-`AURUM_DEMO_MOCK_MASS` ships `false` and the cell drives the cycle.
+The 2026-08-26 mounting fault is fixed and `configs/calibration.yaml` carries a
+verified record. **A separate fault replaced it**: the cell input is now open.
 
 What is left needs the machine, and none of it can be done in software:
 
-1. **Reconnect the board.** It dropped off USB on 2026-08-27 and no
-   `cu.usbmodem*` node exists. Re-read the port after reseating — it follows the
-   socket.
-2. **Re-tare.** The empty pan read 7.9–8.3 g on 2026-08-27, over both the 5 g
-   arrival and 2 g clear thresholds, so the automatic cycle cannot arm. The
-   thresholds were deliberately **not** raised to mask this.
-   `python -m app.calibrate --port <PORT> --reference-mass 204 --verify-mass 170`
-3. **Watch one full automatic cycle end to end** — camera to a physical
-   diversion into bin A or B. Every piece is proven separately; the whole cycle
-   with a paddle stroke has never been observed in one go.
+1. **Repair the load cell.** It reads a floating DOUT line, not a mass — raw `0`
+   and `−1` with occasional bit patterns. Through the verified factor that
+   becomes a rock-steady **670.75 g on an empty pan**, which settles at 0.000 g
+   spread and therefore earns `MEASURED`. Check HX711 VCC, DOUT/SCK on D2/D3,
+   and the cell's four bridge wires. See
+   [the open cell in docs/hardware.md](hardware.md#the-cell-itself-open-and-not-reading--2026-08-27).
 
-One software fix is also **unverified against hardware**: the board is now
-offered its servo angles twice on connect, which should absorb the first CFG
-losing its ACK to the boot backlog. Proven by unit test only, because the board
-was absent when it was written.
+   **Do not re-tare first.** An earlier revision of this checkpoint told you to,
+   on the theory that the pan had drifted to 7.9–8.3 g. That diagnosis is
+   superseded: taring an open cell averages a dead converter into a fabricated
+   zero. The cell is fixed when it reads a *wandering* number near **−263078**
+   with an empty pan — only then run:
+   `python -m app.calibrate --port <PORT> --reference-mass 204 --verify-mass 170`
+
+2. **Watch one full automatic cycle end to end** — camera to a physical
+   diversion into bin A or B. Every piece is proven separately; the whole cycle
+   with a paddle stroke has never been observed in one go. The camera-trigger
+   path is proven scripted, simulated and with zero hardware, but **no object
+   has ever been put in front of the camera** to drive it.
+
+The CFG retry is **no longer unverified**: the board applied its angles on the
+first Connect of the 2026-08-27 session, and `connect_board` now re-offers them
+on a link that is already up, so pressing Connect a second time is a real remedy
+rather than a no-op.
 
 Everything else that could be solved in software has been.
 
@@ -70,6 +79,30 @@ belt and no way to model one honestly. Phase 11 reversed it: `app/routing/` is
 now joined to the session, and `conveyor.mode` decides whether it is used.
 `NONE` is the default and is still the truth about this machine — the operator
 carries the object and routing is immediate. See `docs/conveyor.md`.
+
+---
+
+# Everything below is the record, not the state
+
+The checkpoint at the top of this file is the current state. What follows is the
+original completion plan and the dated notes from each session that worked
+through it, **kept as written**. It is here so a decision can be traced back to
+the evidence and the day it was made, not consulted for what is true now.
+
+Where the two disagree, the checkpoint wins. Three places below are known to be
+overtaken and are left standing on purpose:
+
+- **"PHYSICAL VALIDATION — still none, for anything"** lists Arduino-Python
+  communication, a servo moved by Aurum code, the calibration workflow and
+  flashing a sketch as never done. All four have since been done — the board and
+  both paddles were watched on 2026-08-22 and 2026-08-26.
+- **Two "FIRST ACTION NEXT SESSION" blocks.** Both are spent. The next action is
+  the one in the checkpoint: repair the open load cell.
+- **"Phase 7 — Arduino and servo integration  IN PROGRESS"** and its
+  per-phase file lists. Phase 7 closed; some files named in the plans landed at
+  different paths than proposed.
+
+---
 
 ### HARDWARE STATE — 2026-08-22 bench session
 

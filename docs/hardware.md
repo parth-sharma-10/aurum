@@ -96,11 +96,23 @@ must not let a resend swing the paddle into whatever is now in front of it.
 in firmware would be the single most misleading thing this repository could do.
 
 **The ACK follows the stroke, not the frame.** It means the board completed its
-movement routine — which is why `conveyor.arduino.ack_timeout_ms` is 4 s
-against a 700 ms hold: a MOVE was measured at 1.212 s on the attached board,
-and 2 s produced false timeouts on a board that was answering correctly. It is
-still not proof a servo physically moved: a
-stripped horn or a dead supply rail acknowledges identically.
+movement routine, so the timeout must clear a whole stroke and not just a round
+trip: a MOVE was measured at **1.212 s** on the attached board against a 700 ms
+hold. It is still not proof a servo physically moved — a stripped horn or a dead
+supply rail acknowledges identically.
+
+> **The shipped default is known to be too tight, and this is not yet fixed.**
+> `conveyor.arduino.ack_timeout_ms` ships **2000 ms**. The bench recorded that
+> 2 s produces false timeouts on a board that is answering correctly, and an
+> earlier revision of this page asserted the default was 4 s — it never was. The
+> value has only ever been 500 ms and then 2000 ms.
+>
+> `configs/bench-profile.sh` works around it with **8000 ms**, which is also
+> absorbing a second fault: an open load cell makes the sketch emit as fast as
+> the port allows (~5600 lines/s against a documented 10 Hz), and the ACK
+> arrives buried in that flood. Once the cell is repaired the flood goes away
+> and the honest question — what should the default be, given a 1.212 s
+> stroke — should be settled on the board rather than in a profile.
 
 ### Serial protocol
 
@@ -230,7 +242,7 @@ the nominal 170 g mass weighs approximately **170.70 g** if the 204 g mass is
 taken as exact. Both are uncertified, so only their ratio is established —
 absolute accuracy awaits a traceable mass.
 
-### Current state: CALIBRATED AND VERIFIED, 2026-08-26
+### The calibration record: VERIFIED, 2026-08-26
 
 ```yaml
 counts_per_gram:      392.2166666666667
@@ -241,9 +253,58 @@ verification_mass_g:  170.0
 verification_error_g: +1.1297752092806093   # tolerance 1.5 g
 ```
 
-`has_factor: true`, `verified: true`, `present: true`. Readings can now reach
-`MEASURED`, which is what lets a concentration-based metal estimate run and what
-opens the pan machine's arrival gate.
+`has_factor: true`, `verified: true`. This record is sound and has not been
+touched since.
+
+### The cell itself: OPEN, and not reading — 2026-08-27
+
+**The record above describes a calibration, not today's wiring.** Keep the two
+apart. A stored factor says a cell *was* measured; it says nothing about whether
+that cell is converting right now, and this rig is the case that proves the
+difference matters.
+
+As of the 2026-08-27 bench session the load cell input is **open** — DOUT
+floating, the bridge not driving the converter. Two reads, hours apart:
+
+| read | what the wire carried |
+|---|---|
+| first | raw `0` in **121 of 121** frames, status `OK`, 8 Hz |
+| second | `0` ×66, `−1` ×20, and single frames of `8191`, `4095`, `63`, `−16`, `−65536` |
+
+The second shape is the giveaway: powers-of-two bit patterns and a 0/−1 dither
+are a floating line, not a quiet one.
+
+**Why this was worse than reading nothing.** Put raw `0` through the verified
+factor above and the empty pan weighs **670.75 g**. It is perfectly steady — a
+spread of exactly 0.000 g — so it settled instantly and earned **`MEASURED`**,
+the one status a concentration-based metal estimate is allowed to consume. A
+dead cell did not present as a dead cell. It presented as the best reading the
+machine had ever taken.
+
+Two rules now stand between that wire and a number, because the bench produced
+two shapes of the same fault:
+
+- **`repeats_exactly`** — a run that never changes. A converting cell wanders
+  ~33 counts with the belt stopped; only a dead one repeats bit-for-bit.
+- **`rests_at_zero`** — a run whose **median** sits within 1000 counts
+  (≈ **2.55 g** here) of digital zero. Judged on the median, not on every
+  sample, because the bit-pattern spikes above are exactly what the median
+  filter discards before turning the rest into a confident number. An `all()`
+  test was written first and let the real wire through.
+
+1000 counts sits below the 5 g arrival threshold and far above the 33-count
+noise floor.
+
+**Do not re-tare it.** Taring an open cell averages a dead converter into a
+fabricated zero and buries the fault deeper. The cell is fixed when it reads a
+*wandering* number near **−263078** with an empty pan; only then is the
+calibration workflow worth running, and only then does the record above start
+describing the present again.
+
+Until it does, `present: false` — readings cannot reach `MEASURED`, the pan
+machine's arrival gate never opens, and the machine runs on the camera trigger
+and a stand-in mass instead. See
+[the mock-mass fallback](demo.md#4-if-the-load-cell-will-not-calibrate--the-mock-mass-fallback).
 
 **Read the margin honestly.** The +1.130 g error sits 0.37 g inside the 1.5 g
 tolerance, and most of it is not cell error: the nominal 170 g mass weighs
@@ -373,7 +434,7 @@ Software status, which is a different claim:
 |---|---|
 | Camera → detection → tracking → item id | **RUNNING** — real webcam, real model |
 | Item id → mass → PMDI → decision → command | **RUNNING** — `app/pipeline/session.py` |
-| Command layer, link layer, session | **TESTED** — 1428 tests, hardware layer covered |
+| Command layer, link layer, session | **TESTED** — 1491 tests, hardware layer covered |
 | Serial link against a real board | **VERIFIED** — no longer a fake |
 
 ### The five levels, kept apart
@@ -408,10 +469,15 @@ panel and at `GET /ready`. A paddle that acknowledged and did **not** move is
 recorded too: that is the most valuable observation the bench can produce, and
 discarding it would leave a known-broken rig looking merely untested.
 
-**Level 4 is reached, with one qualification.** The cell is mounted, responds
-linearly through the tare, and carries a calibration verified against a second
-known mass by the project's own workflow. The qualification is traceability:
-both masses are uncertified, so the factor is verified *self-consistently* and
+**Level 4 was reached on 2026-08-26, and the rig has since regressed.** The cell
+is mounted, responded linearly through the tare, and carries a calibration
+verified against a second known mass by the project's own workflow — but its
+input is now open and it is not converting, so no reading taken today is at
+Level 4 or at any level. Repairing it restores the level; it does not need
+re-deriving.
+
+The original qualification still stands on the record itself: **traceability**.
+Both masses are uncertified, so the factor is verified *self-consistently* and
 inherits whatever the 204 g reference actually weighs. Level 5 needs a conveyor
 that does not exist and is out of the demonstration's scope.
 

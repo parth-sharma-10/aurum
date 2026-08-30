@@ -9,7 +9,7 @@ invisible at the point of collection. Aurum's vision layer makes it
 machine-readable: point a camera at a pile of hardware and get back *what is
 there and how much of it*, as JSON the rest of a recycling workflow can use.
 
-![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-1428%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
+![status](https://img.shields.io/badge/status-prototype-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![tests](https://img.shields.io/badge/tests-1491%20passing-brightgreen) ![mAP50](https://img.shields.io/badge/test%20mAP%4050-0.806-1E5B41) ![python](https://img.shields.io/badge/python-3.12-blue)
 
 > **The weights are a release asset, not a tracked file.** `models/*.pt` is
 > gitignored, so a fresh clone has no model until you download one. One command
@@ -65,7 +65,7 @@ Not "a fully automated conveyor sorting system". There is no conveyor.
 ## Running the sorting console
 
 ```bash
-export AURUM_ARDUINO_PORT=/dev/cu.usbmodem1101  # ls /dev/cu.usbmodem* — it follows the socket
+export AURUM_ARDUINO_PORT=auto                  # finds the board by USB vendor id
 export AURUM_ARDUINO_ENABLED=true               # actuation ships OFF
 uvicorn app.api:app --port 8000
 
@@ -517,8 +517,12 @@ The measurement path (`WeightSensor`) has been run against real hardware: an
 Arduino streams raw HX711 counts, Python owns the calibration, and a reading
 only becomes `MEASURED` on a factor verified against a *second* known mass.
 
-**The load cell is calibrated and verified (2026-08-26).** The mounting fault is
-fixed; the cell responds at **392.2167 counts/g**, linear through the tare
+**A verified calibration record exists (2026-08-26), but the cell is not
+reading today.** Keep the two apart — a stored factor says a cell *was*
+measured, not that it is converting now. As of 2026-08-27 the input is **open**;
+see [docs/hardware.md](docs/hardware.md#the-cell-itself-open-and-not-reading--2026-08-27).
+The record itself is sound: the mounting fault is fixed, and the cell responded
+at **392.2167 counts/g**, linear through the tare
 (fitted offset +80 ± 223 counts, consistent with zero), with 0.008 g of zero
 drift once warmed. The second-mass check predicted 171.130 g for the nominal
 170 g reference — an error of **+1.130 g against a 1.5 g tolerance**.
@@ -1000,9 +1004,11 @@ Aurum
 
 **Aurum is a working software pipeline driving real hardware.** Both servos have
 been moved by Aurum's own command over a real serial link, and watched doing it.
-The load cell is mounted, calibrated and verified against a second known mass, so
-readings reach `MEASURED`. There is no conveyor, and the operator carries
-components between stages.
+The load cell is mounted and carries a calibration verified against a second
+known mass — but its input went **open on 2026-08-27** and it is not reading, so
+nothing currently reaches `MEASURED` and the machine runs on the camera trigger
+with a stand-in mass. There is no conveyor, and the operator carries components
+between stages.
 
 | Phase | Status | Software | Hardware | Validation |
 |---|---|---|---|---|
@@ -1016,7 +1022,7 @@ components between stages.
 | 7 Arduino/servo | COMPLETE | transport, command layer, both sketches | **both servos moved by Aurum code** | **PHYSICALLY VERIFIED** |
 | 8 API/frontend | COMPLETE | session API + sorting console | real webcam | verified in the browser |
 | 9 End-to-end | COMPLETE | `app/pipeline/session.py` | camera + board | camera→item→PMDI→bin→servo, on hardware |
-| 10 Validation | PARTIAL | 1428 tests, ruff clean | — | calibration verified 2026-08-26; **full automatic cycle to A/B still unwatched** |
+| 10 Validation | PARTIAL | 1491 tests, ruff clean | — | calibration verified 2026-08-26, but **the cell went open 2026-08-27 and is not reading**; **full automatic cycle to A/B still unwatched** |
 
 ### What the five levels mean
 
@@ -1115,7 +1121,7 @@ frontend/    React/Vite browser view of the ledger (reads the API only)
 ml/          Pipeline: ingest → prepare → validate → train → evaluate → realworld → assets
 configs/     Label map, pinned datasets, material reference (cited), price reference (disabled)
 scripts/     Doc generators, training monitor, external-image fetcher, Universe search
-tests/       1428 tests
+tests/       1491 tests
 docs/        dataset · training · evaluation · model-card · architecture · demo · material-reference
 docs/sources/ Canonical bibliography for every material figure
 reports/     Generated metrics, figures and validation output
@@ -1133,7 +1139,7 @@ layer and its fail-closed guards), `app/api.py` (HTTP surface and `/stats`).
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q                  # 1428 tests
+python -m pytest -q                  # 1491 tests
 ruff check . && ruff format --check .
 
 cd frontend && npm run build         # static bundle to frontend/dist/
@@ -1159,6 +1165,8 @@ figure.
 | [docs/hardware.md](docs/hardware.md) | Wiring, protocol, bench results, the latched hardware fault |
 | [docs/demo.md](docs/demo.md) | Presentation runbook — setup, sequence, failure recovery, Q&A |
 | [docs/material-reference.md](docs/material-reference.md) | Material database: sources, evidence table, units, composition vs recovery, gaps |
+| [docs/configuration.md](docs/configuration.md) | Every setting, its environment variable, its default and why it exists (generated) |
+| [docs/pmdi.md](docs/pmdi.md) | The Precious Metal Density Index: definition, inputs, and what it is not |
 
 ## Limitations
 

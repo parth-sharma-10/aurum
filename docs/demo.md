@@ -80,9 +80,18 @@ arduino-cli upload -p /dev/cu.usbmodem1101 --fqbn arduino:avr:uno hardware/ardui
 ```
 
 The port number follows the USB location, so it changes when the board moves
-socket or hub. `ls /dev/cu.usbmodem*` every session — it was `usbmodem101` on
-2026-08-26 and `usbmodem1101` on 2026-08-27, and a stale value fails as
-"could not open", which reads exactly like a dead board.
+socket or hub — it was `usbmodem101` on 2026-08-26 and `usbmodem1101` on
+2026-08-27, and a stale value fails as "could not open", which reads exactly
+like a dead board. `arduino-cli` needs the real name, so `ls /dev/cu.usbmodem*`
+before flashing.
+
+**The backend does not need it.** `configs/bench-profile.sh` ships
+`AURUM_ARDUINO_PORT=auto`, which finds the board by USB vendor id rather than by
+name, so it survives the number changing. It refuses if two USB serial devices are attached, and an
+*unset* port still refuses outright: only the literal string `auto` opts in.
+Selecting on the vendor id is not fussiness — macOS lists Bluetooth, the debug
+console and paired earbuds as `cu.*` nodes too, and a pattern written for
+`usbmodem` picked the earbuds.
 
 `arduino-cli lib install Servo` once, if the sorter sketch will not compile.
 
@@ -101,14 +110,27 @@ Do not change this — the other arrangement melted jumper wires once already.
 
 ### 3. Calibrate the load cell — two masses, not one
 
-The cell is mounted and **carries a verified calibration** as of 2026-08-26:
-392.2167 counts/g, tared at −263 078 counts, referenced on 204 g and verified
-against a second 170 g mass — predicted 171.130 g, error +1.130 g against a
-1.5 g tolerance. That record is `configs/calibration.yaml` and it is measured
-data about one physical rig, not a setting.
+> **As of 2026-08-27 the cell is OPEN and this step cannot succeed.** Skip to
+> [step 4](#4-if-the-load-cell-will-not-calibrate--the-mock-mass-fallback) and
+> run the demonstration on the camera trigger. Attempting to calibrate an open
+> cell is worse than skipping it: see
+> [the open cell](hardware.md#the-cell-itself-open-and-not-reading--2026-08-27).
 
-Re-run it only if the mount is disturbed. The backend must be stopped first —
-it holds the serial port, and two readers get nothing.
+**Read the wire before you calibrate anything.** The cell carries a verified
+calibration from 2026-08-26 — 392.2167 counts/g, tared at −263 078 counts,
+referenced on 204 g and verified against a second 170 g mass, error +1.130 g
+against a 1.5 g tolerance. That record is `configs/calibration.yaml`: measured
+data about one physical rig, not a setting, and **not evidence that the cell is
+converting today**.
+
+An empty pan on a healthy cell reads a *wandering* number near **−263078**. If
+it reads a steady `0`, or dithers between `0` and `−1`, the input is open and
+the calibration workflow will refuse rather than hang. Do not re-tare to make
+the number look right — that averages a dead converter into a fabricated zero.
+
+Re-run calibration if the mount is disturbed, or once an open cell is repaired.
+The backend must be stopped first — it holds the serial port, and two readers
+get nothing.
 
 ```bash
 cd aurum && source .venv/bin/activate
@@ -135,24 +157,39 @@ design.
 If verification fails, check the tare, the mounting, and that both masses are
 what they claim to be before touching `--tolerance`.
 
-**Check the empty pan before the demonstration.** It read 7.9–8.3 g with
-nothing on it on 2026-08-27, and the arrival threshold is 5 g — so the pan
-machine sits in `WAITING_FOR_CLEAR` for ever and **the automatic cycle never
-arms**. `curl -s localhost:8000/session/pan` says so in one line. The fix is a
-re-tare, which means the calibration run above, which means stopping the
-backend. Do it the night before, not at the venue.
+**Check the empty pan before the demonstration.** `curl -s
+localhost:8000/session/pan` says in one line whether the machine can arm. A
+non-zero mass on an empty pan keeps the pan machine in `WAITING_FOR_CLEAR` for
+ever and **the automatic cycle never arms**.
+
+Read what it says before deciding what to do about it. A *wandering* few grams
+is tare drift, and the fix is the calibration run above — done the night before,
+not at the venue. A **steady** number, and especially the ~670 g an open cell
+produces through this rig's factor, is not drift and re-taring it will only
+bury the fault. An earlier revision of this runbook read the 2026-08-27 pan as
+drift and told you to re-tare; the cause was an open cell.
 
 ### 4. If the load cell will not calibrate — the mock-mass fallback
 
-Not needed on this rig any more; kept for a bench where the cell is dead or
-absent. It was the standing arrangement until 2026-08-26, when the mount was
-rebuilt — see `docs/hardware.md`.
+**This is the current path on this rig**, because the cell is open — see
+[the open cell](hardware.md#the-cell-itself-open-and-not-reading--2026-08-27).
+It was also the standing arrangement until 2026-08-26, when the mount was
+rebuilt and the cell briefly worked.
 
 When the demonstration is sooner than the bench job:
 
 ```bash
 export AURUM_DEMO_MOCK_MASS=true
 ```
+
+A stand-in mass alone is not enough when the cell is *open* rather than merely
+wrong. The load cell is what **starts** a cycle, so with nothing arriving the
+automatic chain never runs at all. Turning on `demo.mock_mass.enabled` therefore
+also arms the camera as the arrival source: an assembly the tracker confirms
+becomes the arrival, and the paddles fire on camera confirmation alone.
+
+The cell is still asked first on every pass, so a cell that starts reading takes
+the machine back with no restart. Everything stays `SIMULATED` to the ledger.
 
 An item that cannot be weighed is then given a per-class stand-in mass —
 **CPU 25 g · PCB 180 g · RAM 30 g · Connector 5 g** — so the rest of the
@@ -402,13 +439,15 @@ today is perception, measurement, material intelligence and actuation."*
 | Symptom | Cause | Do this |
 |---|---|---|
 | `CAMERA OFF`, permission error | macOS camera permission | System Settings → Privacy & Security → Camera → your terminal. **Grant it before the venue.** |
-| `NO BOARD` | Wrong port, or cable | `ls /dev/cu.usbmodem*`, re-export `AURUM_ARDUINO_PORT`, press Connect board again |
+| `NO BOARD` | Wrong port, or cable | The bench profile ships `AURUM_ARDUINO_PORT=auto`, which finds the board by USB vendor id — so suspect the cable first. (`demo-profile.sh` sets no port at all: it is the zero-hardware profile and runs `AURUM_SIMULATION=true`.) `auto` refuses if **two** USB serial devices are attached; unplug the other one. Then press Connect board again |
 | `NOT CALIBRATED` | `verified: false` | Re-run `python -m app.calibrate`. Do not hand-edit the YAML |
 | `ACTUATION OFF` | Safety default | `export AURUM_ARDUINO_ENABLED=true` and restart the backend |
 | Mass reads `UNSTABLE` | Bench vibration, or a hand still on the pan | Take your hand off and leave it alone. The cycle re-reads on its own — there is no button to press |
 | Mass reads `UNAVAILABLE` | Cell not responding | Check D2/D3, re-seat the HX711, confirm the sorter sketch is flashed |
-| `the board did not acknowledge the servo configuration` | The board dumps a large backlog when the port opens and the first CFG's ACK is buried in it | The backend now offers the angles **twice** on its own, which should absorb it. If it still fails, press Connect board again and check `servo_config_applied: true` in `/session`. **Not yet confirmed against the board** — the Arduino was off USB when the retry was written |
-| `x.x g still on the pan` with nothing on it | Tare drift — it sat at ~8 g on 2026-08-27, over the 5 g arrival threshold, so the automatic cycle never arms | Stop the backend, clear the pan, re-run `python -m app.calibrate` |
+| **The video is not the rig** — a plausible, evenly-lit surface, and the detector never fires | `AURUM_CAMERA_INDEX` is pointing at the laptop's own camera. It opens and reads, so nothing reports an error | Re-probe: `for i in 0 1 2 3: cv2.VideoCapture(i).read()`. On this bench the external webcam is **index 2**; 0 is the built-in camera and 1 enumerates but never returns a frame |
+| **Boot screen sits on `Connecting...`** | A page load reconnects the board, and the connect path drains the board's backlog first. An open load cell makes that backlog endless | Fixed — `connect_board` is idempotent and answers "already" in 0.02 s. If it recurs, the underlying cause is the cell flooding the port |
+| `the board did not acknowledge the servo configuration` | The board dumps a large backlog when the port opens and the first CFG's ACK is buried in it | **Advisory, not blocking** — an unacknowledged CFG leaves the board on the angles its sketch booted with, which on this rig are the numbers the config would have sent. Press Connect board again: that now re-offers the angles on an already-connected link instead of returning early, and check `servo_config_applied: true` in `/session` |
+| **A large, rock-steady mass on an empty pan** (≈670 g) | The cell input is open. Raw `0` through the verified factor is 670.75 g, and it is *perfectly* steady, so it settles instantly and earns `MEASURED` | Stop and fix the wiring — HX711 VCC, DOUT/SCK on D2/D3, the four bridge wires. **Do not re-tare.** An empty pan on a healthy cell wanders near −263078 |
 | `UNKNOWN_MASS_ANOMALY` | The mass is outside the plausibility window for that class | Not a fault. Use a component inside the range — a PCB must clear 20 g |
 | `ALREADY_PROCESSED` | That item was already routed | Take the component out of frame, let the track drop, present it again |
 | Servo does not move but state is `ACKED` | Mechanical or supply-side | Check the external 5 V rail and the horn. An ACK is not proof of movement |
