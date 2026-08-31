@@ -1,5 +1,17 @@
 # Phase 11 — closing every software loose end
 
+> **Historical record. Phase 11 completed on 2026-08-26 and this plan is kept as
+> written, not updated.** The figures below are the ones it was planned
+> against; for the current state see
+> [COMPLETION_PLAN.md](COMPLETION_PLAN.md#next-session-checkpoint), and for what
+> the phase actually delivered see *Phase 11 — what closed* in the same file.
+>
+> One line here is worth flagging as overtaken: the contract says the only
+> outstanding item is mounting and calibrating the load cell. That was true when
+> written. The cell was calibrated on 2026-08-26 and its input went **open** on
+> 2026-08-27 — see
+> [docs/hardware.md](hardware.md#the-cell-itself-open-and-not-reading--2026-08-27).
+
 The contract: after this phase the only outstanding item is **mounting and
 calibrating the load cell**. Everything solvable in software is solved.
 
