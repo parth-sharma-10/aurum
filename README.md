@@ -540,7 +540,7 @@ sorting, not a claim to be a scale. Derivation and evidence in
 ### The mock-mass fallback
 
 `demo.mock_mass.enabled` ships **off**. With it on, an item that cannot be
-weighed is given a per-class stand-in — **CPU 25 g · PCB 180 g · RAM 30 g ·
+weighed is given a per-class stand-in — **CPU 22 g · PCB 60 g · RAM 20 g ·
 Connector 5 g** — so the pipeline can still be demonstrated. Per class, because
 a precious fraction is metal over *total* mass, and one flat value made a CPU
 read 26 ppm where 188 is right.

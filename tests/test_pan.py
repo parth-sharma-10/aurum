@@ -61,6 +61,8 @@ class ScriptedCell:
         self.reads = 0
         #: Non-zero once the mass has been made to drift and never settle.
         self._drift = 0.0
+        #: How many reads still have to come back empty. See `miss`.
+        self._missing = 0
 
     def place(self, grams: float) -> None:
         self.grams = grams
@@ -75,6 +77,20 @@ class ScriptedCell:
         """
         self._drift = step
 
+    def miss(self, reads: int | None = 1) -> None:
+        """Return nothing for the next `reads` calls, while staying connected.
+
+        `None` means from now on: a cell that is wired up and streaming
+        nothing a converter will accept, which is what an open one does.
+
+        Not a fault, and that is the whole point of it. `BoardLink.next_weight`
+        gives up after `conveyor.arduino.timeout_s` - one second - while the
+        sketch goes deaf for the 1.711 s of a paddle stroke and the manual path
+        drains the same queue from another thread. A perfectly healthy cell
+        really does return None from time to time.
+        """
+        self._missing = reads
+
     def unplug(self) -> None:
         self.connected = False
 
@@ -82,6 +98,11 @@ class ScriptedCell:
         self.reads += 1
         if not self.connected:
             self.last_error = "serial read failed: the cable was pulled"
+            return None
+        if self._missing is None:
+            return None
+        if self._missing:
+            self._missing -= 1
             return None
         if self._drift:
             self.grams += self._drift
@@ -490,6 +511,54 @@ class TestConcurrency:
         cycle(run)
 
         assert observed == [True], "the session lock was held across the serial round trip"
+
+    def test_two_clicks_on_one_item_produce_one_action(self):
+        """`Measure & route now` claims the item, rather than asking and then acting.
+
+        The check and the claim used to sit either side of a slow
+        `_read_mass`, so two requests both passed "has this been handled" and
+        both ran the whole chain: two valuations, two EPR trails, and a
+        ROUTING_ERROR on the dashboard for an item that was only ever routed
+        once. The dashboard reaches this endpoint from a button, and React
+        StrictMode double-invokes an effect - two callers is the normal case,
+        not a contrived one.
+        """
+
+        class SlowCell(ScriptedCell):
+            """A cell that takes as long to answer as a real one does.
+
+            The window between the check and the claim IS the settling read -
+            up to `conveyor.weight.timeout_s`, five seconds on the bench. A
+            fake that answers instantly closes it and the race never shows.
+            """
+
+            def read(self):
+                time.sleep(0.05)
+                return super().read()
+
+        cell = SlowCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true")
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+        cell.place(42.7)
+
+        results: list[dict] = []
+        start = threading.Barrier(4)
+
+        def click():
+            start.wait(timeout=5.0)
+            results.append(run.measure_and_route())
+
+        threads = [threading.Thread(target=click) for _ in range(3)]
+        for thread in threads:
+            thread.start()
+        start.wait(timeout=5.0)
+        for thread in threads:
+            thread.join(timeout=10.0)
+
+        routed = [r for r in results if not r.get("error")]
+        refused = [r for r in results if r.get("error") == "ALREADY_PROCESSED"]
+        assert len(routed) == 1, f"{len(routed)} callers each ran the chain"
+        assert len(refused) == 2
 
     def test_the_camera_thread_keeps_running_while_an_item_is_routed(self):
         """The same property, observed from the other side."""
@@ -1077,6 +1146,61 @@ class TestTheHardwareFallback:
         assert record["weight_g"] == pytest.approx(42.7)
         assert run.pan.snapshot()["trigger"] == "load-cell"
 
+    def test_one_missed_frame_does_not_hand_the_machine_to_the_camera(self):
+        """A gap in the weight stream is not a cell that cannot start cycles.
+
+        This is what broke the demonstration. The board goes deaf for the whole
+        1.711 s of a paddle stroke while `next_weight` gives up after one
+        second, so a healthy cell returns None every so often - and arming the
+        camera on the first one latched the object still in the operator's
+        hand, gave it a stand-in mass and sorted it. The real arrival was then
+        refused as "no assembly has been confirmed", because that id had
+        already been handled.
+        """
+        cell = ScriptedCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true")
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+        cell.miss(1)
+
+        run.pan.step()
+
+        assert run.pan.state is PanState.WAITING_FOR_OBJECT
+        assert run.zone.held is None
+        assert run.pan.snapshot()["trigger"] == "load-cell"
+
+    def test_a_cell_that_stays_quiet_still_hands_over(self):
+        """The fallback still exists: a cell that never speaks loses the machine."""
+        cell = ScriptedCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true", AURUM_DEMO_CAMERA_TRIGGER_QUIET_S="0")
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+        cell.miss(None)
+
+        record = cycle(run)
+
+        assert record["weight_status"] == "SIMULATED"
+        assert run.pan.snapshot()["trigger"] == "camera"
+
+    def test_a_missed_frame_does_not_release_an_object_still_on_the_pan(self):
+        """The same gap at the other end of the cycle.
+
+        Releasing on one empty read marks the object handled while it is still
+        sitting on the cell, and the next confirmed assembly - the one the
+        operator has already picked up - is latched against that mass.
+        """
+        cell = ScriptedCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true")
+        show(run, det(1, "CPU", (10, 10, 90, 90)))
+        cell.place(42.7)
+        cycle(run)
+        held = run.zone.held
+        assert held is not None
+
+        cell.miss(1)
+        run.pan.step()
+
+        assert run.pan.state is PanState.WAITING_FOR_CLEAR
+        assert run.zone.held is held
+
     def test_without_the_fallback_a_dead_cell_stalls_as_before(self):
         """The fallback ships off, and off it changes nothing."""
         cell = ScriptedCell(0.0)
@@ -1089,6 +1213,53 @@ class TestTheHardwareFallback:
 
         assert run.pan.state is PanState.WAITING_FOR_OBJECT
         assert run.pan.snapshot()["trigger"] == "load-cell"
+
+
+class TestTheEmptyPan:
+    """Nothing on the cell is not a measurement of the object.
+
+    The automatic path only weighs after a mass crosses
+    `conveyor.weight.pan.object_threshold_g`. The developer fallback has no
+    such gate, so on the bench the runbook actually describes - a stand-in
+    mass, the operator never using the pan - `Measure & route now` handed the
+    decision engine a settled, MEASURED 0.0 g. A PCB was then refused with
+    `UNKNOWN_MASS_ANOMALY: -0 g is below the 20 g minimum plausible for a
+    PCB`, which reads as a broken identity rather than an empty pan.
+    """
+
+    def test_an_empty_pan_does_not_become_this_object_s_mass(self):
+        cell = ScriptedCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true")
+        show(run, det(1, "PCB", BOARD))
+
+        record = run.measure_and_route()
+
+        assert record["weight_status"] == "SIMULATED"
+        assert record["decision"]["reason_code"] != "UNKNOWN_MASS_ANOMALY"
+        assert record["decision"]["decision"] == "B"
+
+    def test_with_no_stand_in_it_refuses_rather_than_weighing_zero(self):
+        """Fail-closed, and for the right stated reason."""
+        cell = ScriptedCell(0.0)
+        run = session(cell)
+        show(run, det(1, "PCB", BOARD))
+
+        record = run.measure_and_route()
+
+        assert record["weight_status"] == "UNAVAILABLE"
+        assert record["decision"]["reason_code"] == "UNKNOWN_WEIGHT"
+
+    def test_a_real_mass_is_still_a_real_mass(self):
+        """The gate is the pan's arrival threshold, not a floor on every mass."""
+        cell = ScriptedCell(0.0)
+        run = session(cell, AURUM_DEMO_MOCK_MASS="true")
+        show(run, det(1, "PCB", BOARD))
+        cell.place(42.7)
+
+        record = run.measure_and_route()
+
+        assert record["weight_status"] == "MEASURED"
+        assert record["weight_g"] == pytest.approx(42.7)
 
 
 class TestAutomaticTare:

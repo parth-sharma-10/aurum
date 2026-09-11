@@ -16,10 +16,21 @@ reads it, files it by type, and returns only lines of its own type:
     AURUM/1 ACK CMD-1A2B3C4D    -> the response queue
     anything else               -> dropped, and counted
 
-That is why no thread and no lock appear here. A reader that is waiting is a
+No thread is started here, and none needs to be: a reader that is waiting is a
 reader that is pumping, so a caller blocked on a stable mass keeps the ACK
-queue moving and vice versa. Threading two consumers onto one serial port
-would be the obvious design and the one that loses frames at 3am.
+queue moving and vice versa.
+
+**One lock is needed, and it took a bench session to see why.** That design
+makes the QUEUES safe against two consumers; it says nothing about the PORT.
+The pan thread takes a sample from `weight_reader` on every poll while the
+HTTP thread runs a CFG or a BELT exchange, and `_gate` - which serialises whole
+exchanges against each other - does not cover the weight pump. Both then call
+`readline()` on one descriptor at once, and `pyserial` builds a line out of
+repeated reads, so each caller takes part of it and neither gets a frame. A
+torn weight frame is a mass that never settles; a torn ACK is an ACK_TIMEOUT
+that latches a fault and stops the machine over a paddle that moved perfectly
+well. `_read` makes one line at a time atomic; it is not held across an
+exchange, so neither reader can starve the other.
 
 Nothing above `app.hardware` imports pyserial, including through this file.
 """
@@ -71,6 +82,10 @@ class BoardLink:
         #: the port lock between the other's release and re-acquire, and the
         #: loser reported "already owned by another process" about itself.
         self._gate = threading.RLock()
+        #: Held for ONE `readline()`, so two readers cannot split a line
+        #: between them. Deliberately not the gate: an exchange holds that for
+        #: seconds, and the weight stream may not wait that long.
+        self._read = threading.Lock()
         self.last_error: str | None = None
         self._weight: deque[RawSample] = deque(maxlen=QUEUE_LIMIT)
         self._responses: deque[str] = deque(maxlen=QUEUE_LIMIT)
@@ -415,7 +430,11 @@ class BoardLink:
         if self._serial is None:
             return False
         try:
-            raw = self._serial.readline()
+            # One reader at a time on the wire. See the module docstring: the
+            # queues below are safe against two consumers, the descriptor is
+            # not, and a line split between two callers is lost to both.
+            with self._read:
+                raw = self._serial.readline()
         except Exception as exc:
             self._state = LinkState.DEGRADED
             self.last_error = f"read failed: {exc}"

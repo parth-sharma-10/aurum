@@ -139,7 +139,7 @@ Flash with `arduino-cli`, not the IDE:
 ### THE MOCK-MASS FALLBACK
 
 `AURUM_DEMO_MOCK_MASS=true` gives an unweighable item a per-class stand-in
-(CPU 25 g / PCB 180 g / RAM 30 g / Connector 5 g) so the pipeline can be
+(CPU 22 g / PCB 60 g / RAM 20 g / Connector 5 g) so the pipeline can be
 demonstrated. Ships OFF. Everything derived from it is stamped SIMULATED, the
 permission rides on the reading rather than on configuration, and it cannot
 conjure evidence: a stand-in mass changes the arithmetic and never the evidence,

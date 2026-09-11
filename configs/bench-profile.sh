@@ -114,6 +114,11 @@ AURUM_ARDUINO_ENABLED=true
 # reverse themselves the moment the cell reads again - the cell is asked first
 # on every pass, and a real arrival always wins.
 #
+# The camera only takes over once the cell has refused for
+# AURUM_DEMO_CAMERA_TRIGGER_QUIET_S (3 s), or has named its own fault. One
+# empty read is what a healthy cell returns while the board is deaf for a
+# paddle stroke, and acting on it sorted the object in the operator's hand.
+#
 # EVERY FIGURE DERIVED FROM A STAND-IN IS STAMPED SIMULATED, all the way to the
 # EPR ledger and the dashboard. None of them may be quoted as a measurement.
 AURUM_DEMO_MOCK_MASS=true

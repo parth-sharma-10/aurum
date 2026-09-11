@@ -191,8 +191,18 @@ becomes the arrival, and the paddles fire on camera confirmation alone.
 The cell is still asked first on every pass, so a cell that starts reading takes
 the machine back with no restart. Everything stays `SIMULATED` to the ledger.
 
+**A gap is not a dead cell.** The camera only takes over once the cell has
+refused for `demo.camera_trigger.quiet_s` — three seconds — or has named its own
+fault, which a disconnected reader and a stuck converter both do. Handing the
+machine over on a single empty read was a real failure and not a theoretical
+one: the board is deaf for the whole 1.7 s of a paddle stroke while a weight
+read gives up after one second, so a healthy cell returns nothing every so
+often. The machine then latched the object *still in the operator's hand*, gave
+it a stand-in mass, sorted it, and refused the real arrival a moment later with
+"no assembly has been confirmed by the camera".
+
 An item that cannot be weighed is then given a per-class stand-in mass —
-**CPU 25 g · PCB 180 g · RAM 30 g · Connector 5 g** — so the rest of the
+**CPU 22 g · PCB 60 g · RAM 20 g · Connector 5 g** — so the rest of the
 pipeline can be shown running. Per class, because a precious fraction is metal
 over *total* mass: one flat value made a CPU read 26 ppm where 188 is right.
 

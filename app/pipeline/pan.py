@@ -107,6 +107,17 @@ class PanMachine:
         #: confirmed sighting and is preferred whenever one is available.
         self.camera_trigger = bool(self.cfg["demo.camera_trigger.enabled"])
         self.camera_trigger_auto = bool(self.cfg["demo.mock_mass.enabled"])
+        #: How long a connected cell may go quiet before its silence counts as
+        #: a refusal. See `demo.camera_trigger.quiet_s`: one missed frame is
+        #: not a dead cell, and treating it as one sorted the object in the
+        #: operator's hand.
+        self.quiet_s = self.cfg["demo.camera_trigger.quiet_s"]
+        #: When the current run of empty reads began, or None if the last read
+        #: produced a mass.
+        self._quiet_since: float | None = None
+        #: Did the last refusal name its own cause? A verdict is acted on at
+        #: once; only "nothing arrived" has to be waited out.
+        self._refusal_named = False
         #: Did THIS cycle start at the camera? `_waiting_for_clear` has to
         #: match `_waiting_for_object`: an object that never sat on a pan can
         #: never be watched leaving one, so a camera-started cycle must be
@@ -136,6 +147,32 @@ class PanMachine:
         self.reason = reason
         return self.state
 
+    def _refused(self, problem: str, named: bool) -> tuple[None, str]:
+        """Record a read that produced no mass, and whether it said why.
+
+        `named` is the difference between a verdict and a gap. No board, no
+        calibration factor, a disconnected reader and a stuck converter all
+        name their own cause and are true for as long as they last. "Nothing
+        arrived inside the budget" names nothing, and on a healthy cell it
+        happens every time the board is busy elsewhere.
+        """
+        self._refusal_named = named
+        if named:
+            self._quiet_since = None
+        elif self._quiet_since is None:
+            self._quiet_since = self._clock()
+        return None, problem
+
+    def cell_refusing(self) -> bool:
+        """Has the cell stopped driving the machine, as opposed to gone quiet?
+
+        True at once for a refusal that named its cause, and only after
+        `demo.camera_trigger.quiet_s` for one that did not.
+        """
+        if self._refusal_named:
+            return True
+        return self._quiet_since is not None and self._clock() - self._quiet_since >= self.quiet_s
+
     def _live_grams(self) -> tuple[float | None, str | None]:
         """One unfiltered sample, in grams, or None and why not.
 
@@ -145,41 +182,52 @@ class PanMachine:
         """
         sensor = self._sensor()
         if sensor is None:
-            return None, "No load cell is connected, so nothing can be detected on the pan."
+            return self._refused(
+                "No load cell is connected, so nothing can be detected on the pan.", named=True
+            )
         # `has_factor`, not `present`: this only answers "has something
         # arrived". An unverified factor is good enough to notice a mass, and
         # the reading that follows is labelled STABLE and refused downstream by
         # anything that needs a measurement.
         if not sensor.calibration.has_factor:
-            return None, (
+            return self._refused(
                 "The load cell is not calibrated, so counts cannot be read as a mass. "
-                "Run `python -m app.calibrate`."
+                "Run `python -m app.calibrate`.",
+                named=True,
             )
         sample = sensor.reader.read()
         if sample is None:
             if not getattr(sensor.reader, "connected", True):
-                return None, (
+                return self._refused(
                     getattr(sensor.reader, "last_error", None)
-                    or "The load-cell reader disconnected."
+                    or "The load-cell reader disconnected.",
+                    named=True,
                 )
             # A reader that knows WHY it refused says so. The stuck-converter
             # refusal in particular has a cause the generic text below gets
             # wrong: its counts are in range and its frames do arrive.
             if getattr(sensor.reader, "last_error", None):
-                return None, sensor.reader.last_error
+                return self._refused(sensor.reader.last_error, named=True)
             # Two causes, and the operator cannot tell them apart from here:
             # no weight frames are arriving at all, or every one carries a count
             # outside what a 24-bit converter can represent and is refused. The
             # second is what an unplugged, shorted or unwired cell reads, and it
             # is worth naming - it presents as a healthy link and a confident
             # constant, which is the most misleading shape a sensor fault takes.
-            return None, (
+            #
+            # NOT `named`: a single empty read is also what a perfectly healthy
+            # cell returns while the board is busy with a paddle stroke, so this
+            # one has to last `quiet_s` before it counts.
+            return self._refused(
                 "No usable reading from the load cell. Either no weight frames "
                 "are arriving, or every one is off the converter's scale - which "
                 "is what an open or shorted cell reads. Check the HX711 wiring: "
-                "DOUT/SCK on D2/D3, and the cell's four wires into the amplifier."
+                "DOUT/SCK on D2/D3, and the cell's four wires into the amplifier.",
+                named=False,
             )
         grams = sensor.calibration.grams(sample.raw_counts)
+        self._quiet_since = None
+        self._refusal_named = False
         return grams, None
 
     # -- the cycle ---------------------------------------------------------
@@ -234,7 +282,12 @@ class PanMachine:
             # than stalling here - a dead cell would otherwise mean the
             # automatic chain never runs at all. The cell is asked FIRST on
             # every pass, so this reverses itself the moment one reads.
-            if self.camera_trigger_auto:
+            #
+            # `cell_refusing` and not merely `grams is None`: one empty read is
+            # what a healthy cell returns while the board is deaf for a paddle
+            # stroke, and handing the machine over on it sorted the object still
+            # in the operator's hand.
+            if self.camera_trigger_auto and self.cell_refusing():
                 return self._camera_arrival(f"The load cell is not starting cycles: {problem}")
             return self._to(PanState.WAITING_FOR_OBJECT, problem)
         if grams <= self.object_threshold_g:
@@ -324,9 +377,15 @@ class PanMachine:
         grams, problem = self._live_grams()
         self.grams = grams
         if grams is None:
-            # A cell that has gone away cannot report the pan emptying. Release
-            # rather than hold the identity forever: the next object gets a
-            # fresh cycle, and this one keeps whatever record it earned.
+            # A cell that has GONE AWAY cannot report the pan emptying. One
+            # that is merely between frames can, a moment from now - and
+            # releasing on that marks the object handled while it is still
+            # sitting on the cell, so the next assembly the camera confirms is
+            # latched against a mass that belongs to the last one.
+            if not self.cell_refusing():
+                return self._to(PanState.WAITING_FOR_CLEAR, problem)
+            # Release rather than hold the identity forever: the next object
+            # gets a fresh cycle, and this one keeps whatever record it earned.
             self.zone.release()
             self._clear_run = 0
             return self._to(PanState.WAITING_FOR_OBJECT, problem)

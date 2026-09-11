@@ -262,6 +262,9 @@ class DemoSession:
         #: Cached on first use: reading the evidence database per frame would
         #: parse a 950-line YAML file thirty times a second.
         self._classes: set[str] | None = None
+        #: The part of the EPR provenance stamp that cannot change during a
+        #: run, cached for the same reason. See `_provenance`.
+        self._provenance_fixed: dict | None = None
         #: How far through `app.pipeline.scripted.SCRIPT` a camera-less run is.
         self.scripted_index = 0
         #: When `_heal_link` last tried to reopen a dropped port.
@@ -813,13 +816,29 @@ class DemoSession:
 
     # -- the EPR trail -----------------------------------------------------
     def _provenance(self) -> dict:
-        """The stamp that travels on every EPR event this run writes."""
-        detector = self.pipeline.detector_tracker
-        return epr.provenance(
-            self.cfg,
-            model_version=getattr(getattr(detector, "detector", detector), "model_version", None),
-            calibration=self.calibration.as_dict(),
-        )
+        """The stamp that travels on every EPR event this run writes.
+
+        Built once. `epr.provenance` parses the 950-line composition database
+        on every call - 36 ms measured, and by far the most expensive thing in
+        `snapshot()` - while the config, the model version and the database
+        itself are all fixed for the life of the process. That cost was being
+        paid inside the session lock on every dashboard poll, 2.5 times a
+        second, which is the lock the camera thread needs for every frame.
+
+        The calibration is the one term that does move - `auto_tare` replaces
+        it mid-run - so it is stamped fresh on top rather than cached with the
+        rest. Recording a stale tare against an event would be a claim about a
+        measurement that was not taken with it.
+        """
+        if self._provenance_fixed is None:
+            detector = self.pipeline.detector_tracker
+            self._provenance_fixed = epr.provenance(
+                self.cfg,
+                model_version=getattr(
+                    getattr(detector, "detector", detector), "model_version", None
+                ),
+            )
+        return {**self._provenance_fixed, "calibration": self.calibration.as_dict()}
 
     def _epr(self, item_id: str, event: epr.EprEvent, payload: dict, simulated: bool = False):
         """Append one event, and never let the ledger stop the machine.
@@ -858,6 +877,30 @@ class DemoSession:
             self._handled.add(assembly.assembly_id)
             if reading is None:
                 reading = _unavailable_reading("No reading was taken.")
+            # NOTHING ON THE PAN IS NOT A MASS OF ZERO.
+            #
+            # The automatic path only weighs once a mass has crossed the
+            # arrival threshold. `measure_and_route` has no such gate, so on
+            # the bench the runbook actually describes - a stand-in mass, the
+            # operator never touching the pan - it read the empty cell and
+            # passed on a settled, MEASURED 0.0 g. A PCB was then refused with
+            # `UNKNOWN_MASS_ANOMALY: -0 g is below the 20 g minimum plausible
+            # for a PCB`, which sends the operator to look at the identity when
+            # the pan is simply empty.
+            #
+            # Here rather than in `_read_mass`, because the automatic path can
+            # produce it too: an object lifted off again before the reading
+            # settles leaves exactly the same number behind.
+            threshold = self.cfg["conveyor.weight.pan.object_threshold_g"]
+            if (
+                reading.status in (WeightStatus.MEASURED, WeightStatus.STABLE)
+                and reading.grams <= threshold
+            ):
+                reading = _unavailable_reading(
+                    f"{reading.grams:.1f} g is at or below the {threshold:.1f} g arrival "
+                    "threshold, so nothing is on the pan. An empty cell is not this "
+                    "object's mass."
+                )
             # The stand-in mass belongs on BOTH paths. `_read_mass` applies it
             # for `measure_and_route`, and the automatic path used to hand this
             # method whatever `sensor.read()` returned - so with a dead cell and
@@ -1141,15 +1184,25 @@ class DemoSession:
         assembly = self._resolve(item_id)
         if isinstance(assembly, dict):
             return assembly
-        if assembly.assembly_id in self._handled:
-            return {
-                "error": "ALREADY_PROCESSED",
-                "reason": (
-                    f"{assembly.assembly_id} has already been weighed and routed. One "
-                    "physical item gets one physical action."
-                ),
-                "item": assembly.as_dict(),
-            }
+        # CLAIM IT, do not merely ask about it. The window between the question
+        # and the answer is the settling read below - up to
+        # `conveyor.weight.timeout_s`, five seconds on the bench - and two
+        # callers both passed the check and both ran the whole chain: two
+        # valuations, two EPR trails, and a ROUTING_ERROR on screen for an item
+        # that was only ever routed once. Two callers is the normal case, not a
+        # contrived one: this endpoint is a button, and React StrictMode
+        # double-invokes the effect behind it.
+        with self._lock:
+            if assembly.assembly_id in self._handled:
+                return {
+                    "error": "ALREADY_PROCESSED",
+                    "reason": (
+                        f"{assembly.assembly_id} has already been weighed and routed. One "
+                        "physical item gets one physical action."
+                    ),
+                    "item": assembly.as_dict(),
+                }
+            self._handled.add(assembly.assembly_id)
         reading = self._read_mass(assembly)
         self._process(assembly, reading)
         self._route(assembly)
@@ -1357,6 +1410,14 @@ class DemoSession:
     # -- reporting ---------------------------------------------------------
     def snapshot(self) -> dict:
         """Everything the dashboard renders, in one read."""
+        # OUTSIDE THE LOCK. A price is external data: with
+        # `pricing.provider: metalprice` this is an HTTP GET with a
+        # five-second timeout, and a failed fetch is not cached, so every poll
+        # tries again. Held inside the lock, a venue network that cannot reach
+        # the feed stopped the camera thread for seconds at a time, several
+        # times a second - a frozen picture with no error anywhere to explain
+        # it. Nothing in it reads session state, so there is nothing to guard.
+        pricing = self.pricing_snapshot()
         with self._lock:
             current = self.current_assembly
             # Everything routed this run, plus anything currently in view that
@@ -1439,7 +1500,7 @@ class DemoSession:
                         }
                     ),
                 },
-                "pricing": self.pricing_snapshot(),
+                "pricing": pricing,
                 "errors": self.errors.snapshot(),
                 "vision_capture": self.capture.snapshot(),
                 "epr": {

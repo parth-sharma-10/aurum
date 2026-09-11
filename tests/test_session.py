@@ -404,6 +404,81 @@ class TestSnapshot:
     def test_a_session_with_no_board_says_so(self):
         assert session(board=False).snapshot()["board"] == {"connected": False}
 
+    def test_polling_it_does_not_reparse_the_composition_database(self, monkeypatch):
+        """The dashboard asks for this 2.5 times a second, under the session lock.
+
+        `epr.provenance` parses the 950-line evidence database on every call -
+        36 ms measured - and the snapshot takes it inside the lock the camera
+        thread needs for every frame. So a dashboard sitting open was stopping
+        the vision loop several times a second to re-read a file that has not
+        changed since the process started.
+        """
+        from app import materials
+
+        reads = []
+        real_load = materials.load
+        monkeypatch.setattr(
+            materials, "load", lambda *a, **k: (reads.append(1), real_load(*a, **k))[1]
+        )
+
+        run = session()
+        run.snapshot()
+        reads.clear()
+        for _ in range(5):
+            run.snapshot()
+
+        assert reads == [], f"the database was parsed {len(reads)} times by 5 polls"
+
+    def test_the_session_lock_is_free_while_prices_are_fetched(self):
+        """A price provider is a network call, and the camera must not wait on it.
+
+        `pricing.provider: metalprice` makes this an HTTP GET with a five-second
+        timeout, and a failed fetch is not cached - so on a venue network the
+        snapshot held the lock for seconds at a time, several times a second,
+        and the feed froze solid.
+        """
+        import threading
+
+        from app.valuation import prices as prices_module
+
+        run = session()
+        observed: list[bool] = []
+
+        def slow_service(_cfg):
+            # From ANOTHER thread: `_lock` is an RLock, so asking on the thread
+            # that already owns it always succeeds and proves nothing.
+            probed = threading.Event()
+
+            def probe():
+                got = run._lock.acquire(blocking=False)
+                observed.append(got)
+                if got:
+                    run._lock.release()
+                probed.set()
+
+            threading.Thread(target=probe).start()
+            probed.wait(timeout=2.0)
+
+            class Blocked:
+                provider = None
+                max_age_seconds = 0
+
+                def prices(self, _metals):
+                    return {}
+
+            return Blocked()
+
+        original = prices_module.PriceService.from_config
+        prices_module.PriceService.from_config = staticmethod(slow_service)
+        try:
+            thread = threading.Thread(target=run.snapshot)
+            thread.start()
+            thread.join(timeout=5.0)
+        finally:
+            prices_module.PriceService.from_config = original
+
+        assert observed == [True], "the session lock was held across the price lookup"
+
 
 class TestMockMassFallback:
     """The demonstration stand-in mass.

@@ -433,6 +433,22 @@ SPEC: dict[str, tuple] = {
     # sorted twice. The pan cannot tell it apart, because there is no pan.
     # ------------------------------------------------------------------
     "demo.camera_trigger.enabled": (_bool, False, "AURUM_DEMO_CAMERA_TRIGGER"),
+    # How long a CONNECTED cell may go quiet before the camera is allowed to
+    # start cycles in its place.
+    #
+    # It was effectively zero, and that lost a demonstration. `next_weight`
+    # gives up after `conveyor.arduino.timeout_s` - one second - while the
+    # sketch goes deaf for the whole 1.711 s of a paddle stroke and the manual
+    # path drains the same queue from the HTTP thread. So a healthy cell
+    # returns nothing every so often, and handing the machine over on the first
+    # gap latched the object still in the operator's hand, gave it a stand-in
+    # mass and sorted it. The real arrival was then refused as "no assembly has
+    # been confirmed", because that id had already been handled.
+    #
+    # A cell that REPORTS a verdict - no board, no calibration factor, a
+    # disconnected reader, a named wiring fault - does not wait this out. There
+    # is nothing ambiguous about a refusal that names its own cause.
+    "demo.camera_trigger.quiet_s": (_non_negative, 3.0, "AURUM_DEMO_CAMERA_TRIGGER_QUIET_S"),
     "conveyor.runtime.simulation": (_bool, False, "AURUM_SIMULATION"),
     "conveyor.runtime.host": (_text, "127.0.0.1", "AURUM_HOST"),
     "conveyor.runtime.port": (_int, 8000, "AURUM_PORT"),

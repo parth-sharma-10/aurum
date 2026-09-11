@@ -42,8 +42,8 @@ AURUM_SIMULATION=true
 AURUM_ARDUINO_ENABLED=true
 
 # The load cell is mechanically bypassed (see docs/hardware.md), so an item
-# that cannot be weighed gets a per-class stand-in mass: CPU 25 g, PCB 180 g,
-# RAM 30 g, Connector 5 g. The reading is SIMULATED and never `usable`, and
+# that cannot be weighed gets a per-class stand-in mass: CPU 22 g, PCB 60 g,
+# RAM 20 g, Connector 5 g. The reading is SIMULATED and never `usable`, and
 # every figure derived from it carries that status. Remove this line the day
 # the cell is mounted and calibrated.
 AURUM_DEMO_MOCK_MASS=true
