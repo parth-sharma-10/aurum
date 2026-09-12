@@ -489,6 +489,12 @@ today is perception, measurement, material intelligence and actuation."*
 
 ## When something goes wrong
 
+Fourteen faults have been found and fixed on this machine, and
+[docs/failure-modes.md](failure-modes.md) is the measured record of all of them
+— what each looked like from outside, what it actually was, and what changed.
+Read it if a symptom below does not match anything, or if you want to know why
+an instruction here is worded the way it is.
+
 | Symptom | Cause | Do this |
 |---|---|---|
 | `CAMERA OFF`, permission error | macOS camera permission | System Settings → Privacy & Security → Camera → your terminal. **Grant it before the venue.** |
@@ -497,12 +503,15 @@ today is perception, measurement, material intelligence and actuation."*
 | `ACTUATION OFF` | Safety default | `export AURUM_ARDUINO_ENABLED=true` and restart the backend |
 | Mass reads `UNSTABLE` | Bench vibration, or a hand still on the pan | Take your hand off and leave it alone. The cycle re-reads on its own — there is no button to press |
 | Mass reads `UNAVAILABLE` | Cell not responding | Check D2/D3, re-seat the HX711, confirm the sorter sketch is flashed |
-| **The video is not the rig** — a plausible, evenly-lit surface, and the detector never fires | `AURUM_CAMERA_INDEX` is pointing at the laptop's own camera. It opens and reads, so nothing reports an error | Re-probe: `for i in 0 1 2 3: cv2.VideoCapture(i).read()`. On this bench the external webcam is **index 2**; 0 is the built-in camera and 1 enumerates but never returns a frame |
+| **The video is not the rig** — a plausible, evenly-lit surface, and the detector never fires | `AURUM_CAMERA_INDEX` is pointing at the laptop's own camera. It opens and reads, so nothing reports an error | `AURUM_CAMERA_INDEX=auto` picks the one index that delivers a frame and refuses when two do. If it picked the wrong one, pin the right number — a named index is never second-guessed. **Do not copy an index out of this table**: they shuffle. The value here said `2` and on 2026-09-11 index 2 did not exist |
 | **Boot screen sits on `Connecting...`** | A page load reconnects the board, and the connect path drains the board's backlog first. An open load cell makes that backlog endless | Fixed — `connect_board` is idempotent and answers "already" in 0.02 s. If it recurs, the underlying cause is the cell flooding the port |
 | `the board did not acknowledge the servo configuration` | The board dumps a large backlog when the port opens and the first CFG's ACK is buried in it | **Advisory, not blocking** — an unacknowledged CFG leaves the board on the angles its sketch booted with, which on this rig are the numbers the config would have sent. Press Connect board again: that now re-offers the angles on an already-connected link instead of returning early, and check `servo_config_applied: true` in `/session` |
 | **A large, rock-steady mass on an empty pan** (≈670 g) | The cell input is open. Raw `0` through the verified factor is 670.75 g, and it is *perfectly* steady, so it settles instantly and earns `MEASURED` | Stop and fix the wiring — HX711 VCC, DOUT/SCK on D2/D3, the four bridge wires. **Do not re-tare.** An empty pan on a healthy cell wanders near −263078 |
 | `UNKNOWN_MASS_ANOMALY` | The mass is outside the plausibility window for that class | Not a fault. Use a component inside the range — a PCB must clear 20 g |
-| `ALREADY_PROCESSED` | That item was already routed | Take the component out of frame, let the track drop, present it again |
+| `ALREADY_PROCESSED` | That item was already routed | Take the component out of frame, let the track drop, present it again. On the camera trigger, wait the five-second cooldown as well |
+| **Cooldown: N s before the camera may start another cycle** | Two camera-started cycles too close together. The camera cannot tell a new object from the last one seen again, and a tracker that re-acquires one object mints a second id for it | Not a fault — it is what stops one module being sorted three times. Wait it out, or put the object on the load cell, which has no cooldown because a pan can report the object leaving |
+| **`board traffic readable` is red** | The board is streaming something this protocol does not recognise — the headless-fragment burst an open cell produces | The link is fine; the board is not. Fix the cell. The check watches the last 100 lines, so it clears about ten seconds after the board comes right |
+| **`load cell reading` is red while `load cell calibrated` is green** | Exactly the distinction those two checks exist to make: the file records a measurement taken on 2026-08-26, the reading is what the converter is doing now | Expected on this rig while the cell is open. It is why the stand-in mass exists, and why nothing it produces is ever `MEASURED` |
 | Servo does not move but state is `ACKED` | Mechanical or supply-side | Check the external 5 V rail and the horn. An ACK is not proof of movement |
 | Everything is unplugged | — | Every item routes to C and nothing moves. The demo degrades to software, and the dashboard says why on every card |
 

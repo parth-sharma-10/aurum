@@ -309,6 +309,8 @@ Useful flags: `--conf` (default 0.35), `--iou` (0.5), `--window` (45),
 (`auto|hx711|simulated|off`), `--no-window --frames N` for headless.
 
 Presentation runbook, including failure recovery: [docs/demo.md](docs/demo.md).
+The faults behind those instructions, measured:
+[docs/failure-modes.md](docs/failure-modes.md).
 
 ## How a batch is composed
 
@@ -1164,6 +1166,7 @@ figure.
 | [docs/vision-qa.md](docs/vision-qa.md) | Capturing production vision failures and evaluating them in FiftyOne |
 | [docs/hardware.md](docs/hardware.md) | Wiring, protocol, bench results, the latched hardware fault |
 | [docs/demo.md](docs/demo.md) | Presentation runbook — setup, sequence, failure recovery, Q&A |
+| [docs/failure-modes.md](docs/failure-modes.md) | Every way this machine has been observed to fail, what it looked like from outside, and what was done |
 | [docs/material-reference.md](docs/material-reference.md) | Material database: sources, evidence table, units, composition vs recovery, gaps |
 | [docs/configuration.md](docs/configuration.md) | Every setting, its environment variable, its default and why it exists (generated) |
 | [docs/pmdi.md](docs/pmdi.md) | The Precious Metal Density Index: definition, inputs, and what it is not |

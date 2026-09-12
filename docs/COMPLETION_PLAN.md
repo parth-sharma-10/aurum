@@ -6,13 +6,15 @@
 
 | | |
 |---|---|
-| Branch | merged to `main` — PRs #12, #13, #14, #19 |
+| Branch | merged to `main` — PRs #12, #13, #14, #19, #20, #21 |
 | Phases 0-11 | **COMPLETE** |
 | Phase 1 software audit | **COMPLETE** 2026-08-27 (PR #14) |
-| Tests | **1491 passing**, ruff clean, format clean, frontend builds |
+| Demonstration failure pass | **COMPLETE** 2026-09-12 (PR #21) — 14 faults, see [docs/failure-modes.md](failure-modes.md) |
+| Tests | **1541 passing**, ruff clean, format clean, frontend builds |
 | Hardware | Board, both sketches, both servos: **PHYSICALLY VERIFIED** 2026-08-22. Both paddles watched moving 2026-08-26. Board answering on `usbmodem101` 2026-08-27 |
 | Calibration record | **VERIFIED** 2026-08-26 — 392.2167 counts/g, second-mass check +1.130 g. Untouched and sound |
 | Load cell | **OPEN — NOT READING** as of 2026-08-27. The record above does not describe the present wiring |
+| Camera | `AURUM_CAMERA_INDEX=auto`. The profile shipped `2`, and on 2026-09-11 index 2 did not exist — the only blocking check in `/ready`, so nothing started |
 | Blocking | Nothing in software. One physical fault, below |
 
 ### THE REMAINING TASKS ARE PHYSICAL
