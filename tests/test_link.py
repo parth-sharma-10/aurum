@@ -230,6 +230,132 @@ class TestABoardThatNeverGoesIdle:
         assert streaming_link().next_weight().raw_counts == -261605
 
 
+class TestAPortFullOfRubbish:
+    """A board whose traffic is unreadable reports itself perfectly healthy.
+
+    Measured against the documented bench pathology - a headless weight
+    fragment emitted at line rate - the machine survived, recovered, and
+    counted 94,398 dropped lines while `/ready` stayed green and the error log
+    stayed empty. `dropped_lines` was the only number that knew, and nothing
+    looked at it. That is the pathology the comments in `_drain_backlog`
+    describe chasing through the firmware, the servo and the wiring in turn.
+    """
+
+    def test_the_snapshot_says_how_much_of_the_traffic_was_readable(self):
+        board = link(["W,1,10432,-261605,OK\n", "AURUM/1 ACK CMD-1\n", "58900,OK\n"])
+        for _ in range(3):
+            board.pump()
+
+        snapshot = board.snapshot()
+
+        assert snapshot["filed_lines"] == 2
+        assert snapshot["dropped_lines"] == 1
+
+    def test_a_port_that_is_mostly_rubbish_says_so(self):
+        board = link(["58900,OK\n"] * 120)
+        for _ in range(120):
+            board.pump()
+
+        assert board.snapshot()["mostly_unreadable"] is True
+
+    def test_a_healthy_port_does_not(self):
+        board = link(["W,1,10432,-261605,OK\n"] * 120)
+        for _ in range(120):
+            board.pump()
+
+        assert board.snapshot()["mostly_unreadable"] is False
+
+    def test_a_port_that_comes_right_stops_saying_so(self):
+        """Judged on a window, so a burst cannot condemn the port for ever.
+
+        The measured bench burst was 94,398 unreadable lines. Against lifetime
+        counters that would need 94,398 good ones after it - nearly three hours
+        at 10 Hz - before the check went green again, by which time it is a
+        statement about history rather than about the board.
+        """
+        board = link(["58900,OK\n"] * 500 + ["W,1,10432,-261605,OK\n"] * 120)
+        for _ in range(500):
+            board.pump()
+        assert board.snapshot()["mostly_unreadable"] is True
+
+        for _ in range(120):
+            board.pump()
+
+        assert board.snapshot()["mostly_unreadable"] is False
+        # The lifetime counters still remember, because the burst did happen.
+        assert board.snapshot()["dropped_lines"] == 500
+
+    def test_a_boot_banner_is_not_a_broken_port(self):
+        """One unreadable line out of three is noise, not a pathology."""
+        board = link(["AURUM/1 BOOT 2026-08-27g rest=0\n", "W,1,1,-261605,OK\n"])
+        for _ in range(2):
+            board.pump()
+
+        assert board.snapshot()["mostly_unreadable"] is False
+
+
+class TestOneReaderAtATime:
+    """Two threads must never be inside one `Serial.readline()` together.
+
+    This module's own docstring says no lock is needed because a reader that
+    waits is a reader that pumps - and that is true of the QUEUES. It is not
+    true of the port. The pan thread takes a sample from `weight_reader` on
+    every poll while the HTTP thread runs a CFG or a BELT exchange through
+    `_gate`, and `_gate` does not cover the weight pump. Both then call
+    `readline()` on the same descriptor at the same time.
+
+    `pyserial` builds a line out of repeated reads, so two callers each take
+    part of it and neither gets a frame. A torn weight frame is a mass that
+    never settles; a torn ACK is an ACK_TIMEOUT that latches a fault and stops
+    the machine over a paddle that moved perfectly well.
+    """
+
+    def test_a_command_exchange_does_not_read_the_port_under_the_weight_pump(self):
+        import threading
+
+        inside = 0
+        overlaps: list[int] = []
+        guard = threading.Lock()
+
+        class Watched(EndlessWeightSerial):
+            def readline(self):
+                nonlocal inside
+                with guard:
+                    inside += 1
+                    if inside > 1:
+                        overlaps.append(inside)
+                try:
+                    time.sleep(0.002)  # a real readline blocks on the wire
+                    return super().readline()
+                finally:
+                    with guard:
+                        inside -= 1
+
+        board = BoardLink("/dev/fake", timeout_s=0.05)
+        board._serial = Watched()
+        board._state = LinkState.CONNECTED
+
+        stop = threading.Event()
+
+        def weigh():
+            while not stop.is_set():
+                board.weight_reader.read()
+
+        def command():
+            while not stop.is_set():
+                board.configure_servos(0, 90, 700, budget_s=0.05)
+
+        threads = [threading.Thread(target=weigh), threading.Thread(target=command)]
+        for thread in threads:
+            thread.start()
+        time.sleep(1.0)
+        stop.set()
+        for thread in threads:
+            thread.join(timeout=3.0)
+
+        assert overlaps == [], f"{len(overlaps)} concurrent reads of one serial port"
+
+
 class TestViews:
     def test_the_weight_view_reads_samples(self):
         board = link(["W,1,10432,-261605,OK\n"])

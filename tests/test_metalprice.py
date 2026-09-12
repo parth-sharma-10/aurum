@@ -196,6 +196,63 @@ class TestTheCache:
         assert len(feed.calls) == 1
 
 
+class TestAFeedThatIsNotAnswering:
+    """A failed fetch was not cached, so every call tried the network again.
+
+    The dashboard asks for `/session` every 400 ms and that snapshot prices
+    four metals. On a venue network that cannot reach the feed, each poll was
+    three fresh HTTP requests, each waiting out its own five-second timeout -
+    fifteen seconds of blocking per poll, two and a half polls a second, for
+    as long as the network stayed down. A success is cached for fifteen
+    minutes; a failure has to be worth something too.
+    """
+
+    def test_a_failed_fetch_is_not_retried_on_the_very_next_call(self):
+        feed = Feed(FetchError("could not reach the price API"))
+        p = provider(feed)
+
+        for metal in ("Au", "Ag", "Pd"):
+            p.quote(metal, metal.lower())
+
+        assert len(feed.calls) == 1, f"{len(feed.calls)} network attempts for one outage"
+
+    def test_the_refusal_is_still_a_refusal_while_it_is_held(self):
+        """Cheaper must not mean quieter: every call still says what is wrong."""
+        p = provider(Feed(FetchError("could not reach the price API")))
+
+        first = p.quote("Au", "gold")
+        second = p.quote("Ag", "silver")
+
+        assert first.status is PriceStatus.ERROR
+        assert second.status is PriceStatus.ERROR
+        assert "could not reach" in (second.reason or "")
+
+    def test_it_tries_again_once_the_hold_expires(self):
+        feed = Feed(FetchError("blip"), payload())
+        now = [0.0]
+        p = provider(feed, clock=lambda: now[0], retry_seconds=30.0)
+        p.quote("Au", "gold")
+
+        now[0] = 31.0
+        quote = p.quote("Au", "gold")
+
+        assert len(feed.calls) == 2
+        assert quote.status is PriceStatus.LIVE
+
+    def test_a_cached_snapshot_is_still_preferred_over_a_hold(self):
+        """An old real price beats no price, and the outage must not hide it."""
+        feed = Feed(payload(), FetchError("the feed went away"))
+        now = [0.0]
+        p = provider(feed, clock=lambda: now[0], cache_seconds=10.0)
+        p.quote("Au", "gold")
+
+        now[0] = 11.0
+        quote = p.quote("Au", "gold")
+
+        assert quote.price_per_gram is not None
+        assert "Serving the last successful quote" in (quote.reason or "")
+
+
 class TestFailure:
     """No failure path may produce a number, and none may produce a zero."""
 
@@ -295,7 +352,10 @@ class TestRecovery:
         p.quote("Au", "gold")
         now[0] = 20.0
         p.quote("Au", "gold")
-        now[0] = 40.0
+        # Past the refusal hold as well as the cache. A failure at t=20 is held
+        # for `retry_seconds` so a poll loop cannot hammer a dead feed; the
+        # property under test is that recovery IS picked up, not how soon.
+        now[0] = 20.0 + p.retry_seconds + 1.0
         assert p.quote("Au", "gold").price_per_gram == pytest.approx(16000.0)
 
 

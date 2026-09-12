@@ -246,8 +246,28 @@ class DemoSession:
         self._source = None
         self._thread: threading.Thread | None = None
         self._pan_thread: threading.Thread | None = None
+        #: Fires scheduled paddles on a clock the weigh cannot block. See
+        #: `_drain_loop`.
+        self._drain_thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._lock = threading.RLock()
+        #: Serialises the two start-up transitions - opening the camera and
+        #: opening the board - against themselves and each other.
+        #:
+        #: NOT `_lock`. Both hold for seconds (a capture device warming up, a
+        #: board rebooting after its port opens) and `_lock` is what the camera
+        #: thread takes for every frame, so running these under it would freeze
+        #: the feed for the whole of start-up.
+        #:
+        #: Both were check-then-act, and both checks ran before either acted:
+        #: `App.jsx` opens the camera and connects the board by itself on load,
+        #: so a second tab, a refresh, or Retry pressed twice is two clients
+        #: doing this at once. Two captures on one camera halve the frame rate
+        #: and leak a thread `stop()` cannot join; two `BoardLink`s on one port
+        #: fight over an advisory lock that is per open-file-description, and
+        #: the loser reports "already owned by another process" about its own
+        #: process.
+        self._boot = threading.RLock()
         self._jpeg: bytes | None = None
         self.camera_error: str | None = None
         self.camera_label: str | None = None
@@ -256,12 +276,19 @@ class DemoSession:
         #: Assemblies already put through the chain, so one physical object
         #: cannot be weighed and routed twice by an impatient second click.
         self._handled: set[str] = set()
+        #: Item ids inside `_route` right now. The scheduling and the serial
+        #: round trip run with the session lock released, so a check that it
+        #: has not been routed is not on its own enough - see `_route`.
+        self._routing_now: set[str] = set()
         #: Finished records, newest last. The run's ledger, kept here because
         #: the tracker deliberately forgets an item once it has been drained.
         self._routed: dict[str, dict] = {}
         #: Cached on first use: reading the evidence database per frame would
         #: parse a 950-line YAML file thirty times a second.
         self._classes: set[str] | None = None
+        #: The part of the EPR provenance stamp that cannot change during a
+        #: run, cached for the same reason. See `_provenance`.
+        self._provenance_fixed: dict | None = None
         #: How far through `app.pipeline.scripted.SCRIPT` a camera-less run is.
         self.scripted_index = 0
         #: When `_heal_link` last tried to reopen a dropped port.
@@ -277,6 +304,10 @@ class DemoSession:
         Starts the automatic pan machine once there is a cell to watch, unless
         `conveyor.weight.pan.auto` is off.
         """
+        with self._boot:
+            return self._connect_board()
+
+    def _connect_board(self) -> dict:
         if self.cfg["conveyor.runtime.simulation"]:
             return self._connect_simulated_board()
         # Already up: say so and touch nothing. The dashboard calls this on
@@ -439,11 +470,19 @@ class DemoSession:
         Built here rather than in the constructor because it needs a
         controller, and a controller needs a board that may not be attached
         when the session starts.
+
+        Under `_boot` because two threads reach it: the start-up path, and the
+        drain loop on every pass. Two actuators would each keep their own
+        `_attempted` set, which is the one thing standing between an item and a
+        second paddle stroke.
         """
         if self.scheduler is None or self.controller is None:
             return self.actuator
-        if self.actuator is None:
-            self.actuator = ServoActuator(self.scheduler, controller=self.controller, cfg=self.cfg)
+        with self._boot:
+            if self.actuator is None:
+                self.actuator = ServoActuator(
+                    self.scheduler, controller=self.controller, cfg=self.cfg
+                )
         return self.actuator
 
     @property
@@ -474,16 +513,48 @@ class DemoSession:
         self._stop.clear()
         self._pan_thread = threading.Thread(target=self._pan_loop, name="aurum-pan", daemon=True)
         self._pan_thread.start()
+        if self.scheduler is not None and (
+            self._drain_thread is None or not self._drain_thread.is_alive()
+        ):
+            self._drain_thread = threading.Thread(
+                target=self._drain_loop, name="aurum-routes", daemon=True
+            )
+            self._drain_thread.start()
         return True
 
-    def _pan_loop(self) -> None:
-        """The machine loop: step the pan, and fire whatever has arrived.
+    def _drain_loop(self) -> None:
+        """Fire scheduled paddles on a clock of their own.
 
-        Two jobs on one thread because they are the same job at two ends of the
-        belt. Draining here rather than on a thread of its own is what keeps
-        the firing decision on the same clock as the pan, and the polling
-        interval - 50 ms by default - is well inside the +/-200 ms the timing
-        model is accurate to anyway.
+        THIS USED TO RUN IN THE PAN LOOP, and that cost strokes. Weighing
+        blocks: `WeightSensor.read()` collects until the mass settles, which is
+        `conveyor.weight.stability_window_ms` at best and
+        `conveyor.weight.timeout_s` at worst. Measured on this rig, one step
+        through WEIGHING held the loop for 548 ms against a
+        `conveyor.routing.late_tolerance_ms` of 200 - so a route whose moment
+        landed inside a weigh was refused as TIMING_EXPIRED and the item was
+        never sorted. A ten-minute soak of 120 cycles lost one that way:
+        "Its moment was 0.663s ago, past the 0.200s tolerance."
+
+        Refusing to fire late is correct and stays: a paddle behind the item
+        strikes whatever is next. What was wrong was being late in the first
+        place, for a reason that has nothing to do with the belt.
+
+        Only started when there IS a belt model. With `conveyor.mode: NONE` the
+        paddle moves inside `_route` and there is nothing to drain.
+        """
+        interval = self.cfg["conveyor.weight.pan.poll_interval_s"]
+        while not self._stop.is_set():
+            try:
+                self.drain_routes()
+            except Exception as exc:  # the belt must not take this loop down
+                self.errors.record(ErrorCode.SERVO_ERROR, "drain", str(exc))
+            time.sleep(interval)
+
+    def _pan_loop(self) -> None:
+        """The machine loop: step the pan, and stop the belt to weigh.
+
+        Firing paddles was here too, and `_drain_loop` says why it is not any
+        more: weighing blocks for longer than a route may be late.
         """
         interval = self.cfg["conveyor.weight.pan.poll_interval_s"]
         automatic = bool(self.cfg["conveyor.weight.pan.auto"])
@@ -510,18 +581,17 @@ class DemoSession:
                     time.sleep(interval)
                     continue
             self._heal_link()
-            # BEFORE draining routes, and before the next step(). The pan
-            # returns OBJECT_PRESENT one iteration before it weighs, so
-            # stopping here is what guarantees the motor is off by the time
+            # The pan returns OBJECT_PRESENT one iteration before it weighs, so
+            # stopping the motor here is what guarantees it is off by the time
             # WEIGHING runs - see `_drive_belt`.
             try:
                 self._drive_belt(state)
             except Exception as exc:  # a motor is not a reason to stop the loop
                 self.errors.record(ErrorCode.ARDUINO_ERROR, "belt", str(exc))
-            try:
-                self.drain_routes()
-            except Exception as exc:  # the belt must not take the loop down
-                self.errors.record(ErrorCode.SERVO_ERROR, "drain", str(exc))
+            # Firing scheduled paddles is NOT done here - `_drain_loop` owns it
+            # and says why. With no belt there is nothing to fire from anywhere:
+            # `_route` moves the paddle itself.
+            #
             # Only the polling states need pacing; the rest are transitions
             # through work that has already taken its own time.
             if state in (PanState.WAITING_FOR_OBJECT, PanState.WAITING_FOR_CLEAR):
@@ -623,6 +693,10 @@ class DemoSession:
         """
         from app.demo import FrameSource
 
+        with self._boot:
+            return self._start_camera(FrameSource, mode, path)
+
+    def _start_camera(self, FrameSource, mode: str, path: str | None) -> dict:  # noqa: N803
         if self._thread is not None and self._thread.is_alive():
             return {"running": True, "source": self.camera_label}
         if self.pipeline.detector_tracker is None:
@@ -755,11 +829,12 @@ class DemoSession:
 
     def stop(self) -> None:
         self._stop.set()
-        for thread in (self._thread, self._pan_thread):
+        for thread in (self._thread, self._pan_thread, self._drain_thread):
             if thread is not None:
                 thread.join(timeout=3.0)
         self._thread = None
         self._pan_thread = None
+        self._drain_thread = None
         if self._source is not None:
             self._source.release()
             self._source = None
@@ -813,13 +888,29 @@ class DemoSession:
 
     # -- the EPR trail -----------------------------------------------------
     def _provenance(self) -> dict:
-        """The stamp that travels on every EPR event this run writes."""
-        detector = self.pipeline.detector_tracker
-        return epr.provenance(
-            self.cfg,
-            model_version=getattr(getattr(detector, "detector", detector), "model_version", None),
-            calibration=self.calibration.as_dict(),
-        )
+        """The stamp that travels on every EPR event this run writes.
+
+        Built once. `epr.provenance` parses the 950-line composition database
+        on every call - 36 ms measured, and by far the most expensive thing in
+        `snapshot()` - while the config, the model version and the database
+        itself are all fixed for the life of the process. That cost was being
+        paid inside the session lock on every dashboard poll, 2.5 times a
+        second, which is the lock the camera thread needs for every frame.
+
+        The calibration is the one term that does move - `auto_tare` replaces
+        it mid-run - so it is stamped fresh on top rather than cached with the
+        rest. Recording a stale tare against an event would be a claim about a
+        measurement that was not taken with it.
+        """
+        if self._provenance_fixed is None:
+            detector = self.pipeline.detector_tracker
+            self._provenance_fixed = epr.provenance(
+                self.cfg,
+                model_version=getattr(
+                    getattr(detector, "detector", detector), "model_version", None
+                ),
+            )
+        return {**self._provenance_fixed, "calibration": self.calibration.as_dict()}
 
     def _epr(self, item_id: str, event: epr.EprEvent, payload: dict, simulated: bool = False):
         """Append one event, and never let the ledger stop the machine.
@@ -858,6 +949,30 @@ class DemoSession:
             self._handled.add(assembly.assembly_id)
             if reading is None:
                 reading = _unavailable_reading("No reading was taken.")
+            # NOTHING ON THE PAN IS NOT A MASS OF ZERO.
+            #
+            # The automatic path only weighs once a mass has crossed the
+            # arrival threshold. `measure_and_route` has no such gate, so on
+            # the bench the runbook actually describes - a stand-in mass, the
+            # operator never touching the pan - it read the empty cell and
+            # passed on a settled, MEASURED 0.0 g. A PCB was then refused with
+            # `UNKNOWN_MASS_ANOMALY: -0 g is below the 20 g minimum plausible
+            # for a PCB`, which sends the operator to look at the identity when
+            # the pan is simply empty.
+            #
+            # Here rather than in `_read_mass`, because the automatic path can
+            # produce it too: an object lifted off again before the reading
+            # settles leaves exactly the same number behind.
+            threshold = self.cfg["conveyor.weight.pan.object_threshold_g"]
+            if (
+                reading.status in (WeightStatus.MEASURED, WeightStatus.STABLE)
+                and reading.grams <= threshold
+            ):
+                reading = _unavailable_reading(
+                    f"{reading.grams:.1f} g is at or below the {threshold:.1f} g arrival "
+                    "threshold, so nothing is on the pan. An empty cell is not this "
+                    "object's mass."
+                )
             # The stand-in mass belongs on BOTH paths. `_read_mass` applies it
             # for `measure_and_route`, and the automatic path used to hand this
             # method whatever `sensor.read()` returned - so with a dead cell and
@@ -979,7 +1094,48 @@ class DemoSession:
         finished its stroke - up to `arduino.ack_timeout_ms` - and holding the
         session lock across that would stall the camera thread for a second at
         a time, which is the vision freeze this split exists to prevent.
+
+        IDEMPOTENT, because two paths reach it for one object and one of them
+        is a button. The automatic cycle routes what it weighed; `Measure &
+        route now` routes what the camera confirmed. Press the button while the
+        cycle is already handling that object and both arrive here. Nothing
+        moves twice - the scheduler refuses a second route for one item id and
+        the board refuses a second command - but that refusal used to overwrite
+        the good record with ALREADY_ROUTED and put a ROUTING_ERROR on the
+        dashboard for an item that was routed exactly once.
         """
+        item_id = assembly.assembly_id
+        with self._lock:
+            # By ID, not by object. `assemblies` regroups on every read, so the
+            # two callers routinely hold two different `Assembly` instances of
+            # one physical item - the pan latched one, and `current_assembly`
+            # built a fresh one after the zone released. Only the id is stable.
+            already = assembly.actuation or (self._routed.get(item_id) or {}).get("actuation")
+            if already is not None:
+                return already
+            # CLAIMED, not just checked. Scheduling and the serial round trip
+            # both happen with the lock released - they must, or the camera
+            # freezes for the length of a paddle stroke - so a check on its own
+            # leaves the two callers a whole exchange in which to pass it.
+            if item_id in self._routing_now:
+                return {
+                    "commanded": False,
+                    "target": None,
+                    "servo": None,
+                    "reason": (
+                        f"{item_id} is already being routed. One physical item gets one "
+                        "physical routing action."
+                    ),
+                }
+            self._routing_now.add(item_id)
+
+        try:
+            return self._route_now(assembly)
+        finally:
+            with self._lock:
+                self._routing_now.discard(item_id)
+
+    def _route_now(self, assembly: Assembly) -> dict:
         decision = assembly.decision or {}
         # The PHYSICAL bin, not the decision. They differ for UNKNOWN, which is
         # a decision state and not a place: the item still reaches C, and the
@@ -1141,15 +1297,25 @@ class DemoSession:
         assembly = self._resolve(item_id)
         if isinstance(assembly, dict):
             return assembly
-        if assembly.assembly_id in self._handled:
-            return {
-                "error": "ALREADY_PROCESSED",
-                "reason": (
-                    f"{assembly.assembly_id} has already been weighed and routed. One "
-                    "physical item gets one physical action."
-                ),
-                "item": assembly.as_dict(),
-            }
+        # CLAIM IT, do not merely ask about it. The window between the question
+        # and the answer is the settling read below - up to
+        # `conveyor.weight.timeout_s`, five seconds on the bench - and two
+        # callers both passed the check and both ran the whole chain: two
+        # valuations, two EPR trails, and a ROUTING_ERROR on screen for an item
+        # that was only ever routed once. Two callers is the normal case, not a
+        # contrived one: this endpoint is a button, and React StrictMode
+        # double-invokes the effect behind it.
+        with self._lock:
+            if assembly.assembly_id in self._handled:
+                return {
+                    "error": "ALREADY_PROCESSED",
+                    "reason": (
+                        f"{assembly.assembly_id} has already been weighed and routed. One "
+                        "physical item gets one physical action."
+                    ),
+                    "item": assembly.as_dict(),
+                }
+            self._handled.add(assembly.assembly_id)
         reading = self._read_mass(assembly)
         self._process(assembly, reading)
         self._route(assembly)
@@ -1357,6 +1523,14 @@ class DemoSession:
     # -- reporting ---------------------------------------------------------
     def snapshot(self) -> dict:
         """Everything the dashboard renders, in one read."""
+        # OUTSIDE THE LOCK. A price is external data: with
+        # `pricing.provider: metalprice` this is an HTTP GET with a
+        # five-second timeout, and a failed fetch is not cached, so every poll
+        # tries again. Held inside the lock, a venue network that cannot reach
+        # the feed stopped the camera thread for seconds at a time, several
+        # times a second - a frozen picture with no error anywhere to explain
+        # it. Nothing in it reads session state, so there is nothing to guard.
+        pricing = self.pricing_snapshot()
         with self._lock:
             current = self.current_assembly
             # Everything routed this run, plus anything currently in view that
@@ -1439,7 +1613,7 @@ class DemoSession:
                         }
                     ),
                 },
-                "pricing": self.pricing_snapshot(),
+                "pricing": pricing,
                 "errors": self.errors.snapshot(),
                 "vision_capture": self.capture.snapshot(),
                 "epr": {

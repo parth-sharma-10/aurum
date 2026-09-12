@@ -108,6 +108,20 @@ def _duty(value: Any, key: str) -> int:
     return out
 
 
+def _camera_index(value: Any, key: str) -> int | str:
+    """An OpenCV device index, or the literal `auto`.
+
+    Shaped after `conveyor.arduino.port`, which faces the same problem: the
+    identifier is positional, it shuffles when USB devices change, and the
+    wrong one presents as working hardware. Only the exact word `auto` opts in;
+    a typo is refused rather than silently becoming camera 0, which on a laptop
+    is the built-in camera pointing at the ceiling.
+    """
+    if str(value).strip().lower() == "auto":
+        return "auto"
+    return _int(value, key)
+
+
 def _bool(value: Any, key: str) -> bool:
     if isinstance(value, bool):
         return value
@@ -163,9 +177,21 @@ SPEC: dict[str, tuple] = {
     # finds nothing, which looks exactly like a model that is not working.
     #
     # OpenCV has no name lookup on macOS, so this is an index, and indices
-    # shuffle when USB devices change. Re-probe rather than assume:
-    #   for i in 0 1 2 3: cv2.VideoCapture(i).read()
-    "conveyor.camera.index": (_int, 0, "AURUM_CAMERA_INDEX"),
+    # shuffle when USB devices change. Measured on the demonstration laptop on
+    # 2026-09-11, while configs/bench-profile.sh was shipping index 2: index 0
+    # opened and never delivered a frame, index 1 delivered 1920x1080, and
+    # index 2 did not exist. The camera is the only BLOCKING check in /ready,
+    # so a stale index here is a demonstration that cannot start.
+    #
+    # `auto` takes the one index that actually delivers a frame and refuses to
+    # guess between two, exactly as conveyor.arduino.port does. It is opt-in
+    # for the reason in the paragraph above this one: on a laptop the wrong
+    # automatic choice is a camera that works perfectly and shows a wall.
+    #
+    # A named index is never second-guessed. When one fails, the error now says
+    # which indices DO deliver frames rather than leaving the operator to probe
+    # by hand thirty seconds before a demonstration.
+    "conveyor.camera.index": (_camera_index, 0, "AURUM_CAMERA_INDEX"),
     "conveyor.camera.backend": (_text, "auto", "AURUM_CAMERA_BACKEND"),
     "conveyor.camera.width": (_int, 1280, "AURUM_CAMERA_WIDTH"),
     "conveyor.camera.height": (_int, 720, "AURUM_CAMERA_HEIGHT"),
@@ -433,6 +459,44 @@ SPEC: dict[str, tuple] = {
     # sorted twice. The pan cannot tell it apart, because there is no pan.
     # ------------------------------------------------------------------
     "demo.camera_trigger.enabled": (_bool, False, "AURUM_DEMO_CAMERA_TRIGGER"),
+    # How long a CONNECTED cell may go quiet before the camera is allowed to
+    # start cycles in its place.
+    #
+    # It was effectively zero, and that lost a demonstration. `next_weight`
+    # gives up after `conveyor.arduino.timeout_s` - one second - while the
+    # sketch goes deaf for the whole 1.711 s of a paddle stroke and the manual
+    # path drains the same queue from the HTTP thread. So a healthy cell
+    # returns nothing every so often, and handing the machine over on the first
+    # gap latched the object still in the operator's hand, gave it a stand-in
+    # mass and sorted it. The real arrival was then refused as "no assembly has
+    # been confirmed", because that id had already been handled.
+    #
+    # A cell that REPORTS a verdict - no board, no calibration factor, a
+    # disconnected reader, a named wiring fault - does not wait this out. There
+    # is nothing ambiguous about a refusal that names its own cause.
+    "demo.camera_trigger.quiet_s": (_non_negative, 3.0, "AURUM_DEMO_CAMERA_TRIGGER_QUIET_S"),
+    # The shortest gap between two camera-started cycles.
+    #
+    # This is the mitigation for the limit named above, and it is a rate limit
+    # rather than a fix: nothing can tell two objects from one object seen
+    # twice out of an image alone. Measured on the bench state the runbook
+    # describes - cell open, stand-in mass - ONE RAM module shown, lost by the
+    # tracker and shown again produced THREE paddle strokes and three EPR item
+    # ids. RAM scores 0.51 recall and the runbook already says it flickers in
+    # and out, so this is the normal case for the hardest class in the set.
+    #
+    # FIVE SECONDS, because that is shorter than the operator's own loop - take
+    # the object away, pick up the next, hold it up, wait for CONFIRMED - and
+    # far longer than a tracker drops and re-acquires something still in view.
+    # The assumption is stated in the refusal the machine prints.
+    #
+    # It never applies to the load cell. A pan reports the object leaving, so
+    # that path needs no assumption about how fast a human can be.
+    "demo.camera_trigger.cooldown_s": (
+        _non_negative,
+        5.0,
+        "AURUM_DEMO_CAMERA_TRIGGER_COOLDOWN_S",
+    ),
     "conveyor.runtime.simulation": (_bool, False, "AURUM_SIMULATION"),
     "conveyor.runtime.host": (_text, "127.0.0.1", "AURUM_HOST"),
     "conveyor.runtime.port": (_int, 8000, "AURUM_PORT"),
@@ -526,6 +590,21 @@ SPEC: dict[str, tuple] = {
     # Matched to pricing.max_age_seconds by default: refreshing more often
     # than a quote can go stale spends quota for nothing.
     "pricing.metalprice.cache_seconds": (_non_negative, 900.0, "AURUM_METALPRICE_CACHE_SECONDS"),
+    # How long a REFUSAL is held before the network is tried again.
+    #
+    # A success was cached for fifteen minutes and a failure was worth nothing
+    # at all, so every caller went straight back to a feed that had just
+    # refused and waited out its own timeout before saying the same thing. The
+    # dashboard prices four metals inside a `/session` snapshot it asks for
+    # every 400 ms, so on a venue network that cannot reach the feed that was a
+    # five-second blocking request two and a half times a second, for as long
+    # as the network stayed down.
+    #
+    # Long enough to stop a poll loop hammering a dead feed; short enough that
+    # a demonstration which regains the network picks the prices up within a
+    # minute. A cached snapshot is still preferred over a hold, so an outage
+    # degrades to the last real price rather than to nothing.
+    "pricing.metalprice.retry_seconds": (_non_negative, 30.0, "AURUM_METALPRICE_RETRY_SECONDS"),
     "tracking.tracker": (_text, "bytetrack.yaml", "AURUM_TRACKER"),
     "tracking.max_missing_frames": (_int, 15, "AURUM_TRACK_MAX_MISSING_FRAMES"),
     "tracking.min_detections_to_confirm": (_int, 3, "AURUM_TRACK_MIN_DETECTIONS"),

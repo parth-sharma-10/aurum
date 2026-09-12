@@ -490,9 +490,17 @@ class RoutingScheduler:
         return self._routes.get(item_id)
 
     def pending(self) -> list[ScheduledRoute]:
-        """Routes awaiting their moment, soonest first."""
+        """Routes awaiting their moment, soonest first.
+
+        `list(...)` before filtering, and the same everywhere else this dict is
+        walked. Scheduling happens on the pan thread and draining on its own,
+        so a lazy generator over `.values()` can be part-way through when a new
+        route is inserted - which raises "dictionary changed size during
+        iteration" and takes the machine loop down over a bookkeeping detail.
+        Copying the values is one atomic call and needs no lock.
+        """
         return sorted(
-            (r for r in self._routes.values() if r.status is RouteStatus.SCHEDULED),
+            (r for r in list(self._routes.values()) if r.status is RouteStatus.SCHEDULED),
             key=lambda r: r.execute_at,
         )
 
@@ -544,8 +552,8 @@ class RoutingScheduler:
             "routable": self.geometry.belt_speed_problem() is None,
             "pending": [r.as_dict(now) for r in self.pending()],
             "due": [r.as_dict(now) for r in self.due(now)],
-            "routes": [r.as_dict(now) for r in self._routes.values()],
-            "rejected": [r.as_dict(now) for r in self._rejected],
+            "routes": [r.as_dict(now) for r in list(self._routes.values())],
+            "rejected": [r.as_dict(now) for r in list(self._rejected)],
         }
 
 

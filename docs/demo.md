@@ -191,8 +191,28 @@ becomes the arrival, and the paddles fire on camera confirmation alone.
 The cell is still asked first on every pass, so a cell that starts reading takes
 the machine back with no restart. Everything stays `SIMULATED` to the ledger.
 
+**A gap is not a dead cell.** The camera only takes over once the cell has
+refused for `demo.camera_trigger.quiet_s` — three seconds — or has named its own
+fault, which a disconnected reader and a stuck converter both do. Handing the
+machine over on a single empty read was a real failure and not a theoretical
+one: the board is deaf for the whole 1.7 s of a paddle stroke while a weight
+read gives up after one second, so a healthy cell returns nothing every so
+often. The machine then latched the object *still in the operator's hand*, gave
+it a stand-in mass, sorted it, and refused the real arrival a moment later with
+"no assembly has been confirmed by the camera".
+
+**Give it five seconds between objects.** On the camera trigger there is no pan
+to say the object left, and a tracker that loses an object and picks it up
+again mints a *new* id for it — which nothing downstream can tell from a second
+object. Measured on this bench: one RAM module shown, lost and shown again
+produced **three paddle strokes and three ledger entries**, and RAM is the class
+this runbook already warns "flickers in and out" at 0.51 recall. So a second
+camera-started cycle inside `demo.camera_trigger.cooldown_s` — five seconds — is
+refused, and the screen says so and offers the load cell instead. The load cell
+path has no cooldown: a pan can report the object leaving.
+
 An item that cannot be weighed is then given a per-class stand-in mass —
-**CPU 25 g · PCB 180 g · RAM 30 g · Connector 5 g** — so the rest of the
+**CPU 22 g · PCB 60 g · RAM 20 g · Connector 5 g** — so the rest of the
 pipeline can be shown running. Per class, because a precious fraction is metal
 over *total* mass: one flat value made a CPU read 26 ppm where 188 is right.
 
@@ -239,10 +259,22 @@ cd aurum/frontend && npm install && npm run dev    # http://localhost:5173
 # 3 — spare, for curl if the browser misbehaves
 ```
 
-The profile resolves to `HARDWARE_MODE=PHYSICAL`, actuation on, mock mass
-**off** so the load cell drives the cycle, and the belt left on `SIMULATION`
-because the timing model is the only belt there is. It does not set
-`AURUM_CAMERA_INDEX`; export it if the default is the wrong webcam.
+The profile resolves to `HARDWARE_MODE=PHYSICAL`, actuation on, and the belt
+left on `SIMULATION` because the timing model is the only belt there is.
+
+**`AURUM_CAMERA_INDEX=auto`**, and the line it replaced was the whole
+demonstration. That line said `2`; measured on the demonstration laptop on
+2026-09-11, index 0 opened and never delivered a frame, index 1 delivered
+1920x1080, and **index 2 did not exist**. The camera is the only blocking check
+in `/ready`, so the dashboard's start-up sequence stopped at "Camera: could not
+start" and nothing downstream ever ran. The indices had shuffled since the
+value was written, which the file's own comment says they do.
+
+`auto` takes the one index that actually delivers a frame, and refuses when two
+do — one of them is usually the built-in camera pointing at the ceiling, which
+opens and reads and streams a wall. Pin a number the moment it refuses, or the
+moment you have watched the feed and know which index is the rig. A named index
+is never second-guessed, and a failure now names the indices that do work.
 
 Confirm the machine agrees before you trust the screen:
 
@@ -251,10 +283,24 @@ curl -s localhost:8000/ready | python3 -m json.tool
 ```
 
 `"ready": true` with an empty `blocked_by`, `"hardware_mode": "PHYSICAL"`, and
-eight checks green — vision model, camera, no latched fault, board link, servo
-angles applied, load cell calibrated, paddle movement verified, actuation
-enabled. Camera and board read *not started* until the dashboard opens and runs
-its start-up sequence; that is expected, not a fault.
+ten checks green — vision model, camera, no latched fault, board link, board
+traffic readable, servo angles applied, load cell calibrated, load cell
+reading, paddle movement verified, actuation enabled. Camera and board read
+*not started* until the dashboard opens and runs its start-up sequence; that is
+expected, not a fault.
+
+**Read the last two of those as a pair.** `load cell calibrated` is a record of
+a measurement taken on 2026-08-26; `load cell reading` is whether the converter
+is converting *now*. They disagree whenever the cell is open, which is the
+state this rig has been in since 2026-08-27 — and before the second check
+existed, `/ready` showed a full set of green ticks over a dead cell to an
+operator thirty seconds before a demonstration.
+
+`board traffic readable` is the other one worth knowing. A board can stay
+CONNECTED with no error while emitting nothing this protocol recognises — this
+bench has produced 94,398 such lines in a burst — and the first command after
+that spends its whole acknowledgement budget reading past the rubbish. Both
+are advisory: they are things to know, not things to stop for.
 
 ### Fallback — no hardware at all, `configs/demo-profile.sh`
 
@@ -295,14 +341,21 @@ shipped machine is still `mode: NONE`, actuation off, geometry `UNMEASURED`.
 | | `demo-profile.sh` | `bench-profile.sh` |
 |---|---|---|
 | belt, geometry | SIMULATED | SIMULATED — unchanged |
-| mass | per-class stand-in, `SIMULATED` | **HX711, `MEASURED`** |
-| transport | in-process board | **real serial, `/dev/cu.usbmodem1101`** |
+| mass | per-class stand-in, `SIMULATED` | **HX711 when the cell reads**, `MEASURED`; a per-class stand-in when it does not, `SIMULATED` |
+| transport | in-process board | **real serial, `AURUM_ARDUINO_PORT=auto`** |
+| camera | not set | **`auto`** |
 | `HARDWARE_MODE` | `SIMULATION` | **`PHYSICAL`** |
 
 The belt is a model in both, and every figure derived from it is still stamped
-`SIMULATED` to the EPR ledger. The mass and the servo command are not: on the
-bench profile they are a real reading off a verified cell and a real frame down
-a real port.
+`SIMULATED` to the EPR ledger. The servo command is not: on the bench profile
+it is a real frame down a real port.
+
+**Both profiles ship `AURUM_DEMO_MOCK_MASS=true`, and this table used to say
+the bench one did not.** It is a fallback, not a mode: the cell is asked first
+on every pass, and a stand-in is only substituted for an object the cell could
+not weigh. So the mass on the bench profile is whichever the machine actually
+got, and the reading says which — which is also what the operator screen now
+keys its "weights are assumed" caveat off, rather than off the flag.
 
 **The two flags are not interchangeable.** `AURUM_SIMULATION` picks the
 transport *and* the geometry, so turning it off alone drops the router onto the
@@ -436,6 +489,12 @@ today is perception, measurement, material intelligence and actuation."*
 
 ## When something goes wrong
 
+Fourteen faults have been found and fixed on this machine, and
+[docs/failure-modes.md](failure-modes.md) is the measured record of all of them
+— what each looked like from outside, what it actually was, and what changed.
+Read it if a symptom below does not match anything, or if you want to know why
+an instruction here is worded the way it is.
+
 | Symptom | Cause | Do this |
 |---|---|---|
 | `CAMERA OFF`, permission error | macOS camera permission | System Settings → Privacy & Security → Camera → your terminal. **Grant it before the venue.** |
@@ -444,12 +503,15 @@ today is perception, measurement, material intelligence and actuation."*
 | `ACTUATION OFF` | Safety default | `export AURUM_ARDUINO_ENABLED=true` and restart the backend |
 | Mass reads `UNSTABLE` | Bench vibration, or a hand still on the pan | Take your hand off and leave it alone. The cycle re-reads on its own — there is no button to press |
 | Mass reads `UNAVAILABLE` | Cell not responding | Check D2/D3, re-seat the HX711, confirm the sorter sketch is flashed |
-| **The video is not the rig** — a plausible, evenly-lit surface, and the detector never fires | `AURUM_CAMERA_INDEX` is pointing at the laptop's own camera. It opens and reads, so nothing reports an error | Re-probe: `for i in 0 1 2 3: cv2.VideoCapture(i).read()`. On this bench the external webcam is **index 2**; 0 is the built-in camera and 1 enumerates but never returns a frame |
+| **The video is not the rig** — a plausible, evenly-lit surface, and the detector never fires | `AURUM_CAMERA_INDEX` is pointing at the laptop's own camera. It opens and reads, so nothing reports an error | `AURUM_CAMERA_INDEX=auto` picks the one index that delivers a frame and refuses when two do. If it picked the wrong one, pin the right number — a named index is never second-guessed. **Do not copy an index out of this table**: they shuffle. The value here said `2` and on 2026-09-11 index 2 did not exist |
 | **Boot screen sits on `Connecting...`** | A page load reconnects the board, and the connect path drains the board's backlog first. An open load cell makes that backlog endless | Fixed — `connect_board` is idempotent and answers "already" in 0.02 s. If it recurs, the underlying cause is the cell flooding the port |
 | `the board did not acknowledge the servo configuration` | The board dumps a large backlog when the port opens and the first CFG's ACK is buried in it | **Advisory, not blocking** — an unacknowledged CFG leaves the board on the angles its sketch booted with, which on this rig are the numbers the config would have sent. Press Connect board again: that now re-offers the angles on an already-connected link instead of returning early, and check `servo_config_applied: true` in `/session` |
 | **A large, rock-steady mass on an empty pan** (≈670 g) | The cell input is open. Raw `0` through the verified factor is 670.75 g, and it is *perfectly* steady, so it settles instantly and earns `MEASURED` | Stop and fix the wiring — HX711 VCC, DOUT/SCK on D2/D3, the four bridge wires. **Do not re-tare.** An empty pan on a healthy cell wanders near −263078 |
 | `UNKNOWN_MASS_ANOMALY` | The mass is outside the plausibility window for that class | Not a fault. Use a component inside the range — a PCB must clear 20 g |
-| `ALREADY_PROCESSED` | That item was already routed | Take the component out of frame, let the track drop, present it again |
+| `ALREADY_PROCESSED` | That item was already routed | Take the component out of frame, let the track drop, present it again. On the camera trigger, wait the five-second cooldown as well |
+| **Cooldown: N s before the camera may start another cycle** | Two camera-started cycles too close together. The camera cannot tell a new object from the last one seen again, and a tracker that re-acquires one object mints a second id for it | Not a fault — it is what stops one module being sorted three times. Wait it out, or put the object on the load cell, which has no cooldown because a pan can report the object leaving |
+| **`board traffic readable` is red** | The board is streaming something this protocol does not recognise — the headless-fragment burst an open cell produces | The link is fine; the board is not. Fix the cell. The check watches the last 100 lines, so it clears about ten seconds after the board comes right |
+| **`load cell reading` is red while `load cell calibrated` is green** | Exactly the distinction those two checks exist to make: the file records a measurement taken on 2026-08-26, the reading is what the converter is doing now | Expected on this rig while the cell is open. It is why the stand-in mass exists, and why nothing it produces is ever `MEASURED` |
 | Servo does not move but state is `ACKED` | Mechanical or supply-side | Check the external 5 V rail and the horn. An ACK is not proof of movement |
 | Everything is unplugged | — | Every item routes to C and nothing moves. The demo degrades to software, and the dashboard says why on every card |
 

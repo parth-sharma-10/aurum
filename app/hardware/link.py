@@ -16,10 +16,21 @@ reads it, files it by type, and returns only lines of its own type:
     AURUM/1 ACK CMD-1A2B3C4D    -> the response queue
     anything else               -> dropped, and counted
 
-That is why no thread and no lock appear here. A reader that is waiting is a
+No thread is started here, and none needs to be: a reader that is waiting is a
 reader that is pumping, so a caller blocked on a stable mass keeps the ACK
-queue moving and vice versa. Threading two consumers onto one serial port
-would be the obvious design and the one that loses frames at 3am.
+queue moving and vice versa.
+
+**One lock is needed, and it took a bench session to see why.** That design
+makes the QUEUES safe against two consumers; it says nothing about the PORT.
+The pan thread takes a sample from `weight_reader` on every poll while the
+HTTP thread runs a CFG or a BELT exchange, and `_gate` - which serialises whole
+exchanges against each other - does not cover the weight pump. Both then call
+`readline()` on one descriptor at once, and `pyserial` builds a line out of
+repeated reads, so each caller takes part of it and neither gets a frame. A
+torn weight frame is a mass that never settles; a torn ACK is an ACK_TIMEOUT
+that latches a fault and stops the machine over a paddle that moved perfectly
+well. `_read` makes one line at a time atomic; it is not held across an
+exchange, so neither reader can starve the other.
 
 Nothing above `app.hardware` imports pyserial, including through this file.
 """
@@ -56,6 +67,12 @@ class BoardLink:
     #: silently does not apply.
     BOOT_TIMEOUT_S = 6.0
 
+    #: How many recent lines `mostly_unreadable` judges. The board streams at
+    #: 10 Hz, so this is about ten seconds of traffic: long enough that a boot
+    #: banner among real frames cannot trip it, short enough that a port which
+    #: comes right is reported right within ten seconds.
+    TRAFFIC_WINDOW = 100
+
     def __init__(self, port: str, baudrate: int = 115200, timeout_s: float = 1.0) -> None:
         self.port = port
         self.baudrate = baudrate
@@ -71,12 +88,25 @@ class BoardLink:
         #: the port lock between the other's release and re-acquire, and the
         #: loser reported "already owned by another process" about itself.
         self._gate = threading.RLock()
+        #: Held for ONE `readline()`, so two readers cannot split a line
+        #: between them. Deliberately not the gate: an exchange holds that for
+        #: seconds, and the weight stream may not wait that long.
+        self._read = threading.Lock()
         self.last_error: str | None = None
         self._weight: deque[RawSample] = deque(maxlen=QUEUE_LIMIT)
         self._responses: deque[str] = deque(maxlen=QUEUE_LIMIT)
         #: Lines that were neither a weight frame nor a protocol reply. Boot
         #: banners and line noise live here rather than being misread as data.
         self.dropped = 0
+        #: Lines that WERE one or the other. Counted so `dropped` has something
+        #: to be a proportion of: on its own it is a number nobody can read.
+        #: The bench pathology - a headless weight fragment at line rate -
+        #: produced 94,398 dropped lines while every screen stayed green.
+        self.filed = 0
+        #: The last `TRAFFIC_WINDOW` line outcomes, True for unreadable. What
+        #: `mostly_unreadable` judges, because the lifetime counters above can
+        #: never recover from a burst.
+        self._recent: deque[bool] = deque(maxlen=self.TRAFFIC_WINDOW)
         #: The angles the board ACKNOWLEDGED, or None while it is still running
         #: whatever the sketch booted with. Read from the snapshot: an operator
         #: measuring a throw needs to know which of the two is in force, and an
@@ -415,7 +445,11 @@ class BoardLink:
         if self._serial is None:
             return False
         try:
-            raw = self._serial.readline()
+            # One reader at a time on the wire. See the module docstring: the
+            # queues below are safe against two consumers, the descriptor is
+            # not, and a line split between two callers is lost to both.
+            with self._read:
+                raw = self._serial.readline()
         except Exception as exc:
             self._state = LinkState.DEGRADED
             self.last_error = f"read failed: {exc}"
@@ -427,14 +461,24 @@ class BoardLink:
         sample = parse_weight_line(line)
         if sample is not None:
             self._weight.append(sample)
+            self._readable(True)
             return True
         if line.startswith("AURUM/1 "):
             self._responses.append(line)
+            self._readable(True)
             return True
         # A W frame with status ERR lands here too, which is correct: it is a
         # real line the board sent, and it is not a mass.
-        self.dropped += 1
+        self._readable(False)
         return True
+
+    def _readable(self, ok: bool) -> None:
+        """Book one line in, as a lifetime count and in the recent window."""
+        if ok:
+            self.filed += 1
+        else:
+            self.dropped += 1
+        self._recent.append(not ok)
 
     # Both accessors pump until a frame of THEIR type arrives, the port runs
     # dry, or the budget runs out. Pumping once would let the other stream
@@ -475,6 +519,26 @@ class BoardLink:
     def next_response(self) -> str | None:
         return self._next(self._responses, self.timeout_s)
 
+    @property
+    def mostly_unreadable(self) -> bool:
+        """Is more of what this port is saying RIGHT NOW rubbish than data?
+
+        The one question `dropped_lines` was never asked. A board that streams
+        a malformed fragment at full line rate stays CONNECTED, answers
+        nothing, and looks identical to a healthy one from every screen - and
+        the first command after it spends its whole acknowledgement budget
+        reading past the rubbish. That has been blamed on the firmware, the
+        servo and the wiring in turn.
+
+        Over a WINDOW, not over the lifetime counters. A lifetime ratio cannot
+        recover: one measured burst of 94,398 unreadable lines would need
+        94,398 good ones after it - nearly three hours at 10 Hz - before the
+        port stopped reporting itself broken, and by then the number is about
+        history rather than about the board.
+        """
+        window = list(self._recent)
+        return len(window) >= self.TRAFFIC_WINDOW and sum(window) * 2 > len(window)
+
     def snapshot(self) -> dict:
         return {
             "port": self.port,
@@ -485,6 +549,8 @@ class BoardLink:
             "queued_weight_frames": len(self._weight),
             "queued_responses": len(self._responses),
             "dropped_lines": self.dropped,
+            "filed_lines": self.filed,
+            "mostly_unreadable": self.mostly_unreadable,
             "belt_running": self.belt_running,
             "belt_pwm": self.belt_pwm,
             "servo_config_applied": self.servo_config is not None,

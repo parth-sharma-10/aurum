@@ -81,16 +81,26 @@ AURUM_ARDUINO_PORT=auto
 # stopping the machine. Raised for the bench; the real fix is the load cell.
 AURUM_ARDUINO_ACK_TIMEOUT_MS=8000
 
-# THE LENOVO FHD WEBCAM, which is the one aimed at the rig. Index 0 is the
-# MacBook's built-in camera pointing at the ceiling - it opens, it reads, and
-# it streams a plausible blue-grey gradient, so nothing downstream complains
-# and the operator watches a wall. Index 1 enumerates but never returns a
-# frame. Only 2 is the external webcam.
+# THE WEBCAM AIMED AT THE RIG.
 #
-# OpenCV has no name lookup on macOS, so this is an index and indices can
-# shuffle when USB devices change. If the feed is not the rig, re-probe:
-#   for i in 0 1 2 3: cv2.VideoCapture(i).read()
-AURUM_CAMERA_INDEX=2
+# THIS LINE SAID `2` AND WAS WRONG. Measured on the demonstration laptop on
+# 2026-09-11: index 0 opened and never delivered a frame, index 1 delivered
+# 1920x1080, and index 2 DID NOT EXIST. The camera is the only blocking check
+# in /ready, so that value was a demonstration that could not start - the
+# dashboard's start-up sequence stops at "Camera: could not start" and nothing
+# downstream ever runs. The indices had shuffled since the value was written,
+# exactly as the note below says they do.
+#
+# `auto` takes the one index that actually delivers a frame. It REFUSES when
+# two do, naming both, because one of them is usually the MacBook's built-in
+# camera pointing at the ceiling - which opens, reads, and streams a plausible
+# blue-grey gradient while the operator watches a wall.
+#
+# Pin it to a number the moment `auto` refuses, or the moment you have watched
+# the feed and know which index is the rig. A named index is never
+# second-guessed, and when one fails the error now names the indices that do
+# work on this machine right now.
+AURUM_CAMERA_INDEX=auto
 
 # Actuation ships OFF. Without this every move() returns ACTUATION_DISABLED
 # and no frame is written, which looks exactly like a dead servo.
@@ -113,6 +123,11 @@ AURUM_ARDUINO_ENABLED=true
 # mass, and the camera starts the cycle for as long as the cell cannot. Both
 # reverse themselves the moment the cell reads again - the cell is asked first
 # on every pass, and a real arrival always wins.
+#
+# The camera only takes over once the cell has refused for
+# AURUM_DEMO_CAMERA_TRIGGER_QUIET_S (3 s), or has named its own fault. One
+# empty read is what a healthy cell returns while the board is deaf for a
+# paddle stroke, and acting on it sorted the object in the operator's hand.
 #
 # EVERY FIGURE DERIVED FROM A STAND-IN IS STAMPED SIMULATED, all the way to the
 # EPR ledger and the dashboard. None of them may be quoted as a measurement.

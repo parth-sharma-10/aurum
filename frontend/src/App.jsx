@@ -22,6 +22,7 @@ import {
   call,
   grams,
   machineState,
+  massCaveat,
   num,
   pct,
   subsystems,
@@ -222,10 +223,24 @@ export default function App() {
     runStartup();
   }, [runStartup]);
 
+  // POLL_MS after the last answer, not every POLL_MS regardless. `setInterval`
+  // does not wait for the request it started, so a snapshot that takes longer
+  // than the interval stacks: at 400 ms a five-second response - which is what
+  // one failed reach for a live metal price costs - puts a dozen requests in
+  // flight, past the browser's six-per-origin cap, and the screen stops
+  // updating for as long as the queue takes to drain.
   useEffect(() => {
-    load();
-    const id = setInterval(load, POLL_MS);
-    return () => clearInterval(id);
+    let timer = null;
+    let stopped = false;
+    const tick = async () => {
+      await load();
+      if (!stopped) timer = setTimeout(tick, POLL_MS);
+    };
+    tick();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [load]);
 
   const act = async (label, path) => {
@@ -257,6 +272,7 @@ export default function App() {
   const rows = useMemo(() => subsystems(state), [state]);
   const machine = useMemo(() => machineState(state, startup), [state, startup]);
   const worst = useMemo(() => worstSubsystem(rows), [rows]);
+  const caveat = useMemo(() => massCaveat(state), [state]);
 
   // The startup screen owns the whole viewport, so nobody reads a half-built
   // machine as a broken one.
@@ -319,13 +335,7 @@ export default function App() {
         <>
           <MachineStatus
             machine={machine}
-            extra={
-              state?.mock_mass?.enabled ? (
-                <p className="status-caveat">
-                  Weights are assumed, not measured — the load cell is not supplying them.
-                </p>
-              ) : null
-            }
+            extra={caveat ? <p className="status-caveat">{caveat}</p> : null}
           />
 
           <div className="grid-two">

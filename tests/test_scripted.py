@@ -93,6 +93,36 @@ class TestSteppingThrough:
         assert len(set(ids)) == len(scripted.SCRIPT)
 
 
+class TestItRunsTheObjectItInjected:
+    """The step must route the object it just put in front of the tracker.
+
+    It names no item: `measure_and_route()` is called with no argument and
+    `current_assembly` resolves it as the newest confirmed thing in view. That
+    is correct only for as long as the object just injected really is the
+    newest, which is worth pinning rather than assuming - the alternative is a
+    step that reports `CPU` in its `scripted` block while the record under it
+    belongs to whatever else the bench happens to be holding.
+    """
+
+    def test_something_else_in_view_does_not_steal_the_step(self, session):
+        from app.vision.tracker import TrackedDetection
+
+        # A camera-seen object, confirmed and untouched, in a corner of its own.
+        for frame in range(5):
+            session.pipeline.process_detections(
+                [TrackedDetection(1, "PCB", 0.95, (600, 400, 780, 560))], frame_id=frame
+            )
+
+        result = scripted.step(session)
+
+        assert result.get("error") is None, result.get("reason")
+        assert result["class_name"] == result["scripted"]["component_class"] == "CPU"
+
+    def test_each_step_routes_its_own_object(self, session):
+        results = run_all(session)
+        assert [r["class_name"] for r in results] == [o.component_class for o in scripted.SCRIPT]
+
+
 class TestWithoutAStandInMass:
     def test_it_still_runs_and_says_which_setting_is_missing(self, monkeypatch):
         monkeypatch.setenv("AURUM_DEMO_MOCK_MASS", "false")

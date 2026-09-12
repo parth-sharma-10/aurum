@@ -371,6 +371,27 @@ export function loadCellSilent(state) {
   return pan.automatic === true && pan.grams == null;
 }
 
+/**
+ * What to say about where THIS object's mass came from, or null for nothing.
+ *
+ * Driven by the reading, not by the setting, for the same reason
+ * `loadCellSilent` exists. `demo.mock_mass.enabled` ships ON in the bench
+ * profile as a fallback for a cell that cannot weigh, and a live cell still
+ * wins on every pass - so keying this off the flag alone put "Weights are
+ * assumed, not measured" on screen underneath a MEASURED mass taken off a
+ * verified calibration. That hands away the demonstration's strongest claim,
+ * out loud, for nothing.
+ */
+export function massCaveat(state) {
+  if (!state?.mock_mass?.enabled) return null;
+  const status = state?.current_item?.weight_status;
+  if (status === "SIMULATED") {
+    return "Weights are assumed, not measured — the load cell is not supplying them.";
+  }
+  if (status === "MEASURED" || status === "STABLE") return null;
+  return "If the load cell cannot weigh an object, an assumed mass is used and labelled.";
+}
+
 export function machineState(state, startup) {
   if (startup && startup.phase !== "done") {
     return startup.phase === "failed"

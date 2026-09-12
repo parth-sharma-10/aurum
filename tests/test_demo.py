@@ -134,6 +134,75 @@ class TestWebcamSource:
         assert "unknown backend" in capsys.readouterr().out
 
 
+@pytest.fixture
+def cameras(monkeypatch):
+    """Install a bench: {index: frames it will serve}. Anything else is absent.
+
+    The single-behaviour `capture` fixture cannot express the case that matters
+    - a configured index that is dead while another one works - because every
+    index behaves the same under it.
+    """
+
+    def bench(spec: dict[int, int]):
+        opened = []
+
+        def _make(source, _backend=None):
+            cap = FakeCapture(spec.get(source, 0), opened=source in spec)
+            opened.append(source)
+            return cap
+
+        monkeypatch.setattr(cv2, "VideoCapture", _make)
+        return opened
+
+    return bench
+
+
+class TestPickingACamera:
+    """An OpenCV index is not a name, and indices shuffle when USB changes.
+
+    `configs/bench-profile.sh` ships `AURUM_CAMERA_INDEX=2` and its own comment
+    says so. Measured on the demonstration laptop on 2026-09-11: index 0 opens
+    and never delivers a frame, index 1 delivers 1920x1080, and **index 2 does
+    not exist**. The camera is the only blocking check in `/ready`, so a stale
+    index is a demonstration that cannot start - and the message it failed with
+    said nothing about which indices would have worked.
+    """
+
+    def test_the_failure_names_the_cameras_that_do_work(self, cameras):
+        cameras({1: 5})
+        with pytest.raises(RuntimeError, match=r"index 1"):
+            FrameSource("webcam", None, 2, 1280, 720, 0.0, first_frame_timeout=0.05)
+
+    def test_the_failure_says_so_when_nothing_works(self, cameras):
+        cameras({})
+        with pytest.raises(RuntimeError, match="No camera on this machine"):
+            FrameSource("webcam", None, 2, 1280, 720, 0.0, first_frame_timeout=0.05)
+
+    def test_auto_takes_the_one_camera_that_delivers_frames(self, cameras):
+        """Opt-in, and shaped exactly like AURUM_ARDUINO_PORT=auto."""
+        cameras({0: 0, 1: 5})
+        src = FrameSource("webcam", None, "auto", 1280, 720, 0.0, first_frame_timeout=0.05)
+        assert src.camera_index == 1
+
+    def test_auto_refuses_to_guess_between_two(self, cameras):
+        """Index 0 is the built-in camera pointing at the ceiling. It reads fine."""
+        cameras({0: 5, 1: 5})
+        with pytest.raises(RuntimeError, match="refusing to guess"):
+            FrameSource("webcam", None, "auto", 1280, 720, 0.0, first_frame_timeout=0.05)
+
+    def test_auto_with_nothing_attached_says_so(self, cameras):
+        cameras({})
+        with pytest.raises(RuntimeError, match="No camera on this machine"):
+            FrameSource("webcam", None, "auto", 1280, 720, 0.0, first_frame_timeout=0.05)
+
+    def test_a_configured_index_that_works_is_never_second_guessed(self, cameras):
+        """No probing, no surprises: an index that delivers is the one used."""
+        opened = cameras({0: 5, 1: 5, 2: 5})
+        src = FrameSource("webcam", None, 2, 1280, 720, 0.0, first_frame_timeout=0.05)
+        assert src.camera_index == 2
+        assert opened == [2], "a working camera must not trigger a probe of the others"
+
+
 class TestImageSource:
     @pytest.fixture
     def folder(self, tmp_path):
