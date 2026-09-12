@@ -23,7 +23,8 @@ Configuration: **a stand-in mass with a real board** —
 That combination matters, because it is the one the runbook actually
 recommends: the HX711 on this rig has read open since 2026-08-27, so the
 stand-in mass is on and the camera — not the load cell — starts every cycle.
-Six of the fourteen defects below only exist on that path.
+**Three of the fourteen below exist only on that path** — 1, 9 and 14 — and
+one of those three is the fault that produced every reported symptom.
 
 ---
 
