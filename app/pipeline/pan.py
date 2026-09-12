@@ -112,6 +112,13 @@ class PanMachine:
         #: not a dead cell, and treating it as one sorted the object in the
         #: operator's hand.
         self.quiet_s = self.cfg["demo.camera_trigger.quiet_s"]
+        #: The shortest gap between two camera-started cycles, and when the
+        #: last one finished. See `demo.camera_trigger.cooldown_s`: a tracker
+        #: that loses and re-acquires one object mints a second id for it, and
+        #: with no pan to say the object left, nothing else stops it being
+        #: sorted again.
+        self.cooldown_s = self.cfg["demo.camera_trigger.cooldown_s"]
+        self._camera_cycle_ended: float | None = None
         #: When the current run of empty reads began, or None if the last read
         #: produced a mass.
         self._quiet_since: float | None = None
@@ -247,13 +254,31 @@ class PanMachine:
             return self._routing()
         return self._waiting_for_clear()
 
+    def _cooling_down(self) -> float:
+        """Seconds still owed before another camera cycle may start."""
+        if self._camera_cycle_ended is None or self.cooldown_s <= 0:
+            return 0.0
+        return max(0.0, self.cooldown_s - (self._clock() - self._camera_cycle_ended))
+
     def _camera_arrival(self, why: str) -> PanState:
         """Start a cycle on a camera confirmation, because the pan cannot.
 
-        No mass gate: there is no pan reading to gate on. The zone already
-        refuses anything it has handled, so an object cannot be sorted twice
-        for as long as the tracker keeps one id on it.
+        No mass gate: there is no pan reading to gate on. The zone refuses
+        anything it has handled, so an object cannot be sorted twice for as
+        long as the tracker keeps ONE id on it - and the tracker does not.
+        A module that flickers out and back comes back as a new id, which the
+        zone has never seen and cannot refuse, so `_cooling_down` is the only
+        thing between one physical object and a second paddle stroke.
         """
+        waiting = self._cooling_down()
+        if waiting > 0:
+            return self._to(
+                PanState.WAITING_FOR_OBJECT,
+                f"Cooldown: {waiting:.1f} s before the camera may start another cycle. "
+                "The camera cannot tell a new object from the last one seen again, so "
+                "it assumes two objects cannot arrive this close together. Put the "
+                "object on the load cell to sort without waiting.",
+            )
         self.grams = None
         assembly = self.zone.latch()
         if assembly is None:
@@ -372,6 +397,10 @@ class PanMachine:
             self._clear_run = 0
             self.grams = None
             self._camera_cycle = False
+            # Stamped when the cycle ENDS rather than when it starts: the
+            # cooldown is a gap between two sorted objects, and the cycle
+            # itself already takes a second or two of it.
+            self._camera_cycle_ended = self._clock()
             return self._to(PanState.WAITING_FOR_OBJECT, "Ready for the next object.")
 
         grams, problem = self._live_grams()

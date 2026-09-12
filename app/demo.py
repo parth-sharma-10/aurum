@@ -63,6 +63,107 @@ def camera_backend() -> int:
     return backend
 
 
+#: How many camera indices to probe when asked which ones work. Six covers a
+#: laptop, an external webcam and a phone's continuity camera with room spare.
+CAMERA_PROBE_LIMIT = 6
+
+#: How long to give each probed index to produce a frame. Much shorter than
+#: `FIRST_FRAME_TIMEOUT_S`, which is the patience owed to the camera the
+#: operator actually chose: this is a survey, and it runs while somebody is
+#: standing in front of an audience wondering why the screen is black. An index
+#: that is not there fails `isOpened()` at once and costs nothing; only one that
+#: opens and never delivers - the built-in camera without permission - spends
+#: the whole budget.
+CAMERA_PROBE_TIMEOUT_S = 0.5
+
+
+def working_cameras(
+    limit: int = CAMERA_PROBE_LIMIT, timeout_s: float = CAMERA_PROBE_TIMEOUT_S
+) -> list[int]:
+    """Every index that opens AND delivers a frame, in order.
+
+    Both halves are needed, and only the second one is evidence. Measured on
+    the demonstration laptop on 2026-09-11: index 0 reported itself open and
+    never produced a frame, index 1 produced 1920x1080, and index 2 - the value
+    `configs/bench-profile.sh` ships - did not exist at all. `isOpened()` alone
+    would have called two of those three a camera.
+
+    Deliberately NOT called on the happy path. Opening every capture device on
+    a machine is slow, and on macOS it can raise a permission dialog per device;
+    this runs when a configured index has already failed, or when an operator
+    has asked for `auto`.
+    """
+    found = []
+    for index in range(max(0, limit)):
+        cap = cv2.VideoCapture(index, camera_backend())
+        try:
+            if cap.isOpened():
+                deadline = time.time() + timeout_s
+                while time.time() < deadline:
+                    ok, frame = cap.read()
+                    if ok and frame is not None:
+                        found.append(index)
+                        break
+                    time.sleep(0.02)
+        finally:
+            cap.release()
+    return found
+
+
+def _camera_advice(timeout_s: float) -> str:
+    """What to do about a camera index that did not work, in one sentence.
+
+    The operator reads this mid-demonstration, so it names the indices that
+    DO work rather than telling them to go and probe for themselves.
+
+    Capped by the caller's own first-frame patience: a caller that was only
+    willing to wait 150 ms for its camera must not then wait three seconds for
+    advice about it.
+    """
+    found = working_cameras(timeout_s=min(timeout_s, CAMERA_PROBE_TIMEOUT_S))
+    if not found:
+        return (
+            "No camera on this machine delivered a frame "
+            f"(probed 0-{CAMERA_PROBE_LIMIT - 1}). Nothing is plugged in, or the "
+            "permission has not been granted."
+        )
+    names = ", ".join(f"index {i}" for i in found)
+    return (
+        f"{names} does deliver frames on this machine right now — set "
+        f"AURUM_CAMERA_INDEX to it, or to `auto`. Check it is the rig and not the "
+        "built-in camera pointing at the ceiling: that one opens and reads and "
+        "streams a wall."
+    )
+
+
+def resolve_camera(configured) -> int:
+    """The index to open, honouring `auto` the way the serial port does.
+
+    `auto` is opt-in and refuses to guess, for the same reason
+    `app.hardware.transport.autodetect_port` does: on a laptop the wrong choice
+    is a camera pointing at the ceiling, which opens, reads, and streams a
+    plausible grey gradient while the operator believes they are watching the
+    rig. An operator who has named an index is always honoured.
+    """
+    if str(configured).strip().lower() != "auto":
+        return int(configured)
+    found = working_cameras()
+    if not found:
+        raise RuntimeError(
+            "AURUM_CAMERA_INDEX=auto found no camera. "
+            f"No camera on this machine delivered a frame (probed 0-{CAMERA_PROBE_LIMIT - 1}). "
+            "Attach one, grant the permission, or run with --mode images --path <folder>."
+        )
+    if len(found) > 1:
+        names = ", ".join(str(i) for i in found)
+        raise RuntimeError(
+            f"AURUM_CAMERA_INDEX=auto found {len(found)} working cameras ({names}); "
+            "refusing to guess which one is the rig. One of them is probably the "
+            "built-in camera pointing at the ceiling. Name the index instead."
+        )
+    return found[0]
+
+
 class FrameSource:
     """Uniform iterator over webcam / video / image-folder."""
 
@@ -85,7 +186,11 @@ class FrameSource:
         self._last_advance = 0.0
 
         if mode == "webcam":
-            self._cap = cv2.VideoCapture(camera, camera_backend())
+            # `auto` is resolved before anything is opened, and raises its own
+            # message when it cannot decide. An explicit index is opened as
+            # given and never second-guessed.
+            self.camera_index = resolve_camera(camera)
+            self._cap = cv2.VideoCapture(self.camera_index, camera_backend())
             self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
             if not (self._cap.isOpened() and self._first_frame_arrives()):
@@ -97,9 +202,14 @@ class FrameSource:
                     else "Check that no other application holds the camera, and try "
                     "another --camera index or AURUM_CAMERA_BACKEND=CAP_MSMF."
                 )
+                # WHICH INDICES ACTUALLY WORK, not just that this one did not.
+                # An index is not a name and they shuffle when USB changes, so
+                # "could not open camera 2" left the operator probing by hand
+                # thirty seconds before a demonstration.
                 raise RuntimeError(
-                    f"Could not open camera {camera}. {hint} "
-                    f"Or run with --mode images --path <folder>."
+                    f"Could not open camera {self.camera_index}. "
+                    f"{_camera_advice(self.first_frame_timeout)} "
+                    f"{hint} Or run with --mode images --path <folder>."
                 )
         elif mode == "video":
             if not path:

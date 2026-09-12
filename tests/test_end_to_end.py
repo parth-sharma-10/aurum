@@ -319,6 +319,12 @@ class TestTheSimulatedBoard:
     def session(self, **environ):
         environ.setdefault("AURUM_SIMULATION", "true")
         environ.setdefault("AURUM_CONVEYOR_MODE", "SIMULATION")
+        # NOT AUTOMATIC. `connect_board()` starts the machine loop, and the
+        # tests below then drive the same `PanMachine` by hand - two threads
+        # stepping one state machine, which made this file fail about one run
+        # in five for reasons that had nothing to do with what it was testing.
+        # A test that drives the machine has to be the only thing driving it.
+        environ.setdefault("AURUM_PAN_AUTO", "false")
         return DemoSession(cfg=cfg(**environ))
 
     def test_connecting_needs_no_port(self):
@@ -428,6 +434,9 @@ class TestTheDemonstrationWithNothingPluggedIn:
                 AURUM_SIM_BELT_SPEED_CM_S="10.0",
                 AURUM_ARDUINO_ENABLED="true",
                 AURUM_DEMO_MOCK_MASS="true",
+                # `sorted_cpu` steps the pan itself, so the machine loop must
+                # not be stepping it too. See TestTheSimulatedBoard.session.
+                AURUM_PAN_AUTO="false",
             )
         )
 

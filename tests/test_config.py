@@ -77,6 +77,22 @@ class TestYaml:
         assert config.load(empty_dir, environ={})["conveyor.camera.index"] == 0
 
 
+class TestTheCameraIndex:
+    """An index, or `auto` — the same shape AURUM_ARDUINO_PORT already has."""
+
+    def test_auto_is_accepted_and_kept_as_a_word(self, empty_dir):
+        cfg = config.load(empty_dir, environ={"AURUM_CAMERA_INDEX": "auto"})
+        assert cfg["conveyor.camera.index"] == "auto"
+
+    def test_a_number_is_still_a_number(self, empty_dir):
+        cfg = config.load(empty_dir, environ={"AURUM_CAMERA_INDEX": "2"})
+        assert cfg["conveyor.camera.index"] == 2
+
+    def test_a_typo_is_refused_rather_than_becoming_camera_zero(self, empty_dir):
+        with pytest.raises(config.ConfigError, match="whole number"):
+            config.load(empty_dir, environ={"AURUM_CAMERA_INDEX": "atuo"})
+
+
 class TestEnvironmentPrecedence:
     def test_environment_beats_yaml(self, empty_dir):
         write(empty_dir, "conveyor.yaml", "conveyor:\n  camera:\n    index: 3\n")

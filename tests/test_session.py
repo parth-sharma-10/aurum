@@ -26,6 +26,8 @@ each leave a reason on the item.
 from __future__ import annotations
 
 import dataclasses
+import threading
+import time
 
 import pytest
 
@@ -130,6 +132,119 @@ def present(run: DemoSession, component_class: str, confidence: float = 0.94, fr
             [TrackedDetection(1, component_class, confidence, (10, 10, 90, 90))], frame_id=frame
         )
     return run.pipeline.current_item
+
+
+class TestTwoClientsStartingUp:
+    """One browser refresh is two clients running the same start-up sequence.
+
+    `App.jsx` opens the camera and connects the board by itself on load, so a
+    second tab - or a refresh before the first finished, or the Retry button
+    pressed twice - runs both again. Neither entry point was guarded against
+    the other: each checked whether the work had been done, and both checks ran
+    before either did it.
+    """
+
+    def test_two_starts_open_the_camera_once(self, monkeypatch):
+        """Two captures on one device is a halved frame rate and a leaked thread.
+
+        `_thread` only remembers the second one, so `stop()` joins that and the
+        first runs for the life of the process, reading a `_source` that has
+        been replaced underneath it.
+        """
+        opened = []
+
+        class SlowSource:
+            label = "webcam"
+
+            def __init__(self, **kwargs):
+                opened.append(kwargs)
+                time.sleep(0.2)  # opening a camera is not instant
+
+            def read(self):
+                time.sleep(0.01)
+                return False, None
+
+            def release(self):
+                pass
+
+        monkeypatch.setattr("app.demo.FrameSource", SlowSource)
+        run = session()
+        run.pipeline.detector_tracker = object()  # a session with no detector refuses
+
+        start = threading.Barrier(3)
+
+        def tab():
+            start.wait(timeout=5.0)
+            run.start_camera(mode="webcam")
+
+        threads = [threading.Thread(target=tab) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        start.wait(timeout=5.0)
+        for thread in threads:
+            thread.join(timeout=10.0)
+        run.stop()
+
+        assert len(opened) == 1, f"the camera was opened {len(opened)} times"
+
+    def test_two_connects_build_one_link(self, monkeypatch):
+        """Two `BoardLink`s in one process fight over the port lock.
+
+        `flock` is per open-file-description, so the second instance is refused
+        by the first - and reports "already owned by another process" about its
+        own process. That message has cost bench sessions, and `_gate` cannot
+        prevent it: the gate belongs to an instance, and this race is about
+        which instances exist.
+        """
+        built = []
+
+        class SlowLink:
+            def __init__(self, port, **kwargs):
+                # The race window is between "is there a link?" and assigning
+                # one, and constructing it is what sits inside that window. A
+                # fake that builds instantly closes it and the race never shows.
+                time.sleep(0.2)
+                built.append(port)
+                self.port = port
+                self.connected = False
+                self.servo_config = None
+                self.last_error = None
+                self.belt_running = False
+                self.weight_reader = FakeCell(None)
+                self.transport = FakeTransport(connected=True)
+
+            def connect(self):
+                time.sleep(0.2)  # opening a port resets the board
+                self.connected = True
+                return "CONNECTED"
+
+            def configure_servos(self, *a, **k):
+                self.servo_config = (0, 90, 700)
+                return True
+
+            def snapshot(self):
+                return {"connected": self.connected}
+
+        monkeypatch.setattr("app.pipeline.session.BoardLink", SlowLink)
+        cfg = config.load(
+            environ={"AURUM_ARDUINO_PORT": "/dev/fake", "AURUM_ARDUINO_ENABLED": "true"}
+        )
+        run = DemoSession(cfg=cfg)
+
+        start = threading.Barrier(3)
+
+        def tab():
+            start.wait(timeout=5.0)
+            run.connect_board()
+
+        threads = [threading.Thread(target=tab) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        start.wait(timeout=5.0)
+        for thread in threads:
+            thread.join(timeout=10.0)
+
+        assert len(built) == 1, f"{len(built)} links were opened on one port"
 
 
 class TestTheChain:

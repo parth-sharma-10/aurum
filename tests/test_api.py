@@ -687,6 +687,34 @@ class TestReadiness:
         client.post("/hardware/fault/reset")
         assert "no latched fault" not in client.get("/ready").json()["blocked_by"]
 
+    def test_a_calibration_record_is_not_reported_as_a_working_cell(self, client):
+        """`verified: true` on disk says a measurement was taken once.
+
+        It says nothing about whether the cell converts today, and the rig's
+        own cell has read open since 2026-08-27. `/ready` is what an operator
+        reads thirty seconds before a demonstration, and it showed eight green
+        checks over a dead converter - so the only thing that answers "is the
+        cell reading" has to be a reading, not a file.
+        """
+        names = [c["name"] for c in client.get("/ready").json()["checks"]]
+        assert "load cell reading" in names, names
+
+    def test_the_live_cell_check_is_advisory_not_blocking(self, client):
+        """The stand-in mass exists precisely so a dead cell still runs."""
+        by_name = {c["name"]: c for c in client.get("/ready").json()["checks"]}
+        assert by_name["load cell reading"]["blocking"] is False
+
+    def test_with_no_cell_it_says_there_is_no_cell(self, client):
+        by_name = {c["name"]: c for c in client.get("/ready").json()["checks"]}
+        check = by_name["load cell reading"]
+        assert check["ready"] is False
+        assert "load cell" in check["detail"].lower()
+
+    def test_a_port_full_of_rubbish_is_reported(self, client):
+        """94,398 unreadable lines used to leave every screen green."""
+        names = [c["name"] for c in client.get("/ready").json()["checks"]]
+        assert "board traffic readable" in names, names
+
     def test_every_check_explains_itself(self, client):
         """A check that fails without saying why is a check nobody can act on."""
         for check in client.get("/ready").json()["checks"]:

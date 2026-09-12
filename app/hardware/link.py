@@ -67,6 +67,12 @@ class BoardLink:
     #: silently does not apply.
     BOOT_TIMEOUT_S = 6.0
 
+    #: How many recent lines `mostly_unreadable` judges. The board streams at
+    #: 10 Hz, so this is about ten seconds of traffic: long enough that a boot
+    #: banner among real frames cannot trip it, short enough that a port which
+    #: comes right is reported right within ten seconds.
+    TRAFFIC_WINDOW = 100
+
     def __init__(self, port: str, baudrate: int = 115200, timeout_s: float = 1.0) -> None:
         self.port = port
         self.baudrate = baudrate
@@ -92,6 +98,15 @@ class BoardLink:
         #: Lines that were neither a weight frame nor a protocol reply. Boot
         #: banners and line noise live here rather than being misread as data.
         self.dropped = 0
+        #: Lines that WERE one or the other. Counted so `dropped` has something
+        #: to be a proportion of: on its own it is a number nobody can read.
+        #: The bench pathology - a headless weight fragment at line rate -
+        #: produced 94,398 dropped lines while every screen stayed green.
+        self.filed = 0
+        #: The last `TRAFFIC_WINDOW` line outcomes, True for unreadable. What
+        #: `mostly_unreadable` judges, because the lifetime counters above can
+        #: never recover from a burst.
+        self._recent: deque[bool] = deque(maxlen=self.TRAFFIC_WINDOW)
         #: The angles the board ACKNOWLEDGED, or None while it is still running
         #: whatever the sketch booted with. Read from the snapshot: an operator
         #: measuring a throw needs to know which of the two is in force, and an
@@ -446,14 +461,24 @@ class BoardLink:
         sample = parse_weight_line(line)
         if sample is not None:
             self._weight.append(sample)
+            self._readable(True)
             return True
         if line.startswith("AURUM/1 "):
             self._responses.append(line)
+            self._readable(True)
             return True
         # A W frame with status ERR lands here too, which is correct: it is a
         # real line the board sent, and it is not a mass.
-        self.dropped += 1
+        self._readable(False)
         return True
+
+    def _readable(self, ok: bool) -> None:
+        """Book one line in, as a lifetime count and in the recent window."""
+        if ok:
+            self.filed += 1
+        else:
+            self.dropped += 1
+        self._recent.append(not ok)
 
     # Both accessors pump until a frame of THEIR type arrives, the port runs
     # dry, or the budget runs out. Pumping once would let the other stream
@@ -494,6 +519,26 @@ class BoardLink:
     def next_response(self) -> str | None:
         return self._next(self._responses, self.timeout_s)
 
+    @property
+    def mostly_unreadable(self) -> bool:
+        """Is more of what this port is saying RIGHT NOW rubbish than data?
+
+        The one question `dropped_lines` was never asked. A board that streams
+        a malformed fragment at full line rate stays CONNECTED, answers
+        nothing, and looks identical to a healthy one from every screen - and
+        the first command after it spends its whole acknowledgement budget
+        reading past the rubbish. That has been blamed on the firmware, the
+        servo and the wiring in turn.
+
+        Over a WINDOW, not over the lifetime counters. A lifetime ratio cannot
+        recover: one measured burst of 94,398 unreadable lines would need
+        94,398 good ones after it - nearly three hours at 10 Hz - before the
+        port stopped reporting itself broken, and by then the number is about
+        history rather than about the board.
+        """
+        window = list(self._recent)
+        return len(window) >= self.TRAFFIC_WINDOW and sum(window) * 2 > len(window)
+
     def snapshot(self) -> dict:
         return {
             "port": self.port,
@@ -504,6 +549,8 @@ class BoardLink:
             "queued_weight_frames": len(self._weight),
             "queued_responses": len(self._responses),
             "dropped_lines": self.dropped,
+            "filed_lines": self.filed,
+            "mostly_unreadable": self.mostly_unreadable,
             "belt_running": self.belt_running,
             "belt_pwm": self.belt_pwm,
             "servo_config_applied": self.servo_config is not None,

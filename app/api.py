@@ -183,6 +183,7 @@ def readiness() -> dict:
     state = session.snapshot()
     board = state["board"]
     cal = state["calibration"]
+    pan = state["pan"]
     hardware = state["hardware"]
     fault = hardware["fault"]
     weights = DEFAULT_WEIGHTS.exists()
@@ -222,6 +223,33 @@ def readiness() -> dict:
                 else "not connected — POST /session/board/connect"
             ),
         ),
+        # A CONNECTED PORT IS NOT A READABLE ONE. The bench board gets into a
+        # state where it emits a headless weight fragment at full line rate:
+        # the link stays CONNECTED, `last_error` stays empty, and every screen
+        # stays green while nothing on the wire is a mass or a reply. Measured
+        # against that pathology: 94,398 unreadable lines and no indication
+        # anywhere. The first command afterwards spends its whole
+        # acknowledgement budget reading past the rubbish, which is the
+        # "the board did not acknowledge" that has been blamed on the firmware,
+        # the servo and the wiring in turn.
+        _check(
+            "board traffic readable",
+            not board.get("mostly_unreadable", False),
+            False,
+            (
+                f"{board.get('dropped_lines', 0)} of "
+                f"{board.get('dropped_lines', 0) + board.get('filed_lines', 0)} lines were "
+                "neither a mass nor a reply — the board is streaming something this "
+                "protocol does not recognise"
+            )
+            if board.get("mostly_unreadable")
+            else (
+                f"{board.get('filed_lines', 0)} frames read, "
+                f"{board.get('dropped_lines', 0)} unreadable"
+                if board.get("connected")
+                else "no board — nothing to read"
+            ),
+        ),
         _check(
             "servo angles applied",
             bool(board.get("servo_config_applied")),
@@ -235,6 +263,28 @@ def readiness() -> dict:
             bool(cal.get("verified")),
             False,
             cal.get("notes") or "no factor verified against a second known mass",
+        ),
+        # THE RECORD ABOVE IS NOT THE CELL. `verified: true` says a measurement
+        # was taken against two known masses once; it says nothing about
+        # whether the converter is converting today, and this rig's cell has
+        # read open since 2026-08-27. Without this, /ready showed eight green
+        # checks over a dead cell to an operator thirty seconds before a
+        # demonstration - the one moment the distinction matters.
+        #
+        # Advisory, because the stand-in mass exists so that a dead cell still
+        # runs the chain. It is a thing to know, not a thing to stop for.
+        #
+        # Taken from the pan machine rather than read here: it already polls
+        # the cell several times a second and already knows why a refusal
+        # happened, and a second reader on that port would take frames the
+        # machine needs.
+        _check(
+            "load cell reading",
+            pan["grams"] is not None,
+            False,
+            f"{pan['grams']:.1f} g on the pan right now"
+            if pan["grams"] is not None
+            else (pan["reason"] or "no reading yet — the pan machine has not polled the load cell"),
         ),
         _check(
             "paddle movement verified",

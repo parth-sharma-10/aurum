@@ -201,6 +201,16 @@ often. The machine then latched the object *still in the operator's hand*, gave
 it a stand-in mass, sorted it, and refused the real arrival a moment later with
 "no assembly has been confirmed by the camera".
 
+**Give it five seconds between objects.** On the camera trigger there is no pan
+to say the object left, and a tracker that loses an object and picks it up
+again mints a *new* id for it — which nothing downstream can tell from a second
+object. Measured on this bench: one RAM module shown, lost and shown again
+produced **three paddle strokes and three ledger entries**, and RAM is the class
+this runbook already warns "flickers in and out" at 0.51 recall. So a second
+camera-started cycle inside `demo.camera_trigger.cooldown_s` — five seconds — is
+refused, and the screen says so and offers the load cell instead. The load cell
+path has no cooldown: a pan can report the object leaving.
+
 An item that cannot be weighed is then given a per-class stand-in mass —
 **CPU 22 g · PCB 60 g · RAM 20 g · Connector 5 g** — so the rest of the
 pipeline can be shown running. Per class, because a precious fraction is metal
@@ -249,10 +259,22 @@ cd aurum/frontend && npm install && npm run dev    # http://localhost:5173
 # 3 — spare, for curl if the browser misbehaves
 ```
 
-The profile resolves to `HARDWARE_MODE=PHYSICAL`, actuation on, mock mass
-**off** so the load cell drives the cycle, and the belt left on `SIMULATION`
-because the timing model is the only belt there is. It does not set
-`AURUM_CAMERA_INDEX`; export it if the default is the wrong webcam.
+The profile resolves to `HARDWARE_MODE=PHYSICAL`, actuation on, and the belt
+left on `SIMULATION` because the timing model is the only belt there is.
+
+**`AURUM_CAMERA_INDEX=auto`**, and the line it replaced was the whole
+demonstration. That line said `2`; measured on the demonstration laptop on
+2026-09-11, index 0 opened and never delivered a frame, index 1 delivered
+1920x1080, and **index 2 did not exist**. The camera is the only blocking check
+in `/ready`, so the dashboard's start-up sequence stopped at "Camera: could not
+start" and nothing downstream ever ran. The indices had shuffled since the
+value was written, which the file's own comment says they do.
+
+`auto` takes the one index that actually delivers a frame, and refuses when two
+do — one of them is usually the built-in camera pointing at the ceiling, which
+opens and reads and streams a wall. Pin a number the moment it refuses, or the
+moment you have watched the feed and know which index is the rig. A named index
+is never second-guessed, and a failure now names the indices that do work.
 
 Confirm the machine agrees before you trust the screen:
 
@@ -261,10 +283,24 @@ curl -s localhost:8000/ready | python3 -m json.tool
 ```
 
 `"ready": true` with an empty `blocked_by`, `"hardware_mode": "PHYSICAL"`, and
-eight checks green — vision model, camera, no latched fault, board link, servo
-angles applied, load cell calibrated, paddle movement verified, actuation
-enabled. Camera and board read *not started* until the dashboard opens and runs
-its start-up sequence; that is expected, not a fault.
+ten checks green — vision model, camera, no latched fault, board link, board
+traffic readable, servo angles applied, load cell calibrated, load cell
+reading, paddle movement verified, actuation enabled. Camera and board read
+*not started* until the dashboard opens and runs its start-up sequence; that is
+expected, not a fault.
+
+**Read the last two of those as a pair.** `load cell calibrated` is a record of
+a measurement taken on 2026-08-26; `load cell reading` is whether the converter
+is converting *now*. They disagree whenever the cell is open, which is the
+state this rig has been in since 2026-08-27 — and before the second check
+existed, `/ready` showed a full set of green ticks over a dead cell to an
+operator thirty seconds before a demonstration.
+
+`board traffic readable` is the other one worth knowing. A board can stay
+CONNECTED with no error while emitting nothing this protocol recognises — this
+bench has produced 94,398 such lines in a burst — and the first command after
+that spends its whole acknowledgement budget reading past the rubbish. Both
+are advisory: they are things to know, not things to stop for.
 
 ### Fallback — no hardware at all, `configs/demo-profile.sh`
 
@@ -305,14 +341,21 @@ shipped machine is still `mode: NONE`, actuation off, geometry `UNMEASURED`.
 | | `demo-profile.sh` | `bench-profile.sh` |
 |---|---|---|
 | belt, geometry | SIMULATED | SIMULATED — unchanged |
-| mass | per-class stand-in, `SIMULATED` | **HX711, `MEASURED`** |
-| transport | in-process board | **real serial, `/dev/cu.usbmodem1101`** |
+| mass | per-class stand-in, `SIMULATED` | **HX711 when the cell reads**, `MEASURED`; a per-class stand-in when it does not, `SIMULATED` |
+| transport | in-process board | **real serial, `AURUM_ARDUINO_PORT=auto`** |
+| camera | not set | **`auto`** |
 | `HARDWARE_MODE` | `SIMULATION` | **`PHYSICAL`** |
 
 The belt is a model in both, and every figure derived from it is still stamped
-`SIMULATED` to the EPR ledger. The mass and the servo command are not: on the
-bench profile they are a real reading off a verified cell and a real frame down
-a real port.
+`SIMULATED` to the EPR ledger. The servo command is not: on the bench profile
+it is a real frame down a real port.
+
+**Both profiles ship `AURUM_DEMO_MOCK_MASS=true`, and this table used to say
+the bench one did not.** It is a fallback, not a mode: the cell is asked first
+on every pass, and a stand-in is only substituted for an object the cell could
+not weigh. So the mass on the bench profile is whichever the machine actually
+got, and the reading says which — which is also what the operator screen now
+keys its "weights are assumed" caveat off, rather than off the flag.
 
 **The two flags are not interchangeable.** `AURUM_SIMULATION` picks the
 transport *and* the geometry, so turning it off alone drops the router onto the

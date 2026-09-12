@@ -108,9 +108,26 @@ class Snapshot:
 #: quota would be gone by lunchtime. `reset_cache()` exists for tests.
 _CACHE: dict[tuple, Snapshot] = {}
 
+#: The last failure per key, as `(when, why)`. A success is cached for fifteen
+#: minutes and a failure used to be worth nothing at all, so every call went
+#: back to a network that had just refused.
+#:
+#: The dashboard prices four metals inside a `/session` snapshot it asks for
+#: every 400 ms. On a venue network that cannot reach the feed that was three
+#: fresh requests per poll, each waiting out its own five-second timeout -
+#: fifteen seconds of blocking, two and a half times a second, for as long as
+#: the network stayed down. The screen froze and nothing said why.
+_FAILED: dict[tuple, tuple[float, str]] = {}
+
+#: How long a refusal is held before the network is tried again. Long enough to
+#: stop a poll loop hammering a dead feed, short enough that a demonstration
+#: which regains the network picks the prices up within a minute.
+DEFAULT_RETRY_SECONDS = 30.0
+
 
 def reset_cache() -> None:
     _CACHE.clear()
+    _FAILED.clear()
 
 
 def cache_size() -> int:
@@ -159,6 +176,7 @@ class MetalpriceProvider:
         base_url: str = DEFAULT_BASE_URL,
         timeout_s: float = 5.0,
         cache_seconds: float = 900.0,
+        retry_seconds: float = DEFAULT_RETRY_SECONDS,
         fetch=None,
         clock=time.monotonic,
     ) -> None:
@@ -168,6 +186,7 @@ class MetalpriceProvider:
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
         self.cache_seconds = cache_seconds
+        self.retry_seconds = retry_seconds
         #: Injectable so the whole matrix of API failures is testable without a
         #: network, a key or a live market.
         self._fetch = fetch or _http_get
@@ -185,6 +204,7 @@ class MetalpriceProvider:
             base_url=cfg["pricing.metalprice.base_url"],
             timeout_s=cfg["pricing.metalprice.timeout_s"],
             cache_seconds=cfg["pricing.metalprice.cache_seconds"],
+            retry_seconds=cfg["pricing.metalprice.retry_seconds"],
         )
 
     # -- the request -------------------------------------------------------
@@ -257,10 +277,20 @@ class MetalpriceProvider:
         cached = _CACHE.get(self._cache_key)
         if cached is not None and self._clock() - cached.fetched_at < self.cache_seconds:
             return cached, None
+
+        # A REFUSAL IS WORTH REMEMBERING. Without this every caller went back
+        # to a network that had just refused, and each one waited out its own
+        # timeout before saying the same thing. The answer does not change in
+        # the meantime, so neither should the cost of asking for it.
+        failed = _FAILED.get(self._cache_key)
+        if failed is not None and self._clock() - failed[0] < self.retry_seconds:
+            return (cached, failed[1]) if cached is not None else (None, failed[1])
+
         try:
             fresh = self._parse(self._fetch(self._url(), self.timeout_s))
         except FetchError as exc:
             problem = redact(str(exc))
+            _FAILED[self._cache_key] = (self._clock(), problem)
             if cached is not None:
                 return cached, (
                     f"Serving the last successful quote: {problem}. Its age is "
@@ -269,8 +299,10 @@ class MetalpriceProvider:
             return None, problem
         except Exception as exc:  # an external feed may do anything at all
             problem = redact(f"the price API call failed unexpectedly: {exc}")
+            _FAILED[self._cache_key] = (self._clock(), problem)
             return (cached, problem) if cached is not None else (None, problem)
         _CACHE[self._cache_key] = fresh
+        _FAILED.pop(self._cache_key, None)
         return fresh, None
 
     # -- the provider contract --------------------------------------------
