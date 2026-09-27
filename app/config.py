@@ -25,6 +25,7 @@ or something someone exported in a shell that morning.
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -74,9 +75,15 @@ def _int(value: Any, key: str) -> int:
 
 def _float(value: Any, key: str) -> float:
     try:
-        return float(str(value).strip())
+        out = float(str(value).strip())
     except (TypeError, ValueError) as exc:
         raise ConfigError(f"{key}: expected a number, got {value!r}") from exc
+    # `float("nan")` parses, and NaN passes every range check below because it
+    # compares False with everything - 43 settings accepted it. A NaN poll
+    # interval kills a machine thread; an infinite one reaches JSON.
+    if not math.isfinite(out):
+        raise ConfigError(f"{key}: expected a finite number, got {value!r}")
+    return out
 
 
 def _fraction(value: Any, key: str) -> float:

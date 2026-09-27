@@ -265,7 +265,15 @@ export function CameraPanel({ state, api, onHelp }) {
       </div>
 
       {running && !err ? (
-        <img className="camera-feed" src={`${api}/session/stream`} alt="Live camera with detection overlay" />
+        // Keyed on the camera's start time: an MJPEG stream whose connection
+        // dropped (backend restarted, camera restarted) freezes on its last
+        // frame and never reconnects by itself. A new start is a new <img>.
+        <img
+          key={state?.started_at ?? "feed"}
+          className="camera-feed"
+          src={`${api}/session/stream`}
+          alt="Live camera with detection overlay"
+        />
       ) : (
         <div className="camera-feed is-empty">
           <p className="camera-empty-title">Camera offline</p>

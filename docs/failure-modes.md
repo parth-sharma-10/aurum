@@ -348,6 +348,37 @@ and has its own deterministic test.
 
 ---
 
+## The third pass: what the screen was told
+
+The first two passes were about the machine. This one asked a narrower
+question: in every failure, does the dashboard stay up and say something true?
+Each fault was driven through the real API (and, for the frontend, in a real
+browser against a stand-in backend), and each has a test in
+`tests/test_failure_pass_3.py` that fails without its fix.
+
+| # | Fault | What the screen said before | Fixed |
+|---|---|---|---|
+| 15 | Model weights missing | `/ready` 503'd before its own "vision model" check ran; start-up said *"cannot reach the backend. Is the server running?"* | `/ready` reports the model as a blocking check; start-up names it |
+| 16 | Weights present but will not load | a bare 500 from inside torch | a 503 carrying the cause; `/health` says `model_error` |
+| 17 | A bad `AURUM_*` value | `/health` 200, every other endpoint 500, "server not running" | uvicorn refuses to start, naming the setting |
+| 18 | `nan` / `inf` in a numeric setting | accepted by **43** settings — NaN passes every range check | refused by `_float`, the one parser they all share |
+| 19 | `calibration.yaml` valid YAML, wrong shape | every endpoint but `/health` 500 | treated as uncalibrated, with a note saying why |
+| 20 | One transient tracking exception | *"Camera offline"* for the rest of the run — measured over 58,340 good frames afterwards | cleared on the next frame that makes it through |
+| 21 | Camera stops delivering after opening | `running: true`, `/ready` green, frozen picture | named after `FRAME_STALL_S` (3 s) of silence; `/ready` goes red |
+| 22 | Exception after `track()` in the camera loop | thread died, **0** errors logged, *"Camera not started"* | the whole frame is guarded and recorded |
+| 23 | Sensor raises during *Measure & route now* | 500, then `ALREADY_PROCESSED` for ever for an object never graded | the claim is released and `MEASURE_FAILED` explains |
+| 24 | Backend dies mid-run | the last snapshot stayed on screen as live — *"Weighing object"*, frozen | machine status goes to *Cannot reach Aurum*; banner says the panels are the last reading |
+| 25 | Backend wedged | `fetch` had no timeout, so the poll waited for ever with no banner | 8 s on GETs, 60 s on POSTs (connect legitimately takes tens of seconds) |
+| 26 | Any render-time throw | blank page | a screen guard shows the error and a Try again |
+| 27 | Camera restarted | the MJPEG `<img>` froze on its last frame | keyed on `started_at`, so a new start is a new stream |
+
+The frontend fixes were checked in Chrome against a stand-in backend: nothing
+listening, a missing model, a deliberately sparse snapshot in both views, the
+backend killed mid-run, and the backend brought back — the screen recovered
+without a reload.
+
+---
+
 ## Known and unfixed
 
 - **`/session/start?mode=images` never advances.** `DemoSession.start_camera`

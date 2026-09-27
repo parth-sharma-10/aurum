@@ -701,6 +701,13 @@ class DemoSession:
             return {"running": True, "source": self.camera_label}
         if self.pipeline.detector_tracker is None:
             return {"running": False, "error": "This session has no detector."}
+        # A thread that died leaves its capture open. Opening the same device
+        # again while it is still held fails on macOS, so Retry could never
+        # recover the camera it was pressed for.
+        if self._source is not None:
+            with contextlib.suppress(Exception):
+                self._source.release()
+            self._source = None
 
         try:
             self._source = FrameSource(
@@ -723,30 +730,62 @@ class DemoSession:
         self._thread.start()
         return {"running": True, "source": self.camera_label}
 
+    #: How long a running camera may deliver nothing before it is reported as
+    #: not delivering. Opening proved one frame arrived; a camera unplugged or
+    #: taken by another app afterwards reads `ok=False` for ever, and that left
+    #: `running: true`, `/ready` green and a frozen picture on the dashboard.
+    #: A dwell, not the first miss: a single dropped frame is a gap, not a
+    #: verdict.
+    FRAME_STALL_S = 3.0
+
     def _loop(self) -> None:
+        last_frame = time.monotonic()
+        stalled = False
         while not self._stop.is_set():
-            ok, frame = self._source.read()
+            try:
+                ok, frame = self._source.read()
+            except Exception as exc:  # a driver that raises is a camera not delivering
+                ok, frame = False, None
+                self.camera_error = f"camera read failed: {exc}"
             if not ok or frame is None:
+                silent = time.monotonic() - last_frame
+                if silent > self.FRAME_STALL_S and not stalled:
+                    stalled = True
+                    self.camera_error = (
+                        f"No frame from {self.camera_label} for {silent:.0f} s. It may have "
+                        "been unplugged or taken by another app."
+                    )
+                    self.errors.record(ErrorCode.VISION_ERROR, "camera", self.camera_error)
                 time.sleep(0.05)
                 continue
+            last_frame = time.monotonic()
+            stalled = False
+            # The whole frame, not just `track()`. Anything that raised after
+            # it killed this thread with nothing recorded, and the dashboard
+            # then said "Camera not started" about a camera nobody stopped.
             try:
                 detections = self.pipeline.detector_tracker.track(frame)
+                self._capture_failures(frame, detections)
+                with self._lock:
+                    self.pipeline.process_detections(detections)
+                    self.frames += 1
+                    ok_enc, buf = cv2.imencode(
+                        ".jpg",
+                        annotate(frame, detections, self.assemblies),
+                        [cv2.IMWRITE_JPEG_QUALITY, 80],
+                    )
+                    if ok_enc:
+                        self._jpeg = buf.tobytes()
             except Exception as exc:  # a driver or model fault must not kill the run
                 self.camera_error = f"tracking failed: {exc}"
                 self.errors.record(ErrorCode.VISION_ERROR, "camera", str(exc))
                 time.sleep(0.2)
                 continue
-            self._capture_failures(frame, detections)
-            with self._lock:
-                self.pipeline.process_detections(detections)
-                self.frames += 1
-                ok_enc, buf = cv2.imencode(
-                    ".jpg",
-                    annotate(frame, detections, self.assemblies),
-                    [cv2.IMWRITE_JPEG_QUALITY, 80],
-                )
-                if ok_enc:
-                    self._jpeg = buf.tobytes()
+            # A frame went all the way through, so whatever went wrong before
+            # has stopped. Left set, one transient exception marked the camera
+            # offline for the rest of the run - and "Camera offline" outranks
+            # everything else on the operator screen.
+            self.camera_error = None
 
     def reload_calibration(self) -> dict:
         """Re-read the calibration file without restarting the server.
@@ -1316,8 +1355,23 @@ class DemoSession:
                     "item": assembly.as_dict(),
                 }
             self._handled.add(assembly.assembly_id)
-        reading = self._read_mass(assembly)
-        self._process(assembly, reading)
+        try:
+            reading = self._read_mass(assembly)
+            self._process(assembly, reading)
+        except Exception as exc:
+            # Nothing was decided, so nothing may stay claimed. Left in
+            # `_handled`, a serial error during the weigh answered 500 and then
+            # refused the same object as ALREADY_PROCESSED for the rest of the
+            # run, though it was never graded.
+            with self._lock:
+                self._handled.discard(assembly.assembly_id)
+            self.errors.record(
+                ErrorCode.WEIGHT_ERROR, "measure", str(exc), item_id=assembly.assembly_id
+            )
+            return {
+                "error": "MEASURE_FAILED",
+                "reason": f"Weighing {assembly.assembly_id} failed and nothing was decided: {exc}",
+            }
         self._route(assembly)
         return self._routed[assembly.assembly_id]
 
