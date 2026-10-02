@@ -34,9 +34,45 @@ export const CLASS_COLOR = {
 
 export const BIN_CLASS = { A: "badge-a", B: "badge-b", C: "badge-c" };
 
+/**
+ * One request, bounded in time, with the backend's own reason on failure.
+ *
+ * Without a timeout a backend wedged on a lock never answers, the poll awaits
+ * it for ever, and the screen keeps showing the last snapshot as if it were
+ * live. POSTs get longer: connecting the board drains a backlog, sends CFG
+ * twice and tares, which legitimately takes tens of seconds.
+ *
+ * `unreachable` separates "nothing answered" from "something answered no" -
+ * start-up used to call a 503 for a missing model a server that was not
+ * running, and sent the operator to restart something that was up.
+ */
 export async function call(path, method = "GET") {
-  const res = await fetch(`${API}${path}`, { method });
-  if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}`);
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, {
+      method,
+      signal: AbortSignal.timeout(method === "GET" ? 8000 : 60000),
+    });
+  } catch (e) {
+    const err = new Error(
+      e.name === "TimeoutError"
+        ? `${path} did not answer in time`
+        : "Cannot reach the Aurum backend",
+    );
+    err.unreachable = true;
+    throw err;
+  }
+  if (!res.ok) {
+    let detail = null;
+    try {
+      detail = (await res.json()).detail;
+    } catch {
+      /* not JSON - the status code is all there is */
+    }
+    throw new Error(
+      detail ? `${typeof detail === "string" ? detail : JSON.stringify(detail)}` : `${path} -> HTTP ${res.status}`,
+    );
+  }
   return res.json();
 }
 

@@ -105,15 +105,30 @@ export default function App() {
     };
     setStartup({ phase: "checking", reason: "Checking systems…", checks, topic: null });
 
+    let first;
     try {
-      await call("/ready");
-      put(0, "ok", "Running");
-    } catch {
-      put(0, "bad", "Not reachable");
+      first = await call("/ready");
+    } catch (e) {
+      put(0, "bad", e.unreachable ? "Not reachable" : "Answered with an error");
       setStartup((p) => ({
         ...p,
         phase: "failed",
-        reason: "The browser cannot reach the Aurum backend. Is the server running?",
+        reason: e.unreachable
+          ? "The browser cannot reach the Aurum backend. Is the server running?"
+          : `The Aurum backend is running but failed: ${e.message}`,
+        topic: null,
+      }));
+      return;
+    }
+    // Without a model nothing downstream can even be constructed, so every
+    // later step would fail with a less useful version of this sentence.
+    const model = (first.checks ?? []).find((c) => c.name === "vision model" && !c.ready);
+    if (model) {
+      put(0, "bad", "No vision model");
+      setStartup((p) => ({
+        ...p,
+        phase: "failed",
+        reason: `The vision model is not available: ${model.detail}`,
         topic: null,
       }));
       return;
@@ -270,7 +285,13 @@ export default function App() {
   };
 
   const rows = useMemo(() => subsystems(state), [state]);
-  const machine = useMemo(() => machineState(state, startup), [state, startup]);
+  // The last snapshot is not the machine's state once the poll fails. Reading
+  // it anyway kept "Sorting - paddle fires in 1.2 s" on screen, frozen, under
+  // a server that had gone away.
+  const machine = useMemo(
+    () => machineState(error ? null : state, startup),
+    [error, state, startup],
+  );
   const worst = useMemo(() => worstSubsystem(rows), [rows]);
   const caveat = useMemo(() => massCaveat(state), [state]);
 
@@ -314,7 +335,8 @@ export default function App() {
 
       {error && (
         <div className="banner is-bad">
-          <span aria-hidden="true">⚠</span> Cannot reach Aurum. {error}
+          <span aria-hidden="true">⚠</span> No live data from Aurum: {error}. The panels below
+          show the last reading received.
         </div>
       )}
       {actionError && (

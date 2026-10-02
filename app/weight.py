@@ -445,7 +445,12 @@ class Calibration:
             raw = yaml.safe_load(path.read_text()) or {}
         except yaml.YAMLError:
             return cls(notes=f"{path.name} is not valid YAML; treating as uncalibrated")
-        data = raw.get("calibration") or {}
+        data = (raw.get("calibration") or {}) if isinstance(raw, dict) else None
+        # Valid YAML of the wrong shape (a list, a bare string) used to raise
+        # here, inside DemoSession's constructor - so every endpoint but
+        # /health answered 500 and the dashboard said the server was down.
+        if not isinstance(data, dict):
+            return cls(notes=f"{path.name} has no calibration mapping; treating as uncalibrated")
 
         def number(key):
             value = data.get(key)

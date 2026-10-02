@@ -43,7 +43,15 @@ ROOT = Path(__file__).resolve().parent.parent
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Create both ledgers before the first request is served."""
+    """Refuse to start on a bad setting; create both ledgers before serving.
+
+    Config is otherwise read lazily, inside the first request that builds the
+    session - so a typo in an AURUM_* variable used to leave a server that
+    answered /health and 500'd everything else, and the dashboard reported
+    that as a server that was not running. Loading it here stops uvicorn with
+    the setting's name and value instead.
+    """
+    config_module.load()
     ledger.init_db()
     epr.init_db()
     yield
@@ -125,8 +133,17 @@ def detector() -> AurumDetector:
     if _detector is None:
         if not DEFAULT_WEIGHTS.exists():
             raise HTTPException(503, f"Model not trained yet: {DEFAULT_WEIGHTS} missing")
-        _detector = AurumDetector(DEFAULT_WEIGHTS)
-        _detector.warmup()
+        # A truncated or incompatible .pt raises from deep inside torch, which
+        # reached the dashboard as a bare 500. Same class of problem as a
+        # missing file, so it gets the same 503 with the cause attached.
+        try:
+            loaded = AurumDetector(DEFAULT_WEIGHTS)
+            loaded.warmup()
+        except Exception as exc:
+            raise HTTPException(
+                503, f"Model at {DEFAULT_WEIGHTS} failed to load: {type(exc).__name__}: {exc}"
+            ) from exc
+        _detector = loaded
     return _detector
 
 
@@ -151,11 +168,27 @@ def _decode(data: bytes) -> np.ndarray:
 
 @app.get("/health")
 def health() -> dict:
-    ok = DEFAULT_WEIGHTS.exists()
+    if not DEFAULT_WEIGHTS.exists():
+        return {
+            "status": "model_missing",
+            "model_version": None,
+            "classes": [],
+            "weights": _rel(DEFAULT_WEIGHTS),
+        }
+    try:
+        d = detector()
+    except HTTPException as exc:
+        return {
+            "status": "model_error",
+            "model_version": None,
+            "classes": [],
+            "weights": _rel(DEFAULT_WEIGHTS),
+            "detail": exc.detail,
+        }
     return {
-        "status": "ok" if ok else "model_missing",
-        "model_version": detector().model_version if ok else None,
-        "classes": detector().classes if ok else [],
+        "status": "ok",
+        "model_version": d.model_version,
+        "classes": d.classes,
         "weights": _rel(DEFAULT_WEIGHTS),
     }
 
@@ -179,7 +212,20 @@ def readiness() -> dict:
     configuration, and calling it "not ready" would make the honest state look
     like a broken one.
     """
-    session = demo_session()
+    # The session is built on the detector, so a missing or unloadable model
+    # used to make this endpoint 503 before its own "vision model" check could
+    # run - and the dashboard read the 503 as a backend that was not there.
+    try:
+        session = demo_session()
+    except HTTPException as exc:
+        check = _check("vision model", False, True, str(exc.detail))
+        return {
+            "ready": False,
+            "blocked_by": [check["name"]],
+            "advisory": [],
+            "checks": [check],
+            "note": "Nothing else can be checked until the model loads.",
+        }
     state = session.snapshot()
     board = state["board"]
     cal = state["calibration"]
@@ -199,7 +245,9 @@ def readiness() -> dict:
         ),
         _check(
             "camera",
-            bool(state["running"]),
+            # A live thread is not a working camera: it keeps running while the
+            # device delivers nothing, and the loop names that in `error`.
+            bool(state["running"]) and not state["camera"]["error"],
             True,
             state["camera"]["error"]
             or (state["camera"]["source"] or "not started — POST /session/start"),
